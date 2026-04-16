@@ -514,9 +514,11 @@ function sortTable(th) {
   var rows  = Array.from(tbody.querySelectorAll('tr'));
   var col   = Array.from(th.parentNode.children).indexOf(th);
   var asc   = th.dataset.asc !== 'true';
+  var dateRe = /^\d{4}-\d{2}-\d{2}$/;
   rows.sort(function(a, b) {
-    var av = a.children[col] ? a.children[col].innerText.replace(/[%$,]/g,'') : '';
-    var bv = b.children[col] ? b.children[col].innerText.replace(/[%$,]/g,'') : '';
+    var av = a.children[col] ? a.children[col].innerText.replace(/[%$,]/g,'').trim() : '';
+    var bv = b.children[col] ? b.children[col].innerText.replace(/[%$,]/g,'').trim() : '';
+    if (dateRe.test(av) && dateRe.test(bv)) return asc ? av.localeCompare(bv) : bv.localeCompare(av);
     var an = parseFloat(av), bn = parseFloat(bv);
     if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
     return asc ? av.localeCompare(bv) : bv.localeCompare(av);
