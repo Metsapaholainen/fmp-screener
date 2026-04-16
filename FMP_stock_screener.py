@@ -6822,6 +6822,75 @@ def main():
     # Save cache after all fetches
     save_cache()
 
+    # ── Small-cap supplemental enrichment for Lynch 10-Baggers tab ────────────
+    # Main enrichment covers top 4000 by market cap (roughly $2.5B+).
+    # Small-caps ($50M–$2B) need a targeted pass for the 2 critical fields:
+    #   grossMargin / operatingMargin (ratios-ttm) + revGrowth (financial-growth)
+    # Uses separate cache keys to avoid disrupting the main cache.
+    phase_start("sc_enrichment", "Small-cap supplemental enrichment (10-Baggers tab)")
+    _top_enrich_set = set(top_for_enrichment)
+    _sc_candidates = [
+        t for t, u in profiles.items()
+        if 50e6 < (u.get("mktCap") or 0) < 2e9
+        and t not in _top_enrich_set
+        and (u.get("sector") or "") not in ("Real Estate", "Basic Materials")
+        and (u.get("price") or 0) > 1
+    ]
+    _sc_candidates.sort(key=lambda t: -(profiles.get(t, {}).get("mktCap") or 0))
+    _sc_candidates = _sc_candidates[:1500]  # top 1500 small-caps by mktCap
+    print(f"  🎯 {len(_sc_candidates)} small-cap candidates for 10-Baggers enrichment")
+
+    if _sc_candidates:
+        # Fetch ratios (gross/oper margin) — uses separate cache key to avoid
+        # overwriting the main ratios_ttm cache which covers large-caps only
+        _sc_ratios = _parallel_fetch(_sc_candidates, "ratios-ttm",
+                                     "SC financial ratios", "ratios_ttm_sc")
+
+        # Fetch growth (revenue growth) — separate cache key
+        _sc_growth_cache_key = "growth_sc"
+        if _cache.get(_sc_growth_cache_key):
+            _sc_growth = _cache[_sc_growth_cache_key]
+            print(f"  📦 Using cached SC growth ({len(_sc_growth)} stocks)")
+        else:
+            from concurrent.futures import ThreadPoolExecutor as _TpeSc, as_completed as _ascSc
+            import threading as _thr_sc
+            _sc_growth = {}
+            _lock_sc = _thr_sc.Lock()
+            _thr_sc_sem = _thr_sc.Semaphore(4)
+
+            def _fetch_sc_growth(t):
+                with _thr_sc_sem:
+                    d = fmp_get("financial-growth",
+                                {"symbol": t, "period": "annual", "limit": "5"})
+                    time.sleep(0.25)
+                    return t, (d if d and isinstance(d, list) and d else None)
+
+            with _TpeSc(max_workers=12) as _pool_sc:
+                _futs_sc = {_pool_sc.submit(_fetch_sc_growth, t): t for t in _sc_candidates}
+                _done_sc = 0
+                for _fut_sc in _ascSc(_futs_sc):
+                    _t_sc, _d_sc = _fut_sc.result()
+                    if _d_sc:
+                        with _lock_sc: _sc_growth[_t_sc] = _d_sc
+                    _done_sc += 1
+                    if _done_sc % 300 == 0:
+                        print(f"    [{_done_sc}/{len(_sc_candidates)}] SC growth fetched...")
+
+            _cache[_sc_growth_cache_key] = _sc_growth
+            print(f"  ✅ SC growth loaded: {len(_sc_growth)} stocks")
+
+        # Merge into main dicts (don't overwrite existing large-cap data)
+        _sc_ratios_added = sum(1 for t, d in _sc_ratios.items() if t not in ratios_ttm)
+        _sc_growth_added = sum(1 for t, d in _sc_growth.items() if t not in growth_data)
+        for t, d in _sc_ratios.items():
+            if t not in ratios_ttm:
+                ratios_ttm[t] = d
+        for t, d in _sc_growth.items():
+            if t not in growth_data:
+                growth_data[t] = d
+        print(f"  ✅ SC merge: +{_sc_ratios_added} ratios, +{_sc_growth_added} growth entries")
+        save_cache()   # persist SC cache keys for next run
+
     # Assemble
     stocks = assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                                  estimates, scores, ratings, growth_data, insider_data,
