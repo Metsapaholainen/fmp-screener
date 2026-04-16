@@ -2291,7 +2291,7 @@ def _repair_truncated_json(text: str) -> dict:
 
 
 def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None) -> dict:
-    """Multi-agent AI stock analysis: 4 specialist agents (parallel) + 1 judge.
+    """Multi-agent AI stock analysis: 5 specialist agents (parallel) + 1 judge.
     - Quality Growth: sustained compounders with ROIC leadership
     - Special Situation: event-driven, misunderstood, inflection-point plays
     - Capital Appreciation: near-term re-rating candidates with improving momentum
@@ -2303,7 +2303,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None) -> 
         print("  ⏭️ No ANTHROPIC_KEY — skipping AI overview")
         return {}
 
-    print("\n  🤖 Running multi-agent AI analysis (4 specialists + judge)...")
+    print("\n  🤖 Running multi-agent AI analysis (5 specialists + judge)...")
 
     # ── Step 1: Cross-strategy meta-ranking ────────────────────────────────
     # A stock appearing in multiple strategies is cross-validated — stronger signal.
@@ -2318,6 +2318,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None) -> 
         "Slow Growers / Income (Lynch)":     "Slow Grower",
         "Cyclicals (Lynch)":                 "Cyclical",
         "Asset Plays (Lynch)":               "Asset Play",
+        "Lynch 10-Baggers":                  "10-Bagger",
     }
     for tab_name, rows in picks_data.items():
         short = strategy_short.get(tab_name, tab_name)
@@ -2625,6 +2626,38 @@ Focus on: $100M–$15B market cap, revenue growth > 20%, rising ROIC, large TAM,
 For each pick, explain: WHY is this company in a position to become the dominant player in its market over 3-5 years?
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
+        (
+            "TenBagger",
+            "🎯 10-Bagger Hunter",
+            f"""You are a Peter Lynch-style small-cap 10-bagger analyst. Today is {datetime.date.today()}.
+YOUR LENS — find stocks with 5–15x upside potential over 3–7 years, inspired by Lynch's actual method:
+- Market cap $50M–$2B: small enough that institutions can't own it, large enough to be real
+- PEG < 1.5: paying a reasonable price for genuine, sustained growth — Lynch's anchor metric
+- Gross margin > 30%: proves the business has pricing power and a defensible position
+- Revenue growth 15–60% sustained: not a one-year spike, but a multi-year structural trend
+- Simple, understandable business: if you can't explain what they do in one sentence, move on
+- Overlooked by Wall Street: very few analyst recommendations, little press coverage
+- Insider buying: management buying their own stock at market prices = clearest vote of confidence
+YOUR PHILOSOPHY:
+- FCF is NOT required at this stage — Lynch bought early Amazon, early Starbucks, early Home Depot, all pre-FCF
+- What replaces FCF? Gross margin > 30% (unit economics work) + operating margin > 0 (scaling)
+- The 10-bagger setup: tiny company, huge market, no institutional ownership, boring name, growing 25%/yr
+- Avoid: companies where growth is ALL analyst estimate, with no historical track record
+- Avoid: negative gross margin (product subsidised), negative operating margin for 3+ years (model broken)
+- The best 10-baggers are the ones that make you say "this sounds too simple to be a 10-bagger"
+SIGNALS TO PRIORITISE:
+- 52wPos < 0.70: everyone has given up — that's where Lynch shopped
+- insiderBuys > 0: management buying = they see something the market doesn't
+- Net D/EBITDA < 1: fortress balance sheet = they control their own destiny
+- RevConsistency > 0.70: 7+ of 10 quarters growing = structural trend, not a lucky year""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS:\n{candidates_block}
+
+Pick your TOP 7 stocks with genuine 10-bagger potential (5–15x upside over 3–7 years).
+Focus on: $50M–$2B market cap, PEG < 1.5, gross margin > 30%, sustained revenue growth 15–60%, insider buying, 52wPos < 0.80.
+For each pick, write a Lynch-style one-liner: "This is a company that [what they do], growing at [X]% per year, trading at a PEG of [Y], that Wall Street has completely ignored because [reason]."
+Then explain: WHY does this company have 10-bagger potential, and WHAT would have to happen for it to get there?
+Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
+        ),
     ]
 
     from concurrent.futures import ThreadPoolExecutor, as_completed as _as_completed
@@ -2643,9 +2676,9 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
             print(f"    ⚠️ {label} specialist error: {str(exc)[:80]}")
         return name, label, []
 
-    print("    Launching 4 specialist agents in parallel...")
+    print("    Launching 5 specialist agents in parallel...")
     specialist_results = {}
-    with ThreadPoolExecutor(max_workers=4) as _pool:
+    with ThreadPoolExecutor(max_workers=5) as _pool:
         _futs = {_pool.submit(_call_specialist, cfg): cfg[0] for cfg in specialists_cfg}
         for _fut in _as_completed(_futs):
             s_name, s_label, s_picks = _fut.result()
@@ -2676,9 +2709,9 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
     )
 
     # ── Step 7: Judge agent — final synthesis ───────────────────────────────
-    judge_system = f"""You are a chief investment officer synthesising recommendations from four specialist analysts.
+    judge_system = f"""You are a chief investment officer synthesising recommendations from five specialist analysts.
 Today is {datetime.date.today()}.
-Your four specialists are: Quality Growth, Special Situation, Capital Appreciation, Emerging Growth.
+Your five specialists are: Quality Growth, Special Situation, Capital Appreciation, Emerging Growth, 10-Bagger Hunter.
 
 YOUR INVESTMENT PHILOSOPHY:
 - Quality first: ROIC > 15% sustained is the clearest indicator of durable competitive advantage
@@ -2687,13 +2720,15 @@ YOUR INVESTMENT PHILOSOPHY:
 - A great business at a fair price beats a fair business at a great price
 - Catalyst matters: prefer picks where a specific event in 1-6 months can unlock value
 - Size is irrelevant: a $100B compounder at PEG 0.8 beats a $1B name at PEG 0.8 with half the ROIC
+- Small caps from the 10-Bagger Hunter deserve equal consideration — if the fundamentals are genuine, small size is an advantage not a disqualifier
 
 QUALITY STANDARD — hard filter before including any pick:
 - Structural moat: pricing power, network effects, switching costs, brand, or cost leadership — NOT cyclical tailwind
 - Competitive position: market leader or dominant niche, not a commoditised also-ran
 - Survivability: would this business remain competitively relevant through a recession and an aggressive new entrant?
+- For 10-Bagger candidates: gross margin > 30% + operating margin > 0 replaces FCF as the quality gate
 
-YOUR ROLE: Synthesise the four specialist reports into a final 3-10 pick list that is diversified across lenses (quality + special situations + appreciation + emerging), prioritises consensus names, and includes at least one pick from each specialist where quality meets the bar."""
+YOUR ROLE: Synthesise the five specialist reports into a final 3-10 pick list that is diversified across lenses (quality + special situations + appreciation + emerging + small-cap 10-baggers), prioritises consensus names, and includes at least one pick from each specialist where quality meets the bar."""
 
     # ── Build macro context block for judge (from live FRED data) ──────────
     macro_block = ""
@@ -2712,7 +2747,7 @@ Use these REAL numbers to anchor your macro_context, market_outlook, and crash_r
 YIELD CURVE INVERTED (<0) historically precedes recession 6-18 months out. VIX>25 = genuine fear.
 Rates ELEVATED (>4%) compress growth multiples — prefer quality cash generators over pure-growth names."""
 
-    judge_user = f"""THREE SPECIALIST REPORTS:
+    judge_user = f"""FIVE SPECIALIST REPORTS:
 {specialist_block}
 
 {consensus_block}
@@ -2775,7 +2810,7 @@ Respond with ONLY valid JSON (no markdown, no preamble):
       "ticker": "TICKER",
       "company": "Company Name",
       "sector": "Sector",
-      "strategy": "Fast Grower | Stalwart | Turnaround | Asset Play | Cyclical | Slow Grower | IV Discount | Quality Compounder",
+      "strategy": "Fast Grower | 10-Bagger | Stalwart | Turnaround | Asset Play | Cyclical | Slow Grower | IV Discount | Quality Compounder",
       "endorsed_by": "QualityGrowth + SpecialSit | EmergingGrowth only | CapAppreciation + QualityGrowth | etc.",
       "headline": "Lynch-style one-liner anyone can understand in 10 seconds",
       "story": "2-3 sentences: WHAT DOES THE MARKET NOT UNDERSTAND? Why cheap or overlooked?",
@@ -3301,7 +3336,7 @@ def build_overview_tab(ws, stocks, iv_rows, stalwarts, fast_growers, turnarounds
                        slow_growers, cyclicals, asset_plays, quality_compounders,
                        fmp_call_count, ai=None, portfolio=None,
                        portfolio_nav=None, portfolio_ret=None, portfolio_spy_ret=None,
-                       macro=None):
+                       macro=None, ten_baggers=None):
     """Build the Overview tab: AI analysis at top, strategy tables below."""
     ws.sheet_view.showGridLines = False
     today = datetime.date.today()
@@ -3785,6 +3820,7 @@ def build_overview_tab(ws, stocks, iv_rows, stalwarts, fast_growers, turnarounds
         ("💰 Slow Growers",     slow_growers,       "455A64"),
         ("🔄 Cyclicals",        cyclicals,          "E65100"),
         ("🏗 Asset Plays",      asset_plays,        "0D47A1"),
+        ("🎯 10-Baggers",       ten_baggers or [],  "BF360D"),
     ]
     sum_hdrs = ["Strategy", "# Qualifying", "Top 3 Tickers", "Top Pick", "PEG", "MoS", "Piotroski"]
     r = _col_hdrs(r, sum_hdrs, "37474F")
@@ -5805,7 +5841,7 @@ def build_insider_tab(wb, stocks, insider_data):
 def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       slow_growers, cyclicals, asset_plays, quality_compounders,
                       sector_rows=None, etf_rows=None, ai=None, macro=None,
-                      portfolio=None, fmp_call_count=0) -> str:
+                      portfolio=None, fmp_call_count=0, ten_baggers=None) -> str:
     """Generate a self-contained mobile-responsive HTML dashboard.
     Reads the same data structures that feed the Excel — no extra computation.
     Returns the full HTML string.
@@ -6082,6 +6118,7 @@ document.querySelectorAll('th').forEach(th => th.addEventListener('click', funct
         ("iv",       "📊 IV Discount"),
         ("stalwart", "🏛 Stalwarts"),
         ("fastg",    "🚀 Fast Growers"),
+        ("tenb",     "🎯 10-Baggers"),
         ("slowg",    "🐢 Slow Growers"),
         ("cycl",     "🔄 Cyclicals"),
         ("turn",     "🔁 Turnarounds"),
@@ -6637,6 +6674,9 @@ document.querySelectorAll('th').forEach(th => th.addEventListener('click', funct
 {_strategy_table(fast_growers, STRAT_COLS + ["Rev Growth 5Y","EPS Growth 5Y"], "fastg",    "🚀 Fast Growers",
     "Revenue growth >20% · PEG <1.5 · ROIC >10% · FCF positive or high-growth exception. "
     "Lynch's highest-return category — find the next 10-bagger before it's obvious.")}
+{_strategy_table(ten_baggers or [], STRAT_COLS + ["Gross Margin","Oper Margin","Net Debt/EBITDA"], "tenb", "🎯 Lynch 10-Baggers",
+    "Small-cap $50M–$2B · PEG<2 · Gross margin>20% · Operating margin>0. "
+    "Lynch's real criteria: pricing power + growth at a reasonable price. No FCF kill — early Amazon had negative FCF too.")}
 {_strategy_table(slow_growers, STRAT_COLS + ["Div Yield"],              "slowg",    "🐢 Slow Growers",
     "Dividend yield ≥2% · Stable multi-year earnings · Large established companies. "
     "Lynch category: own for income + capital preservation, not growth.")}
@@ -7714,6 +7754,165 @@ def main():
                                   "0D47A1", "P/B<1, tangible book, net cash, or Graham net-net. Lynch hidden value.",
                                   custom_headers=_ap_headers, custom_widths=_ap_widths)
 
+    # ─── Lynch 10-Baggers: pure small-cap opportunity list ─────────────────
+    # Lynch's real insight: PEG + gross margin + operating margin are the quality gates.
+    # FCF is NOT required — early Amazon, early Starbucks, early Home Depot all had negative FCF.
+    # The filters here replace FCF with profitability (gross + operating margin > 0).
+    # This is a dedicated small-cap tab ($50M–$2B) — Fast Growers goes to $150B.
+    def _ten_bagger_filter(s):
+        if not _is_common_stock(s): return False
+        # Exclude sectors where revenue growth is commodity-price driven
+        if (s.get("sector") or "") in ("Real Estate", "Basic Materials"): return False
+
+        mktcap = s.get("mktCap", 0)
+        # Pure small-cap focus: $50M floor (nano excluded — too illiquid), $2B ceiling
+        if mktcap < 50e6 or mktcap > 2e9:
+            return False
+
+        rg  = s.get("revGrowth")
+        rg5 = s.get("revGrowth5y")
+        eg5 = s.get("epsGrowth5y")
+        rg5h = s.get("fiveYRevGrowth")
+        gm  = s.get("grossMargin")
+        om  = s.get("operatingMargin")
+        az  = s.get("altmanZ")
+        nde = s.get("netDebtEbitda")
+
+        # Growth qualifier — at least one strong signal (slightly lower bar than Fast Growers)
+        strong_current = (rg  is not None and rg  > 0.15)
+        strong_5yr_f   = (rg5 is not None and rg5 > 0.12)
+        strong_5yr_h   = (rg5h is not None and rg5h > 0.12)
+        eps_led        = (eg5 is not None and eg5 > 0.15 and (rg is None or rg > 0.05))
+        if not (strong_current or strong_5yr_f or strong_5yr_h or eps_led):
+            return False
+
+        # Kill 1: Gross margin must exist and show real pricing power
+        # This is Lynch's proxy for business quality — replaces FCF requirement
+        if gm is None or gm < 0.20:
+            return False
+
+        # Kill 2: Business model must work — operating margin must be positive
+        # Lynch: "If they can't make money operating the business, growth doesn't matter."
+        if om is not None and om < 0:
+            return False
+
+        # Kill 3: Not in distress — Altman Z > 1.0 (slightly lower than Fast Growers' 1.0 kill)
+        if az is not None and az < 1.0:
+            return False
+
+        # Kill 4: Not over-leveraged (allow some debt — small caps need growth capital)
+        if nde is not None and nde > 6:
+            return False
+
+        # Kill 5: Share dilution ≤ 20% (slightly more lenient than FG — small caps issue equity)
+        sd = s.get("sharesGrowth")
+        if sd is not None and sd > 0.20:
+            return False
+
+        return True
+
+    def _ten_bagger_score(s):
+        sc = 0
+        gm  = s.get("grossMargin") or 0
+        om  = s.get("operatingMargin") or 0
+        rg  = s.get("revGrowth") or 0
+        rg5 = s.get("revGrowth5y")
+        peg = s.get("peg")
+        fpeg = s.get("fwdPEG")
+        nde = s.get("netDebtEbitda")
+        az  = s.get("altmanZ")
+        rc  = s.get("revConsistency") or 0
+
+        # ── PEG ratio: Lynch's anchor metric — most important single signal ──
+        # Low PEG = paying reasonable price for genuine growth = 10-bagger setup
+        best_peg = min(p for p in [peg, fpeg] if p and 0 < p < 5) if any(p and 0 < p < 5 for p in [peg, fpeg]) else None
+        if best_peg is not None:
+            if best_peg < 0.5:  sc += 25
+            elif best_peg < 0.75: sc += 20
+            elif best_peg < 1.0: sc += 16
+            elif best_peg < 1.25: sc += 12
+            elif best_peg < 1.5: sc += 8
+            elif best_peg < 2.0: sc += 4
+        else:
+            sc -= 4  # missing PEG — can't verify valuation vs growth
+
+        # ── Gross margin: pricing power = durable competitive advantage ──
+        if gm > 0.70:   sc += 18
+        elif gm > 0.55: sc += 14
+        elif gm > 0.40: sc += 10
+        elif gm > 0.30: sc += 6
+        elif gm > 0.20: sc += 2
+
+        # ── Operating margin: business model efficiency ──
+        if om > 0.25:   sc += 12
+        elif om > 0.15: sc += 9
+        elif om > 0.08: sc += 6
+        elif om > 0.03: sc += 3
+        elif om > 0:    sc += 1
+
+        # ── Revenue growth: the engine ──
+        if rg > 0.50:   sc += 16
+        elif rg > 0.35: sc += 12
+        elif rg > 0.25: sc += 9
+        elif rg > 0.15: sc += 6
+        elif rg > 0.08: sc += 3
+        if rg5 and rg5 > 0.20: sc += 6
+        elif rg5 and rg5 > 0.12: sc += 3
+
+        # ── Revenue consistency: sustained growth > one-year spike ──
+        if rc > 0.80:   sc += 8
+        elif rc > 0.65: sc += 5
+        elif rc > 0.50: sc += 2
+
+        # ── Balance sheet: net debt / EBITDA ──
+        # Net cash is special — Lynch loved "Fort Knox" balance sheets on small caps
+        if nde is not None:
+            if nde < -0.5:  sc += 12  # net cash position
+            elif nde < 0.5: sc += 8   # essentially debt-free
+            elif nde < 1.5: sc += 5
+            elif nde < 3.0: sc += 2
+        # else: no data — no penalty (small caps often missing)
+
+        # ── Altman Z: financial health ──
+        if az is not None:
+            if az > 4.0:    sc += 6
+            elif az > 2.5:  sc += 4
+            elif az > 1.5:  sc += 2
+
+        # ── 52-week position: buy beaten-down small caps, not momentum ──
+        pvs52h = s.get("priceVs52H")
+        if pvs52h is not None:
+            if pvs52h < 0.70:   sc += 8   # >30% off high — maximum opportunity
+            elif pvs52h < 0.80: sc += 5
+            elif pvs52h < 0.90: sc += 2
+
+        # ── Insider buying: management eats their own cooking ──
+        if s.get("insiderBuys", 0) >= 3:   sc += 10
+        elif s.get("insiderBuys", 0) >= 1: sc += 5
+
+        # ── Cap size bonus: smaller = more neglected = more mispricing ──
+        _mc = s.get("mktCap", 0)
+        if _mc < 150e6:    sc += 15   # sub-$150M: maximum neglect
+        elif _mc < 350e6:  sc += 11   # $150M–$350M: very underfollowed
+        elif _mc < FG_SMALL_CAP_MAX:  sc += 7   # $350M–$2B: small cap territory
+
+        return sc
+
+    _tb_headers = [
+        "Rank", "Ticker", "Company", "Sector", "Price",
+        "PEG", "Fwd PEG", "P/E", "Fwd P/E",
+        "Gross Margin", "Oper Margin", "Net D/EBITDA",
+        "Rev Growth", "Rev Growth 5Y", "Rev Consist.",
+        "52w vs High", "Altman Z", "Shares Δ",
+        "MktCap ($B)", "Cap Size", "Score", "🏦 Insider",
+    ]
+    _tb_widths = [5, 8, 22, 15, 8, 6, 8, 6, 8, 12, 11, 12, 10, 12, 11, 11, 9, 9, 10, 7, 6, 14]
+
+    ten_baggers = build_lynch_tab(wb, stocks, "Lynch 10-Baggers", "9", _ten_bagger_filter, _ten_bagger_score,
+                                  "BF360D", "Small-cap $50M–$2B · PEG<2 · Gross margin>20% · Oper margin>0. "
+                                  "Lynch's real criteria: pricing power + growth + reasonable price. No FCF kill.",
+                                  custom_headers=_tb_headers, custom_widths=_tb_widths)
+
     quality_compounders = build_quality_compounders(wb, stocks)
 
     # Sector Valuations + ETF Rotation
@@ -7732,6 +7931,7 @@ def main():
         "Stalwarts": stalwarts, "Fast Growers": fast_growers,
         "Turnarounds": turnarounds, "Slow Growers": slow_growers,
         "Cyclicals": cyclicals, "Asset Plays": asset_plays,
+        "Lynch 10-Baggers": ten_baggers,
     }, current_prices)
 
     # ── AI analysis (single call — result shared across Overview + AI tab) ──
@@ -7744,8 +7944,9 @@ def main():
         "Slow Growers / Income (Lynch)": slow_growers,
         "Cyclicals (Lynch)": cyclicals,
         "Asset Plays (Lynch)": asset_plays,
+        "Lynch 10-Baggers": ten_baggers,
     }
-    phase_start("ai_analysis", "Running multi-agent AI analysis (4 specialists + judge)")
+    phase_start("ai_analysis", "Running multi-agent AI analysis (5 specialists + judge)")
     ai_result = call_claude_analysis(picks_data, stocks, macro=macro_data)
 
     # Auto-log AI picks every run (no flag needed)
@@ -7772,6 +7973,7 @@ def main():
         "Slow Growers / Income (Lynch)": "Slow Grower",
         "Cyclicals (Lynch)": "Cyclical",
         "Asset Plays (Lynch)": "Asset Play",
+        "Lynch 10-Baggers": "10-Bagger",
     }
     for _tab_name, _rows in picks_data.items():
         _short = _pm_strat_short.get(_tab_name, _tab_name)
@@ -7870,7 +8072,7 @@ def main():
                        _fmp_call_count, ai=ai_result,
                        portfolio=portfolio, portfolio_nav=_ptf_nav,
                        portfolio_ret=_ptf_ret, portfolio_spy_ret=_ptf_spy_ret,
-                       macro=macro_data)
+                       macro=macro_data, ten_baggers=ten_baggers)
 
     # Save
     phase_start("save", "Saving Excel + HTML dashboard")
@@ -7883,6 +8085,7 @@ def main():
         sector_rows=_sector_rows, etf_rows=_etf_rows,
         ai=ai_result, macro=macro_data,
         portfolio=portfolio, fmp_call_count=_fmp_call_count,
+        ten_baggers=ten_baggers,
     )
     html_file = output_file.replace(".xlsx", ".html")
     with open(html_file, "w", encoding="utf-8") as _hf:
