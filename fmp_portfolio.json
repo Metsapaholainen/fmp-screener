@@ -1,0 +1,242 @@
+{
+  "started": "2026-04-08",
+  "initial_cash": 100000.0,
+  "cash": 178.20999999999913,
+  "holdings": [
+    {
+      "ticker": "QLYS",
+      "company": "Qualys, Inc.",
+      "shares": 115,
+      "entry_price": 86.7,
+      "entry_date": "2026-04-08",
+      "rationale": "Best-in-class cloud security platform with 28% ROIC, 9.6% FCF yield, and PEG of 0.89 \u2014 deeply undervalued relative to quality. Sticky SaaS model with near-100% gross margins and zero net debt. MoS of ",
+      "conviction": "HIGH",
+      "sell_trigger": "Revenue growth falls below 5% for two consecutive quarters, or ROIC drops below 18%, or a major competitive displacement by CrowdStrike/SentinelOne in"
+    },
+    {
+      "ticker": "HIG",
+      "company": "The Hartford Financial Service",
+      "shares": 72,
+      "entry_price": 138.41,
+      "entry_date": "2026-04-08",
+      "rationale": "Exceptional capital-light insurer with 28% ROIC, 15.2% FCF yield, and PEG of 0.74. Commercial insurance pricing remains firm and Hartford's combined ratio discipline is best-in-class. MoS of 48% with ",
+      "conviction": "HIGH",
+      "sell_trigger": "Combined ratio rises above 100% for two consecutive quarters, or commercial P&C pricing turns negative, or ROIC falls below 20%"
+    },
+    {
+      "ticker": "ADBE",
+      "company": "Adobe Inc.",
+      "shares": 41,
+      "entry_price": 241.23,
+      "entry_date": "2026-04-08",
+      "rationale": "37% ROIC and 10.6% FCF yield at a PEG of 0.79 is genuinely rare for a dominant creative/document software franchise. AI integration (Firefly) is a revenue catalyst rather than a threat. Recurring subs",
+      "conviction": "HIGH",
+      "sell_trigger": "FCF margin compresses below 25%, AI-native competitors (Canva, Figma post-acquisition alternative) achieve material enterprise penetration, or revenue"
+    },
+    {
+      "ticker": "HALO",
+      "company": "Halozyme Therapeutics",
+      "shares": 152,
+      "entry_price": 65.51,
+      "entry_date": "2026-04-08",
+      "rationale": "ENHANZE drug delivery technology is a pure-play royalty-like business with 24% ROIC, 8.6% FCF yield, and PEG of 0.63. Partners include J&J, Roche, Pfizer \u2014 blue-chip validation. 38% revenue growth wit",
+      "conviction": "HIGH",
+      "sell_trigger": "Key partner (J&J DARZALEX subcutaneous) loses market share to competing formulations, royalty rates renegotiated materially downward, or ROIC falls be"
+    },
+    {
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 310,
+      "entry_price": 32.16,
+      "entry_date": "2026-04-08",
+      "rationale": "30% ROIC, 12.6% FCF yield, PEG of 0.31, and 75% MoS \u2014 one of the most compelling value/quality combinations in the screen. Dominant tax preparation franchise with ~20M clients annually, pricing power,",
+      "conviction": "HIGH",
+      "sell_trigger": "IRS free filing program materially expands to include complex returns (threatening DIY segment), or FCF yield drops below 7%, or ROIC falls below 22%"
+    },
+    {
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 239,
+      "entry_price": 41.7,
+      "entry_date": "2026-04-08",
+      "rationale": "Enterprise AI/automation software with exceptional 29% ROIC and PEG of 0.51. Transition to cloud ACV model is accelerating revenue quality. 17% revenue growth with high-value Fortune 500 clients in fi",
+      "conviction": "HIGH",
+      "sell_trigger": "ACV growth decelerates below 10% for two consecutive quarters, cloud transition stalls, or major client churn in core financial services vertical"
+    },
+    {
+      "ticker": "CQP",
+      "company": "Cheniere Energy Partners",
+      "shares": 157,
+      "entry_price": 63.5,
+      "entry_date": "2026-04-08",
+      "rationale": "22% ROIC, 8.7% FCF yield, and PEG of 0.24 with 86% MoS. LNG demand is structurally growing as Europe diversifies away from Russian gas and Asian demand accelerates. CQP's long-term take-or-pay contrac",
+      "conviction": "HIGH",
+      "sell_trigger": "Henry Hub price collapses below $1.50 for sustained period impacting economics, key long-term contracts cancelled or renegotiated, or ROIC falls below"
+    },
+    {
+      "ticker": "DOCS",
+      "company": "Doximity, Inc.",
+      "shares": 451,
+      "entry_price": 22.12,
+      "entry_date": "2026-04-08",
+      "rationale": "20% ROIC, 7.3% FCF yield, PEG of 0.78, and 20% revenue growth. Doximity is the LinkedIn for physicians with ~80% of US doctors on platform \u2014 an extraordinarily durable network effect moat. Pharma digi",
+      "conviction": "MEDIUM",
+      "sell_trigger": "Physician network engagement declines materially, pharma digital ad budgets cut by >15%, or revenue growth falls below 12%"
+    },
+    {
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 773,
+      "entry_price": 12.92,
+      "entry_date": "2026-04-08",
+      "rationale": "29% ROIC, 10.9% FCF yield, PEG of 0.77, and 47% revenue growth with 85% MoS. Dominant cross-border payments infrastructure for emerging markets (LatAm, Africa, Asia). Network effects in local payment ",
+      "conviction": "MEDIUM",
+      "sell_trigger": "Total Payment Volume growth falls below 20%, regulatory action in key EM markets (Brazil, Mexico), or gross profit per dollar of TPV compresses materi"
+    },
+    {
+      "ticker": "ESTC",
+      "company": "Elastic N.V.",
+      "shares": 222,
+      "entry_price": 44.97,
+      "entry_date": "2026-04-09",
+      "rationale": "ESTC offers the highest ROIC in the candidate universe at 61% \u2014 exceptional capital efficiency \u2014 with 5.0% FCF yield, PEG of 0.46, and 17% revenue growth. Elastic's search and observability platform (",
+      "conviction": "HIGH",
+      "sell_trigger": "ROIC falls below 30% for two consecutive quarters, revenue growth decelerates below 10% on a trailing basis, or FCF turns consistently negative \u2014 indi"
+    }
+  ],
+  "transactions": [
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "QLYS",
+      "company": "Qualys, Inc.",
+      "shares": 115,
+      "price": 86.7,
+      "value": 9970.35,
+      "return_pct": 0.0,
+      "rationale": "Best-in-class cloud security platform with 28% ROIC, 9.6% FCF yield, and PEG of 0.89 \u2014 deeply undervalued relative to quality. Sticky SaaS model with near-100% gross margins and zero net debt. MoS of "
+    },
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "HIG",
+      "company": "The Hartford Financial Service",
+      "shares": 72,
+      "price": 138.41,
+      "value": 9965.52,
+      "return_pct": 0.0,
+      "rationale": "Exceptional capital-light insurer with 28% ROIC, 15.2% FCF yield, and PEG of 0.74. Commercial insurance pricing remains firm and Hartford's combined ratio discipline is best-in-class. MoS of 48% with "
+    },
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "ADBE",
+      "company": "Adobe Inc.",
+      "shares": 41,
+      "price": 241.23,
+      "value": 9890.43,
+      "return_pct": 0.0,
+      "rationale": "37% ROIC and 10.6% FCF yield at a PEG of 0.79 is genuinely rare for a dominant creative/document software franchise. AI integration (Firefly) is a revenue catalyst rather than a threat. Recurring subs"
+    },
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "HALO",
+      "company": "Halozyme Therapeutics",
+      "shares": 152,
+      "price": 65.51,
+      "value": 9956.85,
+      "return_pct": 0.0,
+      "rationale": "ENHANZE drug delivery technology is a pure-play royalty-like business with 24% ROIC, 8.6% FCF yield, and PEG of 0.63. Partners include J&J, Roche, Pfizer \u2014 blue-chip validation. 38% revenue growth wit"
+    },
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 310,
+      "price": 32.16,
+      "value": 9969.6,
+      "return_pct": 0.0,
+      "rationale": "30% ROIC, 12.6% FCF yield, PEG of 0.31, and 75% MoS \u2014 one of the most compelling value/quality combinations in the screen. Dominant tax preparation franchise with ~20M clients annually, pricing power,"
+    },
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 239,
+      "price": 41.7,
+      "value": 9965.58,
+      "return_pct": 0.0,
+      "rationale": "Enterprise AI/automation software with exceptional 29% ROIC and PEG of 0.51. Transition to cloud ACV model is accelerating revenue quality. 17% revenue growth with high-value Fortune 500 clients in fi"
+    },
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "CQP",
+      "company": "Cheniere Energy Partners",
+      "shares": 157,
+      "price": 63.5,
+      "value": 9969.5,
+      "return_pct": 0.0,
+      "rationale": "22% ROIC, 8.7% FCF yield, and PEG of 0.24 with 86% MoS. LNG demand is structurally growing as Europe diversifies away from Russian gas and Asian demand accelerates. CQP's long-term take-or-pay contrac"
+    },
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "DOCS",
+      "company": "Doximity, Inc.",
+      "shares": 451,
+      "price": 22.12,
+      "value": 9978.38,
+      "return_pct": 0.0,
+      "rationale": "20% ROIC, 7.3% FCF yield, PEG of 0.78, and 20% revenue growth. Doximity is the LinkedIn for physicians with ~80% of US doctors on platform \u2014 an extraordinarily durable network effect moat. Pharma digi"
+    },
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 773,
+      "price": 12.92,
+      "value": 9987.16,
+      "return_pct": 0.0,
+      "rationale": "29% ROIC, 10.9% FCF yield, PEG of 0.77, and 47% revenue growth with 85% MoS. Dominant cross-border payments infrastructure for emerging markets (LatAm, Africa, Asia). Network effects in local payment "
+    },
+    {
+      "date": "2026-04-08",
+      "action": "BUY",
+      "ticker": "CF",
+      "company": "CF Industries Holdings",
+      "shares": 81,
+      "price": 122.72,
+      "value": 9940.73,
+      "return_pct": 0.0,
+      "rationale": "16% ROIC, 8.7% FCF yield, PEG of 0.44, and 61% MoS. World's largest nitrogen fertilizer producer with structural advantage from low-cost US natural gas feedstock. Global food security and decarbonizat"
+    },
+    {
+      "date": "2026-04-09",
+      "action": "SELL",
+      "ticker": "CF",
+      "company": "CF Industries Holdings",
+      "shares": 81,
+      "price": 120.44,
+      "proceeds": 9755.64,
+      "return_pct": -1.86,
+      "rationale": "Auto-exit: Basic Materials excluded from quality growth portfolio"
+    },
+    {
+      "date": "2026-04-09",
+      "action": "BUY",
+      "ticker": "ESTC",
+      "company": "Elastic N.V.",
+      "shares": 222,
+      "price": 44.97,
+      "value": 9983.34,
+      "return_pct": 0.0,
+      "rationale": "ESTC offers the highest ROIC in the candidate universe at 61% \u2014 exceptional capital efficiency \u2014 with 5.0% FCF yield, PEG of 0.46, and 17% revenue growth. Elastic's search and observability platform ("
+    }
+  ],
+  "last_updated": "2026-04-16"
+}

@@ -1,0 +1,27 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Claude Code
+.claude/
+
+# Screener outputs (timestamped runs — only index.html is tracked)
+fmp_screener_*.html
+fmp_screener_*.xlsx
+
+# Large runtime cache (~40 MB, regenerated each run)
+fmp_screener_cache.json
+
+# Logs
+run_output.txt
+debug_output.txt

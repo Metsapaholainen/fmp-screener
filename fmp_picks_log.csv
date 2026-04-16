@@ -1,0 +1,653 @@
+date,strategy,ticker,entry_price,company
+2026-03-30,IV Discount,CMCSA,28.33,Comcast Corporation
+2026-03-30,IV Discount,T,29.09,AT&T Inc.
+2026-03-30,IV Discount,TBB,21.51,AT&T Inc. 5.35% GLB NTS 66
+2026-03-30,IV Discount,TFC,44.53,Truist Financial Corporation
+2026-03-30,IV Discount,CI,261.96,Cigna Corporation
+2026-03-30,Quality Compounders,ADBE,234.84,Adobe Inc.
+2026-03-30,Quality Compounders,HIG,132.32,The Hartford Financial Service
+2026-03-30,Quality Compounders,ALL,202.71,The Allstate Corporation
+2026-03-30,Quality Compounders,GFI,42.33,Gold Fields Limited
+2026-03-30,Quality Compounders,APP,381.2,AppLovin Corporation
+2026-03-30,Stalwarts,HIG,132.32,The Hartford Financial Service
+2026-03-30,Stalwarts,UBER,69.18,"Uber Technologies, Inc."
+2026-03-30,Stalwarts,ADBE,234.84,Adobe Inc.
+2026-03-30,Stalwarts,CCL,24.19,Carnival Corporation & plc
+2026-03-30,Stalwarts,TRV,285.27,"The Travelers Companies, Inc."
+2026-03-30,Fast Growers,MFC,33.63,Manulife Financial Corporation
+2026-03-30,Fast Growers,PUK,27.78,Prudential plc
+2026-03-30,Fast Growers,VG,17.53,"Venture Global, Inc."
+2026-03-30,Fast Growers,BNS,67.71,The Bank of Nova Scotia
+2026-03-30,Fast Growers,GFI,42.33,Gold Fields Limited
+2026-03-30,Turnarounds,CI,261.96,Cigna Corporation
+2026-03-30,Turnarounds,SLF,61.37,Sun Life Financial Inc.
+2026-03-30,Turnarounds,TFC,44.53,Truist Financial Corporation
+2026-03-30,Turnarounds,ACGL,93.42,Arch Capital Group Ltd.
+2026-03-30,Turnarounds,UBER,69.18,"Uber Technologies, Inc."
+2026-03-30,Slow Growers,NTES,109.26,"NetEase, Inc."
+2026-03-30,Slow Growers,MPLX,58.13,MPLX Lp
+2026-03-30,Slow Growers,BMY,58.54,Bristol-Myers Squibb Company
+2026-03-30,Slow Growers,MO,66.48,"Altria Group, Inc."
+2026-03-30,Slow Growers,ALL,202.71,The Allstate Corporation
+2026-03-30,Cyclicals,ALL,202.71,The Allstate Corporation
+2026-03-30,Cyclicals,PYPL,43.59,"PayPal Holdings, Inc."
+2026-03-30,Cyclicals,PBR,20.77,Petróleo Brasileiro S.A. - Pet
+2026-03-30,Cyclicals,HIG,132.32,The Hartford Financial Service
+2026-03-30,Cyclicals,ACGL,93.42,Arch Capital Group Ltd.
+2026-03-30,Asset Plays,VOD,14.49,Vodafone Group Public Limited 
+2026-03-30,Asset Plays,MT,49.62,ArcelorMittal S.A.
+2026-03-30,Asset Plays,COF,176.1,Capital One Financial Corporat
+2026-03-30,Asset Plays,BCS,20.24,Barclays PLC
+2026-03-30,Asset Plays,TFC,44.53,Truist Financial Corporation
+2026-03-30,IV Discount,SLF,61.37,Sun Life Financial Inc.
+2026-03-30,IV Discount,ACGL,93.42,Arch Capital Group Ltd.
+2026-03-30,IV Discount,PBR,20.77,Petróleo Brasileiro S.A. - Pet
+2026-03-30,Turnarounds,ELV,286.39,Elevance Health Inc.
+2026-03-30,IV Discount,JBS,17.03,JBS N.V.
+2026-03-30,IV Discount,CFG,57.78,"Citizens Financial Group, Inc."
+2026-03-30,IV Discount,UAL,88.44,"United Airlines Holdings, Inc."
+2026-03-30,Stalwarts,GDDY,79.97,GoDaddy Inc.
+2026-03-30,Stalwarts,CNQ,50.09,Canadian Natural Resources Lim
+2026-03-30,Fast Growers,NBIS,100.82,Nebius Group N.V.
+2026-03-30,Fast Growers,ENLT,65.99,Enlight Renewable Energy Ltd
+2026-03-30,Turnarounds,JBS,17.03,JBS N.V.
+2026-03-30,Turnarounds,BAH,78.49,Booz Allen Hamilton Holding Co
+2026-03-30,Turnarounds,SFD,26.69,"Smithfield Foods, Inc."
+2026-03-30,Slow Growers,EWBC,103.96,"East West Bancorp, Inc."
+2026-03-30,Slow Growers,CIB,69.98,Grupo Cibest S.A.
+2026-03-30,Slow Growers,RF,25.16,Regions Financial Corporation
+2026-03-30,Cyclicals,UAL,88.44,"United Airlines Holdings, Inc."
+2026-03-30,Cyclicals,SYF,65.36,Synchrony Financial
+2026-03-30,Asset Plays,KT,21.53,KT Corporation
+2026-03-30,Asset Plays,FCNCN,24.48,"First Citizens BancShares, Inc"
+2026-03-30,Asset Plays,KEP,14.87,Korea Electric Power Corporati
+2026-03-30,Asset Plays,EG,317.93,"Everest Re Group, Ltd."
+2026-03-30,Asset Plays,BNT,40.6,Brookfield Wealth Solutions Lt
+2026-03-30,IV Discount,ATAT,34.92,Atour Lifestyle Holdings Limit
+2026-03-30,IV Discount,TDW,82.4,Tidewater Inc.
+2026-03-30,IV Discount,FNB,16.18,F.N.B. Corporation
+2026-03-30,Quality Compounders,PEGA,40.31,Pegasystems Inc.
+2026-03-30,Quality Compounders,ATAT,34.92,Atour Lifestyle Holdings Limit
+2026-03-30,Quality Compounders,QLYS,85.63,"Qualys, Inc."
+2026-03-30,Stalwarts,MORN,156.81,"Morningstar, Inc."
+2026-03-30,Stalwarts,CACC,419.49,Credit Acceptance Corporation
+2026-03-30,Stalwarts,G,36.58,Genpact Limited
+2026-03-30,Fast Growers,ARWR,57.78,"Arrowhead Pharmaceuticals, Inc"
+2026-03-30,Fast Growers,RCD,18.72,Ready Capital Corporation Note
+2026-03-30,Fast Growers,MNSO,15.89,MINISO Group Holding Limited
+2026-03-30,Fast Growers,ONDS,8.8,Ondas Holdings Inc.
+2026-03-30,Turnarounds,ATAT,34.92,Atour Lifestyle Holdings Limit
+2026-03-30,Turnarounds,CVSA,114.61,Covista Inc.
+2026-03-30,Slow Growers,WU,8.73,The Western Union Company
+2026-03-30,Slow Growers,FBP,20.86,First BanCorp.
+2026-03-30,Cyclicals,SLM,20.36,SLM Corporation
+2026-03-30,Cyclicals,OMF,51.55,"OneMain Holdings, Inc."
+2026-03-30,Cyclicals,HG,28.61,"Hamilton Insurance Group, Ltd."
+2026-03-30,Asset Plays,MCHB,14.37,Mechanics Bank
+2026-03-30,Asset Plays,NMIH,36.86,"NMI Holdings, Inc."
+2026-03-30,Asset Plays,GNW,7.99,"Genworth Financial, Inc."
+2026-03-30,Fast Growers,DLO,12.27,DLocal Limited
+2026-03-30,Fast Growers,TGTX,31.75,"TG Therapeutics, Inc."
+2026-03-30,Fast Growers,PLMR,116.83,"Palomar Holdings, Inc."
+2026-03-30,Fast Growers,FUTU,133.94,Futu Holdings Limited
+2026-03-30,Fast Growers,CNX,40.58,CNX Resources Corporation
+2026-03-30,Asset Plays,TTAN,60.39,"ServiceTitan, Inc."
+2026-03-30,IV Discount,HRB,31.21,"H&R Block, Inc."
+2026-03-30,IV Discount,BAH,78.49,Booz Allen Hamilton Holding Co
+2026-03-30,IV Discount,MTG,25.72,MGIC Investment Corporation
+2026-03-30,IV Discount,CALM,77.12,"Cal-Maine Foods, Inc."
+2026-03-31,IV Discount,HRB,31.21,"H&R Block, Inc."
+2026-03-31,IV Discount,BAH,78.49,Booz Allen Hamilton Holding Co
+2026-03-31,IV Discount,ACGL,93.42,Arch Capital Group Ltd.
+2026-03-31,IV Discount,MTG,25.72,MGIC Investment Corporation
+2026-03-31,IV Discount,CALM,77.12,"Cal-Maine Foods, Inc."
+2026-03-31,Quality Compounders,PEGA,40.31,Pegasystems Inc.
+2026-03-31,Quality Compounders,ADBE,234.84,Adobe Inc.
+2026-03-31,Quality Compounders,ATAT,34.92,Atour Lifestyle Holdings Limit
+2026-03-31,Quality Compounders,QLYS,85.63,"Qualys, Inc."
+2026-03-31,Quality Compounders,HIG,132.32,The Hartford Financial Service
+2026-03-31,Stalwarts,HIG,132.32,The Hartford Financial Service
+2026-03-31,Stalwarts,GDDY,79.97,GoDaddy Inc.
+2026-03-31,Stalwarts,MORN,156.81,"Morningstar, Inc."
+2026-03-31,Stalwarts,CACC,419.49,Credit Acceptance Corporation
+2026-03-31,Stalwarts,G,36.58,Genpact Limited
+2026-03-31,Fast Growers,DLO,12.27,DLocal Limited
+2026-03-31,Fast Growers,TGTX,31.75,"TG Therapeutics, Inc."
+2026-03-31,Fast Growers,PLMR,116.83,"Palomar Holdings, Inc."
+2026-03-31,Fast Growers,FUTU,133.94,Futu Holdings Limited
+2026-03-31,Fast Growers,CNX,40.58,CNX Resources Corporation
+2026-03-31,Turnarounds,CQP,64.92,"Cheniere Energy Partners, L.P."
+2026-03-31,Turnarounds,DUOL,95.35,"Duolingo, Inc."
+2026-03-31,Turnarounds,DLO,12.27,DLocal Limited
+2026-03-31,Turnarounds,RELY,15.01,"Remitly Global, Inc."
+2026-03-31,Turnarounds,LNG,296.91,"Cheniere Energy, Inc."
+2026-03-31,Slow Growers,WU,8.73,The Western Union Company
+2026-03-31,Slow Growers,FBP,20.86,First BanCorp.
+2026-03-31,Slow Growers,NTES,109.26,"NetEase, Inc."
+2026-03-31,Slow Growers,EWBC,103.96,"East West Bancorp, Inc."
+2026-03-31,Slow Growers,MPLX,58.13,MPLX Lp
+2026-03-31,Cyclicals,NOV,19.88,NOV Inc.
+2026-03-31,Cyclicals,ECCC,24.55,Eagle Point Credit Company Inc
+2026-03-31,Cyclicals,NVG,11.98,Nuveen AMT-Free Municipal Cred
+2026-03-31,Cyclicals,ECCU,24.61,Eagle Point Credit Company Inc
+2026-03-31,Cyclicals,APLE,11.49,"Apple Hospitality REIT, Inc."
+2026-03-31,Asset Plays,MCHB,14.37,Mechanics Bank
+2026-03-31,Asset Plays,GNW,7.99,"Genworth Financial, Inc."
+2026-03-31,Asset Plays,NMIH,36.86,"NMI Holdings, Inc."
+2026-03-31,Asset Plays,TTAN,60.39,"ServiceTitan, Inc."
+2026-03-31,Asset Plays,FCNCN,24.48,"First Citizens BancShares, Inc"
+2026-03-31,IV Discount,RNR,292.21,RenaissanceRe Holdings Ltd.
+2026-03-31,IV Discount,CQP,64.92,"Cheniere Energy Partners, L.P."
+2026-03-31,Quality Compounders,HALO,61.63,"Halozyme Therapeutics, Inc."
+2026-03-31,Quality Compounders,KGC,28.73,Kinross Gold Corporation
+2026-03-31,Stalwarts,CF,136.45,"CF Industries Holdings, Inc."
+2026-03-31,Stalwarts,CQP,64.92,"Cheniere Energy Partners, L.P."
+2026-03-31,Cyclicals,SBLK,22.25,Star Bulk Carriers Corp.
+2026-03-31,Cyclicals,MHK,96.26,"Mohawk Industries, Inc."
+2026-03-31,Cyclicals,SMG,60.65,The Scotts Miracle-Gro Company
+2026-03-31,Asset Plays,TKC,5.99,Turkcell Iletisim Hizmetleri A
+2026-03-31,Asset Plays,ARE,46.04,Alexandria Real Estate Equitie
+2026-03-31,Asset Plays,RNR,292.21,RenaissanceRe Holdings Ltd.
+2026-03-31,Asset Plays,GGB,3.42,Gerdau S.A.
+2026-04-01,IV Discount,RNR,292.21,RenaissanceRe Holdings Ltd.
+2026-04-01,IV Discount,HRB,31.21,"H&R Block, Inc."
+2026-04-01,IV Discount,BAH,78.49,Booz Allen Hamilton Holding Co
+2026-04-01,IV Discount,ACGL,93.42,Arch Capital Group Ltd.
+2026-04-01,IV Discount,CQP,64.92,"Cheniere Energy Partners, L.P."
+2026-04-01,Quality Compounders,HALO,61.63,"Halozyme Therapeutics, Inc."
+2026-04-01,Quality Compounders,PEGA,40.31,Pegasystems Inc.
+2026-04-01,Quality Compounders,KGC,28.73,Kinross Gold Corporation
+2026-04-01,Quality Compounders,ADBE,234.84,Adobe Inc.
+2026-04-01,Quality Compounders,ATAT,34.92,Atour Lifestyle Holdings Limit
+2026-04-01,Stalwarts,HIG,132.32,The Hartford Financial Service
+2026-04-01,Stalwarts,CF,136.45,"CF Industries Holdings, Inc."
+2026-04-01,Stalwarts,GDDY,79.97,GoDaddy Inc.
+2026-04-01,Stalwarts,MORN,156.81,"Morningstar, Inc."
+2026-04-01,Stalwarts,CQP,64.92,"Cheniere Energy Partners, L.P."
+2026-04-01,Fast Growers,DLO,12.27,DLocal Limited
+2026-04-01,Fast Growers,TGTX,31.75,"TG Therapeutics, Inc."
+2026-04-01,Fast Growers,PLMR,116.83,"Palomar Holdings, Inc."
+2026-04-01,Fast Growers,FUTU,133.94,Futu Holdings Limited
+2026-04-01,Fast Growers,CNX,40.58,CNX Resources Corporation
+2026-04-01,Turnarounds,CQP,64.92,"Cheniere Energy Partners, L.P."
+2026-04-01,Turnarounds,DUOL,95.35,"Duolingo, Inc."
+2026-04-01,Turnarounds,DLO,12.27,DLocal Limited
+2026-04-01,Turnarounds,RELY,15.01,"Remitly Global, Inc."
+2026-04-01,Turnarounds,LNG,296.91,"Cheniere Energy, Inc."
+2026-04-01,Slow Growers,WU,8.73,The Western Union Company
+2026-04-01,Slow Growers,FBP,20.86,First BanCorp.
+2026-04-01,Slow Growers,NTES,109.26,"NetEase, Inc."
+2026-04-01,Slow Growers,EWBC,103.96,"East West Bancorp, Inc."
+2026-04-01,Slow Growers,MPLX,58.13,MPLX Lp
+2026-04-01,Cyclicals,NOV,19.88,NOV Inc.
+2026-04-01,Cyclicals,APLE,11.49,"Apple Hospitality REIT, Inc."
+2026-04-01,Cyclicals,SBLK,22.25,Star Bulk Carriers Corp.
+2026-04-01,Cyclicals,MHK,96.26,"Mohawk Industries, Inc."
+2026-04-01,Cyclicals,SMG,60.65,The Scotts Miracle-Gro Company
+2026-04-01,Asset Plays,GNW,7.99,"Genworth Financial, Inc."
+2026-04-01,Asset Plays,BZ,13.13,Kanzhun Limited
+2026-04-01,Asset Plays,RLX,2.12,RLX Technology Inc.
+2026-04-01,Asset Plays,PDD,99.81,PDD Holdings Inc.
+2026-04-01,Asset Plays,WIT,2.08,Wipro Limited
+2026-04-01,Stalwarts,PEGA,40.31,Pegasystems Inc.
+2026-04-01,Stalwarts,FTDR,53.64,"Frontdoor, Inc."
+2026-04-01,Asset Plays,RDY,13.48,Dr. Reddy's Laboratories Limit
+2026-04-01,IV Discount,TDW,83.42,Tidewater Inc.
+2026-04-01,Asset Plays,MKL,1895.37,Markel Corporation
+2026-04-01,Asset Plays,SIM,31.36,"Grupo Simec, S.A.B. de C.V."
+2026-04-02,IV Discount,HRB,31.93,"H&R Block, Inc."
+2026-04-02,IV Discount,BAH,82.51,Booz Allen Hamilton Holding Co
+2026-04-02,IV Discount,ACGL,96.98,Arch Capital Group Ltd.
+2026-04-02,IV Discount,CQP,64.47,"Cheniere Energy Partners, L.P."
+2026-04-02,IV Discount,TDW,84.41,Tidewater Inc.
+2026-04-02,Quality Compounders,ADBE,242.36,Adobe Inc.
+2026-04-02,Quality Compounders,HALO,64.07,"Halozyme Therapeutics, Inc."
+2026-04-02,Quality Compounders,PEGA,42.58,Pegasystems Inc.
+2026-04-02,Quality Compounders,KGC,31.59,Kinross Gold Corporation
+2026-04-02,Quality Compounders,ATAT,36.42,Atour Lifestyle Holdings Limit
+2026-04-02,Stalwarts,CF,130.1,"CF Industries Holdings, Inc."
+2026-04-02,Stalwarts,CQP,64.47,"Cheniere Energy Partners, L.P."
+2026-04-02,Stalwarts,PEGA,42.58,Pegasystems Inc.
+2026-04-02,Stalwarts,FTDR,54.55,"Frontdoor, Inc."
+2026-04-02,Stalwarts,HIG,136.46,The Hartford Financial Service
+2026-04-02,Fast Growers,DLO,12.99,DLocal Limited
+2026-04-02,Fast Growers,TGTX,33.78,"TG Therapeutics, Inc."
+2026-04-02,Fast Growers,PLMR,119.46,"Palomar Holdings, Inc."
+2026-04-02,Fast Growers,FUTU,139.35,Futu Holdings Limited
+2026-04-02,Fast Growers,CNX,38.73,CNX Resources Corporation
+2026-04-02,Turnarounds,CQP,64.47,"Cheniere Energy Partners, L.P."
+2026-04-02,Turnarounds,DUOL,97.22,"Duolingo, Inc."
+2026-04-02,Turnarounds,DLO,12.99,DLocal Limited
+2026-04-02,Turnarounds,RELY,15.85,"Remitly Global, Inc."
+2026-04-02,Turnarounds,LNG,280.49,"Cheniere Energy, Inc."
+2026-04-02,Slow Growers,WU,8.64,The Western Union Company
+2026-04-02,Slow Growers,FBP,21.59,First BanCorp.
+2026-04-02,Slow Growers,NTES,112.25,"NetEase, Inc."
+2026-04-02,Slow Growers,EWBC,108.37,"East West Bancorp, Inc."
+2026-04-02,Slow Growers,MPLX,55.55,MPLX Lp
+2026-04-02,Cyclicals,NOV,18.62,NOV Inc.
+2026-04-02,Cyclicals,APLE,11.57,"Apple Hospitality REIT, Inc."
+2026-04-02,Cyclicals,SBLK,23.92,Star Bulk Carriers Corp.
+2026-04-02,Cyclicals,MHK,96.09,"Mohawk Industries, Inc."
+2026-04-02,Cyclicals,SMG,62.94,The Scotts Miracle-Gro Company
+2026-04-02,Asset Plays,BZ,13.48,Kanzhun Limited
+2026-04-02,Asset Plays,RLX,2.19,RLX Technology Inc.
+2026-04-02,Asset Plays,PDD,100.24,PDD Holdings Inc.
+2026-04-02,Asset Plays,SIM,31.36,"Grupo Simec, S.A.B. de C.V."
+2026-04-02,Asset Plays,GNW,8.4,"Genworth Financial, Inc."
+2026-04-03,IV Discount,HRB,32.18,"H&R Block, Inc."
+2026-04-03,IV Discount,BAH,83.13,Booz Allen Hamilton Holding Co
+2026-04-03,IV Discount,ACGL,96.74,Arch Capital Group Ltd.
+2026-04-03,IV Discount,CQP,65.1,"Cheniere Energy Partners, L.P."
+2026-04-03,IV Discount,TDW,84.38,Tidewater Inc.
+2026-04-03,Quality Compounders,ADBE,242.92,Adobe Inc.
+2026-04-03,Quality Compounders,HALO,64.49,"Halozyme Therapeutics, Inc."
+2026-04-03,Quality Compounders,PEGA,42.62,Pegasystems Inc.
+2026-04-03,Quality Compounders,KGC,31.51,Kinross Gold Corporation
+2026-04-03,Quality Compounders,ATAT,36.48,Atour Lifestyle Holdings Limit
+2026-04-03,Stalwarts,CF,129.97,"CF Industries Holdings, Inc."
+2026-04-03,Stalwarts,CQP,65.1,"Cheniere Energy Partners, L.P."
+2026-04-03,Stalwarts,PEGA,42.62,Pegasystems Inc.
+2026-04-03,Stalwarts,FTDR,54.58,"Frontdoor, Inc."
+2026-04-03,Stalwarts,HIG,136.19,The Hartford Financial Service
+2026-04-03,Fast Growers,DLO,12.86,DLocal Limited
+2026-04-03,Fast Growers,TGTX,33.53,"TG Therapeutics, Inc."
+2026-04-03,Fast Growers,PLMR,120.1,"Palomar Holdings, Inc."
+2026-04-03,Fast Growers,FUTU,140.16,Futu Holdings Limited
+2026-04-03,Fast Growers,CNX,38.71,CNX Resources Corporation
+2026-04-03,Turnarounds,CQP,65.1,"Cheniere Energy Partners, L.P."
+2026-04-03,Turnarounds,DUOL,96.54,"Duolingo, Inc."
+2026-04-03,Turnarounds,DLO,12.86,DLocal Limited
+2026-04-03,Turnarounds,RELY,16.02,"Remitly Global, Inc."
+2026-04-03,Turnarounds,LNG,281.16,"Cheniere Energy, Inc."
+2026-04-03,Slow Growers,WU,8.71,The Western Union Company
+2026-04-03,Slow Growers,FBP,21.74,First BanCorp.
+2026-04-03,Slow Growers,NTES,112.81,"NetEase, Inc."
+2026-04-03,Slow Growers,EWBC,108.99,"East West Bancorp, Inc."
+2026-04-03,Slow Growers,MPLX,55.9,MPLX Lp
+2026-04-03,Cyclicals,NOV,18.78,NOV Inc.
+2026-04-03,Cyclicals,APLE,11.53,"Apple Hospitality REIT, Inc."
+2026-04-03,Cyclicals,SBLK,24.32,Star Bulk Carriers Corp.
+2026-04-03,Cyclicals,MHK,96.8,"Mohawk Industries, Inc."
+2026-04-03,Cyclicals,SMG,63.88,The Scotts Miracle-Gro Company
+2026-04-03,Asset Plays,BZ,13.52,Kanzhun Limited
+2026-04-03,Asset Plays,RLX,2.19,RLX Technology Inc.
+2026-04-03,Asset Plays,PDD,100.87,PDD Holdings Inc.
+2026-04-03,Asset Plays,SIM,29.56,"Grupo Simec, S.A.B. de C.V."
+2026-04-03,Asset Plays,GNW,8.39,"Genworth Financial, Inc."
+2026-04-03,IV Discount,MTG,26.52,MGIC Investment Corporation
+2026-04-03,Quality Compounders,QLYS,88.36,"Qualys, Inc."
+2026-04-03,Quality Compounders,FIX,1417.19,"Comfort Systems USA, Inc."
+2026-04-03,Quality Compounders,GFI,47.58,Gold Fields Limited
+2026-04-03,Stalwarts,NTES,112.81,"NetEase, Inc."
+2026-04-03,Stalwarts,EAT,144.69,"Brinker International, Inc."
+2026-04-03,Stalwarts,GNTX,21.51,Gentex Corporation
+2026-04-03,Fast Growers,ALNY,318.85,"Alnylam Pharmaceuticals, Inc."
+2026-04-03,Fast Growers,RDDT,136.04,"Reddit, Inc."
+2026-04-03,Quality Compounders,JOE,65.15,The St. Joe Company
+2026-04-03,Quality Compounders,HIG,136.19,The Hartford Financial Service
+2026-04-03,IV Discount,RLI,58.14,RLI Corp.
+2026-04-03,Quality Compounders,KLAC,1516.84,KLA Corporation
+2026-04-03,Stalwarts,QLYS,88.36,"Qualys, Inc."
+2026-04-03,Fast Growers,PTCT,67.77,"PTC Therapeutics, Inc."
+2026-04-03,Fast Growers,BKNG,4194.31,Booking Holdings Inc.
+2026-04-03,Slow Growers,RF,26.47,Regions Financial Corporation
+2026-04-03,Slow Growers,FRME,39.43,First Merchants Corporation
+2026-04-03,Asset Plays,RDY,13.32,Dr. Reddy's Laboratories Limit
+2026-04-04,IV Discount,HRB,32.18,"H&R Block, Inc."
+2026-04-04,IV Discount,ACGL,96.74,Arch Capital Group Ltd.
+2026-04-04,IV Discount,TDW,84.38,Tidewater Inc.
+2026-04-04,IV Discount,MTG,26.52,MGIC Investment Corporation
+2026-04-04,IV Discount,RLI,58.14,RLI Corp.
+2026-04-04,Quality Compounders,QLYS,88.36,"Qualys, Inc."
+2026-04-04,Quality Compounders,KLAC,1516.84,KLA Corporation
+2026-04-04,Quality Compounders,HIG,136.19,The Hartford Financial Service
+2026-04-04,Quality Compounders,FIX,1417.19,"Comfort Systems USA, Inc."
+2026-04-04,Quality Compounders,ASML,1317.23,ASML Holding N.V.
+2026-04-04,Stalwarts,PEGA,42.62,Pegasystems Inc.
+2026-04-04,Stalwarts,QLYS,88.36,"Qualys, Inc."
+2026-04-04,Stalwarts,HIG,136.19,The Hartford Financial Service
+2026-04-04,Stalwarts,LOGI,91.98,Logitech International S.A.
+2026-04-04,Stalwarts,GNTX,21.51,Gentex Corporation
+2026-04-04,Fast Growers,DLO,12.86,DLocal Limited
+2026-04-04,Fast Growers,PTCT,67.77,"PTC Therapeutics, Inc."
+2026-04-04,Fast Growers,RDDT,136.04,"Reddit, Inc."
+2026-04-04,Fast Growers,BKNG,4194.31,Booking Holdings Inc.
+2026-04-04,Fast Growers,PEGA,42.62,Pegasystems Inc.
+2026-04-04,Turnarounds,CQP,65.1,"Cheniere Energy Partners, L.P."
+2026-04-04,Turnarounds,DUOL,96.54,"Duolingo, Inc."
+2026-04-04,Turnarounds,DLO,12.86,DLocal Limited
+2026-04-04,Turnarounds,RELY,16.02,"Remitly Global, Inc."
+2026-04-04,Turnarounds,LNG,281.16,"Cheniere Energy, Inc."
+2026-04-04,Slow Growers,NTES,112.81,"NetEase, Inc."
+2026-04-04,Slow Growers,MPLX,55.9,MPLX Lp
+2026-04-04,Slow Growers,WU,8.71,The Western Union Company
+2026-04-04,Slow Growers,RF,26.47,Regions Financial Corporation
+2026-04-04,Slow Growers,FRME,39.43,First Merchants Corporation
+2026-04-04,Cyclicals,NOV,18.78,NOV Inc.
+2026-04-04,Cyclicals,APLE,11.53,"Apple Hospitality REIT, Inc."
+2026-04-04,Cyclicals,SBLK,24.32,Star Bulk Carriers Corp.
+2026-04-04,Cyclicals,MHK,96.8,"Mohawk Industries, Inc."
+2026-04-04,Cyclicals,SMG,63.88,The Scotts Miracle-Gro Company
+2026-04-04,Asset Plays,BZ,13.52,Kanzhun Limited
+2026-04-04,Asset Plays,RLX,2.19,RLX Technology Inc.
+2026-04-04,Asset Plays,PDD,100.87,PDD Holdings Inc.
+2026-04-04,Asset Plays,SIM,29.56,"Grupo Simec, S.A.B. de C.V."
+2026-04-04,Asset Plays,RDY,13.32,Dr. Reddy's Laboratories Limit
+2026-04-04,IV Discount,QLYS,88.36,"Qualys, Inc."
+2026-04-04,IV Discount,EXEL,43.88,"Exelixis, Inc."
+2026-04-04,Quality Compounders,KGC,31.51,Kinross Gold Corporation
+2026-04-08,IV Discount,HRB,32.7,"H&R Block, Inc."
+2026-04-08,IV Discount,TDW,85.55,Tidewater Inc.
+2026-04-08,IV Discount,QLYS,87.83,"Qualys, Inc."
+2026-04-08,IV Discount,CF,134.74,"CF Industries Holdings, Inc."
+2026-04-08,IV Discount,SNY,46.82,Sanofi
+2026-04-08,Quality Compounders,QLYS,87.83,"Qualys, Inc."
+2026-04-08,Quality Compounders,KLAC,1514.64,KLA Corporation
+2026-04-08,Quality Compounders,ASML,1286.89,ASML Holding N.V.
+2026-04-08,Quality Compounders,HIG,135.55,The Hartford Financial Service
+2026-04-08,Quality Compounders,KGC,31.12,Kinross Gold Corporation
+2026-04-08,Stalwarts,PEGA,42.67,Pegasystems Inc.
+2026-04-08,Stalwarts,QLYS,87.83,"Qualys, Inc."
+2026-04-08,Stalwarts,INCY,93.45,Incyte Corporation
+2026-04-08,Stalwarts,HIG,135.55,The Hartford Financial Service
+2026-04-08,Stalwarts,LOGI,91.91,Logitech International S.A.
+2026-04-08,Fast Growers,DLO,12.75,DLocal Limited
+2026-04-08,Fast Growers,PTCT,69.22,"PTC Therapeutics, Inc."
+2026-04-08,Fast Growers,RDDT,139.13,"Reddit, Inc."
+2026-04-08,Fast Growers,PEGA,42.67,Pegasystems Inc.
+2026-04-08,Fast Growers,HALO,63.43,"Halozyme Therapeutics, Inc."
+2026-04-08,Turnarounds,CQP,65.55,"Cheniere Energy Partners, L.P."
+2026-04-08,Turnarounds,DUOL,95.94,"Duolingo, Inc."
+2026-04-08,Turnarounds,DLO,12.75,DLocal Limited
+2026-04-08,Turnarounds,RELY,16.1,"Remitly Global, Inc."
+2026-04-08,Turnarounds,LNG,285.7,"Cheniere Energy, Inc."
+2026-04-08,Slow Growers,NTES,111.41,"NetEase, Inc."
+2026-04-08,Slow Growers,MPLX,55.18,MPLX Lp
+2026-04-08,Slow Growers,WU,8.86,The Western Union Company
+2026-04-08,Slow Growers,RF,26.49,Regions Financial Corporation
+2026-04-08,Slow Growers,FRME,39.94,First Merchants Corporation
+2026-04-08,Cyclicals,NOV,19.43,NOV Inc.
+2026-04-08,Cyclicals,APLE,11.57,"Apple Hospitality REIT, Inc."
+2026-04-08,Cyclicals,SBLK,23.6,Star Bulk Carriers Corp.
+2026-04-08,Cyclicals,MHK,96.4,"Mohawk Industries, Inc."
+2026-04-08,Cyclicals,GM,71.75,General Motors Company
+2026-04-08,Asset Plays,BZ,13.13,Kanzhun Limited
+2026-04-08,Asset Plays,RLX,2.13,RLX Technology Inc.
+2026-04-08,Asset Plays,PDD,98.85,PDD Holdings Inc.
+2026-04-08,Asset Plays,SIM,30.8,"Grupo Simec, S.A.B. de C.V."
+2026-04-08,Asset Plays,RDY,12.95,Dr. Reddy's Laboratories Limit
+2026-04-08,IV Discount,G,37.22,Genpact Limited
+2026-04-08,Quality Compounders,PRI,263.64,"Primerica, Inc."
+2026-04-09,IV Discount,HRB,30.8,"H&R Block, Inc."
+2026-04-09,IV Discount,CF,122.11,"CF Industries Holdings, Inc."
+2026-04-09,IV Discount,TDW,87.41,Tidewater Inc.
+2026-04-09,IV Discount,QLYS,79.29,"Qualys, Inc."
+2026-04-09,IV Discount,G,35.74,Genpact Limited
+2026-04-09,Quality Compounders,QLYS,79.29,"Qualys, Inc."
+2026-04-09,Quality Compounders,KLAC,1711.34,KLA Corporation
+2026-04-09,Quality Compounders,ASML,1451.26,ASML Holding N.V.
+2026-04-09,Quality Compounders,HIG,140.47,The Hartford Financial Service
+2026-04-09,Quality Compounders,PRI,261.81,"Primerica, Inc."
+2026-04-09,Stalwarts,PEGA,39.29,Pegasystems Inc.
+2026-04-09,Stalwarts,QLYS,79.29,"Qualys, Inc."
+2026-04-09,Stalwarts,HIG,140.47,The Hartford Financial Service
+2026-04-09,Stalwarts,LOGI,92.1,Logitech International S.A.
+2026-04-09,Stalwarts,GNTX,22.16,Gentex Corporation
+2026-04-09,Fast Growers,DLO,13.09,DLocal Limited
+2026-04-09,Fast Growers,PTCT,71.41,"PTC Therapeutics, Inc."
+2026-04-09,Fast Growers,RDDT,138.96,"Reddit, Inc."
+2026-04-09,Fast Growers,PEGA,39.29,Pegasystems Inc.
+2026-04-09,Fast Growers,HALO,66.54,"Halozyme Therapeutics, Inc."
+2026-04-09,Turnarounds,CQP,64.18,"Cheniere Energy Partners, L.P."
+2026-04-09,Turnarounds,DUOL,89.61,"Duolingo, Inc."
+2026-04-09,Turnarounds,DLO,13.09,DLocal Limited
+2026-04-09,Turnarounds,RELY,16.94,"Remitly Global, Inc."
+2026-04-09,Turnarounds,LNG,267.91,"Cheniere Energy, Inc."
+2026-04-09,Slow Growers,NTES,113.48,"NetEase, Inc."
+2026-04-09,Slow Growers,MPLX,56.2,MPLX Lp
+2026-04-09,Slow Growers,WU,9.02,The Western Union Company
+2026-04-09,Slow Growers,RF,28.02,Regions Financial Corporation
+2026-04-09,Slow Growers,FRME,41.38,First Merchants Corporation
+2026-04-09,Cyclicals,NOV,19.6,NOV Inc.
+2026-04-09,Cyclicals,APLE,12.43,"Apple Hospitality REIT, Inc."
+2026-04-09,Cyclicals,SBLK,24.48,Star Bulk Carriers Corp.
+2026-04-09,Cyclicals,MHK,102.94,"Mohawk Industries, Inc."
+2026-04-09,Cyclicals,GM,77.14,General Motors Company
+2026-04-09,Asset Plays,BZ,13.31,Kanzhun Limited
+2026-04-09,Asset Plays,RLX,2.12,RLX Technology Inc.
+2026-04-09,Asset Plays,PDD,101.35,PDD Holdings Inc.
+2026-04-09,Asset Plays,SIM,34.35,"Grupo Simec, S.A.B. de C.V."
+2026-04-09,Asset Plays,RDY,13.29,Dr. Reddy's Laboratories Limit
+2026-04-09,Quality Compounders,ADBE,229.17,Adobe Inc.
+2026-04-09,Stalwarts,ADBE,229.17,Adobe Inc.
+2026-04-11,IV Discount,HRB,29.8,"H&R Block, Inc."
+2026-04-11,IV Discount,QLYS,76.2,"Qualys, Inc."
+2026-04-11,IV Discount,G,34.18,Genpact Limited
+2026-04-11,IV Discount,CF,121.28,"CF Industries Holdings, Inc."
+2026-04-11,IV Discount,TDW,86.1,Tidewater Inc.
+2026-04-11,Quality Compounders,ADBE,225.35,Adobe Inc.
+2026-04-11,Quality Compounders,QLYS,76.2,"Qualys, Inc."
+2026-04-11,Quality Compounders,KLAC,1737.28,KLA Corporation
+2026-04-11,Quality Compounders,ASML,1478.28,ASML Holding N.V.
+2026-04-11,Quality Compounders,HIG,137.23,The Hartford Financial Service
+2026-04-11,Stalwarts,PEGA,39.37,Pegasystems Inc.
+2026-04-11,Stalwarts,ADBE,225.35,Adobe Inc.
+2026-04-11,Stalwarts,QLYS,76.2,"Qualys, Inc."
+2026-04-11,Stalwarts,INCY,96.07,Incyte Corporation
+2026-04-11,Stalwarts,HIG,137.23,The Hartford Financial Service
+2026-04-11,Fast Growers,DLO,13.12,DLocal Limited
+2026-04-11,Fast Growers,PTCT,68.69,"PTC Therapeutics, Inc."
+2026-04-11,Fast Growers,RDDT,139.73,"Reddit, Inc."
+2026-04-11,Fast Growers,BKNG,173.46,Booking Holdings Inc.
+2026-04-11,Fast Growers,PEGA,39.37,Pegasystems Inc.
+2026-04-11,Turnarounds,CQP,62.95,"Cheniere Energy Partners, L.P."
+2026-04-11,Turnarounds,DUOL,90.03,"Duolingo, Inc."
+2026-04-11,Turnarounds,DLO,13.12,DLocal Limited
+2026-04-11,Turnarounds,RELY,16.86,"Remitly Global, Inc."
+2026-04-11,Turnarounds,NNI,132.29,"Nelnet, Inc."
+2026-04-11,Slow Growers,NTES,112.72,"NetEase, Inc."
+2026-04-11,Slow Growers,MPLX,56.15,MPLX Lp
+2026-04-11,Slow Growers,WU,8.88,The Western Union Company
+2026-04-11,Slow Growers,RF,27.5,Regions Financial Corporation
+2026-04-11,Slow Growers,FRME,41.07,First Merchants Corporation
+2026-04-11,Cyclicals,NOV,19.49,NOV Inc.
+2026-04-11,Cyclicals,APLE,12.48,"Apple Hospitality REIT, Inc."
+2026-04-11,Cyclicals,SBLK,24.22,Star Bulk Carriers Corp.
+2026-04-11,Cyclicals,SMG,60.74,The Scotts Miracle-Gro Company
+2026-04-11,Cyclicals,PTEN,10.05,"Patterson-UTI Energy, Inc."
+2026-04-11,Asset Plays,BZ,13.05,Kanzhun Limited
+2026-04-11,Asset Plays,RLX,2.09,RLX Technology Inc.
+2026-04-11,Asset Plays,PDD,100.17,PDD Holdings Inc.
+2026-04-11,Asset Plays,SIM,30.6,"Grupo Simec, S.A.B. de C.V."
+2026-04-11,Asset Plays,RDY,13.31,Dr. Reddy's Laboratories Limit
+2026-04-12,IV Discount,HRB,29.8,"H&R Block, Inc."
+2026-04-12,IV Discount,QLYS,76.2,"Qualys, Inc."
+2026-04-12,IV Discount,G,34.18,Genpact Limited
+2026-04-12,IV Discount,CF,121.28,"CF Industries Holdings, Inc."
+2026-04-12,IV Discount,TDW,86.1,Tidewater Inc.
+2026-04-12,Quality Compounders,ADBE,225.35,Adobe Inc.
+2026-04-12,Quality Compounders,QLYS,76.2,"Qualys, Inc."
+2026-04-12,Quality Compounders,KLAC,1737.28,KLA Corporation
+2026-04-12,Quality Compounders,ASML,1478.28,ASML Holding N.V.
+2026-04-12,Quality Compounders,HIG,137.23,The Hartford Financial Service
+2026-04-12,Stalwarts,PEGA,39.37,Pegasystems Inc.
+2026-04-12,Stalwarts,ADBE,225.35,Adobe Inc.
+2026-04-12,Stalwarts,QLYS,76.2,"Qualys, Inc."
+2026-04-12,Stalwarts,INCY,96.07,Incyte Corporation
+2026-04-12,Stalwarts,HIG,137.23,The Hartford Financial Service
+2026-04-12,Fast Growers,DLO,13.12,DLocal Limited
+2026-04-12,Fast Growers,PTCT,68.69,"PTC Therapeutics, Inc."
+2026-04-12,Fast Growers,RDDT,139.73,"Reddit, Inc."
+2026-04-12,Fast Growers,BKNG,173.46,Booking Holdings Inc.
+2026-04-12,Fast Growers,PEGA,39.37,Pegasystems Inc.
+2026-04-12,Turnarounds,CQP,62.95,"Cheniere Energy Partners, L.P."
+2026-04-12,Turnarounds,DUOL,90.03,"Duolingo, Inc."
+2026-04-12,Turnarounds,DLO,13.12,DLocal Limited
+2026-04-12,Turnarounds,RELY,16.86,"Remitly Global, Inc."
+2026-04-12,Turnarounds,NNI,132.29,"Nelnet, Inc."
+2026-04-12,Slow Growers,NTES,112.72,"NetEase, Inc."
+2026-04-12,Slow Growers,MPLX,56.15,MPLX Lp
+2026-04-12,Slow Growers,WU,8.88,The Western Union Company
+2026-04-12,Slow Growers,RF,27.5,Regions Financial Corporation
+2026-04-12,Slow Growers,FRME,41.07,First Merchants Corporation
+2026-04-12,Cyclicals,NOV,19.49,NOV Inc.
+2026-04-12,Cyclicals,APLE,12.48,"Apple Hospitality REIT, Inc."
+2026-04-12,Cyclicals,SBLK,24.22,Star Bulk Carriers Corp.
+2026-04-12,Cyclicals,SMG,60.74,The Scotts Miracle-Gro Company
+2026-04-12,Cyclicals,PTEN,10.05,"Patterson-UTI Energy, Inc."
+2026-04-12,Asset Plays,BZ,13.05,Kanzhun Limited
+2026-04-12,Asset Plays,RLX,2.09,RLX Technology Inc.
+2026-04-12,Asset Plays,PDD,100.17,PDD Holdings Inc.
+2026-04-12,Asset Plays,SIM,30.6,"Grupo Simec, S.A.B. de C.V."
+2026-04-12,Asset Plays,RDY,13.31,Dr. Reddy's Laboratories Limit
+2026-04-12,Turnarounds,LNG,265.54,"Cheniere Energy, Inc."
+2026-04-12,Turnarounds,MNDY,58.81,monday.com Ltd.
+2026-04-12,Turnarounds,CTRE,39.69,"CareTrust REIT, Inc."
+2026-04-12,Turnarounds,LB,68.01,LandBridge Company LLC
+2026-04-13,IV Discount,HRB,31.08,"H&R Block, Inc."
+2026-04-13,IV Discount,G,35.57,Genpact Limited
+2026-04-13,IV Discount,QLYS,80.49,"Qualys, Inc."
+2026-04-13,IV Discount,CF,121.51,"CF Industries Holdings, Inc."
+2026-04-13,IV Discount,TDW,87.55,Tidewater Inc.
+2026-04-13,Quality Compounders,ADBE,238.54,Adobe Inc.
+2026-04-13,Quality Compounders,QLYS,80.49,"Qualys, Inc."
+2026-04-13,Quality Compounders,KLAC,1756.48,KLA Corporation
+2026-04-13,Quality Compounders,ASML,1490.05,ASML Holding N.V.
+2026-04-13,Quality Compounders,HIG,138.31,The Hartford Financial Service
+2026-04-13,Stalwarts,PEGA,41.34,Pegasystems Inc.
+2026-04-13,Stalwarts,ADBE,238.54,Adobe Inc.
+2026-04-13,Stalwarts,QLYS,80.49,"Qualys, Inc."
+2026-04-13,Stalwarts,INCY,94.85,Incyte Corporation
+2026-04-13,Stalwarts,HIG,138.31,The Hartford Financial Service
+2026-04-13,Fast Growers,DLO,13.53,DLocal Limited
+2026-04-13,Fast Growers,PTCT,69.99,"PTC Therapeutics, Inc."
+2026-04-13,Fast Growers,RDDT,147.83,"Reddit, Inc."
+2026-04-13,Fast Growers,BKNG,177.4,Booking Holdings Inc.
+2026-04-13,Fast Growers,PEGA,41.34,Pegasystems Inc.
+2026-04-13,Turnarounds,DUOL,93.29,"Duolingo, Inc."
+2026-04-13,Turnarounds,RELY,17.32,"Remitly Global, Inc."
+2026-04-13,Turnarounds,MNDY,62.15,monday.com Ltd.
+2026-04-13,Turnarounds,CTRE,38.88,"CareTrust REIT, Inc."
+2026-04-13,Turnarounds,LB,68.62,LandBridge Company LLC
+2026-04-13,Slow Growers,NTES,112.97,"NetEase, Inc."
+2026-04-13,Slow Growers,MPLX,55.82,MPLX Lp
+2026-04-13,Slow Growers,WU,9.02,The Western Union Company
+2026-04-13,Slow Growers,RF,27.68,Regions Financial Corporation
+2026-04-13,Slow Growers,FRME,40.86,First Merchants Corporation
+2026-04-13,Cyclicals,NOV,19.5,NOV Inc.
+2026-04-13,Cyclicals,APLE,12.4,"Apple Hospitality REIT, Inc."
+2026-04-13,Cyclicals,SBLK,24.59,Star Bulk Carriers Corp.
+2026-04-13,Cyclicals,SMG,61.41,The Scotts Miracle-Gro Company
+2026-04-13,Cyclicals,MHK,104.11,"Mohawk Industries, Inc."
+2026-04-13,Asset Plays,BZ,13.16,Kanzhun Limited
+2026-04-13,Asset Plays,RLX,2.17,RLX Technology Inc.
+2026-04-13,Asset Plays,PDD,100.4,PDD Holdings Inc.
+2026-04-13,Asset Plays,SIM,30.6,"Grupo Simec, S.A.B. de C.V."
+2026-04-13,Asset Plays,RDY,13.23,Dr. Reddy's Laboratories Limit
+2026-04-14,IV Discount,HRB,31.17,"H&R Block, Inc."
+2026-04-14,IV Discount,G,35.54,Genpact Limited
+2026-04-14,IV Discount,QLYS,81.4,"Qualys, Inc."
+2026-04-14,IV Discount,CF,121.67,"CF Industries Holdings, Inc."
+2026-04-14,IV Discount,TDW,87.83,Tidewater Inc.
+2026-04-14,Quality Compounders,ADBE,240.11,Adobe Inc.
+2026-04-14,Quality Compounders,QLYS,81.4,"Qualys, Inc."
+2026-04-14,Quality Compounders,KLAC,1768.78,KLA Corporation
+2026-04-14,Quality Compounders,ASML,1500.2,ASML Holding N.V.
+2026-04-14,Quality Compounders,HIG,139.07,The Hartford Financial Service
+2026-04-14,Stalwarts,PEGA,41.58,Pegasystems Inc.
+2026-04-14,Stalwarts,ADBE,240.11,Adobe Inc.
+2026-04-14,Stalwarts,QLYS,81.4,"Qualys, Inc."
+2026-04-14,Stalwarts,INCY,95.55,Incyte Corporation
+2026-04-14,Stalwarts,HIG,139.07,The Hartford Financial Service
+2026-04-14,Fast Growers,DLO,13.65,DLocal Limited
+2026-04-14,Fast Growers,PTCT,70.42,"PTC Therapeutics, Inc."
+2026-04-14,Fast Growers,RDDT,149.29,"Reddit, Inc."
+2026-04-14,Fast Growers,BKNG,177.25,Booking Holdings Inc.
+2026-04-14,Fast Growers,PEGA,41.58,Pegasystems Inc.
+2026-04-14,Turnarounds,DUOL,93.53,"Duolingo, Inc."
+2026-04-14,Turnarounds,RELY,17.31,"Remitly Global, Inc."
+2026-04-14,Turnarounds,MNDY,63.55,monday.com Ltd.
+2026-04-14,Turnarounds,CTRE,38.85,"CareTrust REIT, Inc."
+2026-04-14,Turnarounds,LB,67.46,LandBridge Company LLC
+2026-04-14,Slow Growers,NTES,113.41,"NetEase, Inc."
+2026-04-14,Slow Growers,MPLX,56.07,MPLX Lp
+2026-04-14,Slow Growers,WU,9.08,The Western Union Company
+2026-04-14,Slow Growers,RF,27.83,Regions Financial Corporation
+2026-04-14,Slow Growers,FRME,41.13,First Merchants Corporation
+2026-04-14,Cyclicals,NOV,19.63,NOV Inc.
+2026-04-14,Cyclicals,APLE,12.51,"Apple Hospitality REIT, Inc."
+2026-04-14,Cyclicals,SBLK,24.73,Star Bulk Carriers Corp.
+2026-04-14,Cyclicals,SMG,61.91,The Scotts Miracle-Gro Company
+2026-04-14,Cyclicals,MHK,105,"Mohawk Industries, Inc."
+2026-04-14,Asset Plays,BZ,13.17,Kanzhun Limited
+2026-04-14,Asset Plays,RLX,2.17,RLX Technology Inc.
+2026-04-14,Asset Plays,PDD,100.8,PDD Holdings Inc.
+2026-04-14,Asset Plays,SIM,30.6,"Grupo Simec, S.A.B. de C.V."
+2026-04-14,Asset Plays,RDY,13.27,Dr. Reddy's Laboratories Limit
+2026-04-14,Turnarounds,BAH,81.81,Booz Allen Hamilton Holding Co
+2026-04-14,Turnarounds,PATH,10.12,UiPath Inc.
+2026-04-14,Cyclicals,RHI,25.8,Robert Half International Inc.
+2026-04-14,Stalwarts,PTC,133.68,PTC Inc.
+2026-04-16,IV Discount,HRB,31.0,"H&R Block, Inc."
+2026-04-16,IV Discount,TDW,82.92,Tidewater Inc.
+2026-04-16,IV Discount,G,36.29,Genpact Limited
+2026-04-16,IV Discount,QLYS,85.58,"Qualys, Inc."
+2026-04-16,IV Discount,SNY,48.25,Sanofi
+2026-04-16,Quality Compounders,ADBE,245.3,Adobe Inc.
+2026-04-16,Quality Compounders,QLYS,85.58,"Qualys, Inc."
+2026-04-16,Quality Compounders,KLAC,1722.73,KLA Corporation
+2026-04-16,Quality Compounders,ASML,1450.79,ASML Holding N.V.
+2026-04-16,Quality Compounders,HIG,139.4,The Hartford Financial Service
+2026-04-16,Stalwarts,PEGA,42.71,Pegasystems Inc.
+2026-04-16,Stalwarts,ADBE,245.3,Adobe Inc.
+2026-04-16,Stalwarts,QLYS,85.58,"Qualys, Inc."
+2026-04-16,Stalwarts,INCY,97.64,Incyte Corporation
+2026-04-16,Stalwarts,HIG,139.4,The Hartford Financial Service
+2026-04-16,Fast Growers,DLO,13.5,DLocal Limited
+2026-04-16,Fast Growers,PTCT,73.09,"PTC Therapeutics, Inc."
+2026-04-16,Fast Growers,BKNG,186.18,Booking Holdings Inc.
+2026-04-16,Fast Growers,PEGA,42.71,Pegasystems Inc.
+2026-04-16,Fast Growers,RDDT,158.58,"Reddit, Inc."
+2026-04-16,Turnarounds,MNDY,65.01,monday.com Ltd.
+2026-04-16,Turnarounds,DUOL,97.5,"Duolingo, Inc."
+2026-04-16,Turnarounds,BAH,82.64,Booz Allen Hamilton Holding Co
+2026-04-16,Turnarounds,PATH,10.55,UiPath Inc.
+2026-04-16,Turnarounds,PYPL,49.63,"PayPal Holdings, Inc."
+2026-04-16,Slow Growers,NTES,116.07,"NetEase, Inc."
+2026-04-16,Slow Growers,MPLX,54.84,MPLX Lp
+2026-04-16,Slow Growers,WU,9.23,The Western Union Company
+2026-04-16,Slow Growers,ABEV,3.15,Ambev S.A.
+2026-04-16,Slow Growers,RF,28.04,Regions Financial Corporation
+2026-04-16,Cyclicals,KMX,40.67,"CarMax, Inc."
+2026-04-16,Cyclicals,NOV,19.02,NOV Inc.
+2026-04-16,Cyclicals,PTEN,9.94,"Patterson-UTI Energy, Inc."
+2026-04-16,Cyclicals,SBLK,24.62,Star Bulk Carriers Corp.
+2026-04-16,Cyclicals,MHK,103.86,"Mohawk Industries, Inc."
+2026-04-16,Asset Plays,BZ,14.21,Kanzhun Limited
+2026-04-16,Asset Plays,RLX,2.17,RLX Technology Inc.
+2026-04-16,Asset Plays,PDD,102.38,PDD Holdings Inc.
+2026-04-16,Asset Plays,SIM,30.75,"Grupo Simec, S.A.B. de C.V."
+2026-04-16,Asset Plays,RDY,12.95,Dr. Reddy's Laboratories Limit
+2026-04-16,IV Discount,CF,120.81,"CF Industries Holdings, Inc."
+2026-04-16,IV Discount,ACGL,97.47,Arch Capital Group Ltd.
+2026-04-16,Quality Compounders,PRI,273.3,"Primerica, Inc."
+2026-04-16,Stalwarts,PTC,136.58,PTC Inc.
+2026-04-16,Fast Growers,ADBE,244.66,Adobe Inc.
+2026-04-16,Slow Growers,PB,69.12,"Prosperity Bancshares, Inc."
+2026-04-16,Cyclicals,APLE,12.51,"Apple Hospitality REIT, Inc."
+2026-04-16,Asset Plays,GNW,8.67,"Genworth Financial, Inc."
+2026-04-16,IV Discount,NVDA,198.87,NVIDIA Corporation
+2026-04-16,IV Discount,WMT,124.76,Walmart Inc.
+2026-04-16,Quality Compounders,MSFT,411.22,Microsoft Corporation
+2026-04-16,Quality Compounders,GOOGL,337.12,Alphabet Inc.
+2026-04-16,Quality Compounders,GOOG,334.47,Alphabet Inc.
+2026-04-16,Quality Compounders,TSM,375.1,Taiwan Semiconductor Manufactu
+2026-04-16,Stalwarts,MSFT,411.22,Microsoft Corporation
+2026-04-16,Stalwarts,GOOGL,337.12,Alphabet Inc.
+2026-04-16,Stalwarts,GOOG,334.47,Alphabet Inc.
+2026-04-16,Stalwarts,META,671.58,"Meta Platforms, Inc."
+2026-04-16,Stalwarts,AAPL,266.43,Apple Inc.
+2026-04-16,Cyclicals,AMZN,248.5,"Amazon.com, Inc."
+2026-04-16,Asset Plays,TSM,375.1,Taiwan Semiconductor Manufactu
+2026-04-16,Cyclicals,RHI,26.69,Robert Half International Inc.

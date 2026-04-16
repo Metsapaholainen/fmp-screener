@@ -1,0 +1,329 @@
+date,source,ticker,company,strategy,conviction,entry_price,headline
+2026-04-08,AI-Judge,HALO,Halozyme Therapeutics,Quality Compounder,HIGH,65.45,Every major pharma company pays Halozyme a royalty to turn an IV drug into a con
+2026-04-08,AI-Judge,PEGA,Pegasystems Inc.,Fast Grower,HIGH,41.69,Fortune 500 companies build their entire customer service operations on Pega — t
+2026-04-08,AI-Judge,DOCS,"Doximity, Inc.",Stalwart,HIGH,22.04,"80% of US physicians use Doximity every day — it's LinkedIn for doctors, and pha"
+2026-04-08,AI-Judge,ADBE,Adobe Inc.,Stalwart,HIGH,240.81,The most dominant creative software ecosystem ever built now trades at a cheaper
+2026-04-08,AI-Judge,QLYS,"Qualys, Inc.",IV Discount,HIGH,86.91,A cloud security monopoly with 45% FCF margins trading at a 72% discount to its 
+2026-04-08,AI-QualityGrowth,PEGA,Pegasystems Inc.,Enterprise workflow automation platform with deep ,HIGH,41.69,PEG=0.8 with ROIC=29% and EG5y=24%
+2026-04-08,AI-QualityGrowth,ADBE,Adobe Inc.,Dominant creative and document cloud ecosystem wit,HIGH,240.81,ROIC=37% with PE=13.7 and FCFMargin=42%
+2026-04-08,AI-QualityGrowth,QLYS,"Qualys, Inc.",Cloud-native security platform with high renewal r,HIGH,86.91,MoS=72% with ROIC=28% and FCFMargin=45%
+2026-04-08,AI-QualityGrowth,DOCS,"Doximity, Inc.",Network effects among 80%+ of US physicians create,HIGH,22.04,GrMgn=90% with FCFMargin=48% and ROIC=20%
+2026-04-08,AI-QualityGrowth,HIG,The Hartford Financial Service,Pricing power in specialty commercial insurance an,HIGH,138.63,PEG=0.8 with ROIC=28% and FCF=15%
+2026-04-08,AI-QualityGrowth,HALO,"Halozyme Therapeutics, Inc.",Proprietary ENHANZE drug delivery technology licen,HIGH,65.45,PEG=0.6 with GrMgn=82% and FCFMargin=46%
+2026-04-08,AI-QualityGrowth,NTES,"NetEase, Inc.",Deep IP moat in Chinese gaming with proprietary de,MEDIUM,114.39,NetCash=+220% with FCFMargin=43% and ROIC=17%
+2026-04-08,AI-CapAppreciation,PEGA,Pegasystems Inc.,Revenue re-accelerated sharply to +17% vs +5% prio,HIGH,41.69,PEG=0.8 with RG accelerating from +5% to +17%
+2026-04-08,AI-CapAppreciation,DLO,DLocal Limited,Explosive revenue re-acceleration to +47% vs +15% ,HIGH,12.87,RG jumped from +15% to +47% with MoS=85%
+2026-04-08,AI-CapAppreciation,PTCT,"PTC Therapeutics, Inc.",Massive revenue inflection to +115% from -14% prio,HIGH,71.24,RG inflected from -14% to +115% with PE=8.2
+2026-04-08,AI-CapAppreciation,HALO,"Halozyme Therapeutics, Inc.",Revenue accelerating to +38% from +22% as ENHANZE ,HIGH,65.45,PEG=0.6 with fwd PE=7.6 vs trailing 23.6 and OprMgn=58%
+2026-04-08,AI-CapAppreciation,CNX,CNX Resources Corporation,Natural gas price recovery driving revenue inflect,MEDIUM,38.22,RG inflected from -8% to +59% with PE=8.5 and PEG=0.5
+2026-04-08,AI-CapAppreciation,DOCS,"Doximity, Inc.",Revenue re-accelerating to +20% from +13% as pharm,HIGH,22.04,RG accelerated from +13% to +20% with FCFMargin=48% and NetCash=+22%
+2026-04-08,AI-CapAppreciation,HRB,"H&R Block, Inc.",Seasonal earnings catalyst imminent as tax season ,MEDIUM,32.07,PE=6.7 with PEG=0.5 and ROIC=30% during peak tax season catalyst
+2026-04-08,AI-EmergingGrowth,DLO,DLocal Limited,DLocal is building the dominant emerging-market pa,HIGH,12.87,RG=+47% with ROIC=29% and FCF yield=11% at $3.8B market cap
+2026-04-08,AI-EmergingGrowth,DOCS,"Doximity, Inc.",Doximity has achieved near-total penetration of U.,HIGH,22.04,GrMgn=90% with FCFMargin=48% and RG accelerating to +20% from +13%
+2026-04-08,AI-EmergingGrowth,DUOL,"Duolingo, Inc.",Duolingo's gamified language-learning platform is ,HIGH,92.47,RG=+39% sustained (41% prior year) with FCFMargin=36% at $4.3B market cap
+2026-04-08,AI-EmergingGrowth,RELY,"Remitly Global, Inc.",Remitly is displacing legacy wire-transfer incumbe,HIGH,16.46,FCFConv=4.3x with MoS=85% and RG=+29% at $3.5B market cap
+2026-04-08,AI-EmergingGrowth,RDDT,"Reddit, Inc.",Reddit owns the internet's most authentic communit,HIGH,145.7,RG=+69% (accelerating from +62%) with GrMgn=91% and fwd PE=9.7x vs trailing 50x
+2026-04-08,AI-EmergingGrowth,PEGA,Pegasystems Inc.,Pegasystems is at an inflection point converting i,MEDIUM,41.69,ROIC=29% with PEG=0.8 and RG accelerating to +17% from +5%
+2026-04-08,AI-EmergingGrowth,HALO,"Halozyme Therapeutics, Inc.",Halozyme's ENHANZE drug-delivery technology has be,MEDIUM,65.45,RG=+38% (accelerating from +22%) with FCFMargin=46% and PEG=0.6 at $7.7B market 
+2026-04-08,AI-SpecialSit,NTES,"NetEase, Inc.",Market prices NTES as a Chinese tech regulatory ri,HIGH,114.39,NetCash=+220% of price; PE=14.5 for a 22% ROE compounder
+2026-04-08,AI-SpecialSit,HALO,"Halozyme Therapeutics, Inc.",Market misclassifies Halozyme as a speculative bio,HIGH,65.45,PEG=0.6; fwd PE=7.6 vs trailing 23.6 as royalty revenue inflects
+2026-04-08,AI-SpecialSit,QLYS,"Qualys, Inc.",Classic IV discount where a near-monopoly cloud se,HIGH,86.91,MoS=72% DCF discount with FCFMargin=45% and DE=0.2
+2026-04-08,AI-SpecialSit,HRB,"H&R Block, Inc.",Structural mis-pricing: H&R Block is a subscriptio,HIGH,32.07,"PE=6.7, FCF=13%, ROIC=30%—one of cheapest quality franchises in the universe"
+2026-04-08,AI-SpecialSit,DLO,DLocal Limited,Market is pricing DLO as a volatile EM fintech wit,HIGH,12.87,"RG=+47% accelerating from +15%, PEG=0.8, MoS=85%"
+2026-04-08,AI-SpecialSit,PTCT,"PTC Therapeutics, Inc.",Profound business model inflection: PTCT transform,HIGH,71.24,"PE=8.2 with OprMgn=49%, FCFMargin=40%, ROIC=37%—priced as speculative biotech"
+2026-04-08,AI-SpecialSit,DUOL,"Duolingo, Inc.",Classic turnaround mis-pricing: Duolingo crossed i,MEDIUM,92.47,PE=10.8 post-profitability inflection with MoS=76% and RG=+39%
+2026-04-09,AI-Judge,HALO,Halozyme Therapeutics,Quality Compounder,HIGH,66.54,The market prices this like a biotech — it's actually a royalty toll booth on th
+2026-04-09,AI-Judge,DOCS,"Doximity, Inc.",Stalwart,HIGH,21.45,LinkedIn for doctors with 90% gross margins — pharma can't reach 80% of US physi
+2026-04-09,AI-Judge,DLO,DLocal Limited,Fast Grower,HIGH,13.09,The payments rails for 40+ emerging markets — growing 47% with 29% ROIC at PEG 0
+2026-04-09,AI-Judge,PEGA,Pegasystems Inc.,Quality Compounder,HIGH,39.29,"Mission-critical AI decisioning software growing at 17%, ROIC of 29%, PEG of 0.8"
+2026-04-09,AI-Judge,QLYS,"Qualys, Inc.",IV Discount,HIGH,79.29,Best-in-class cybersecurity SaaS at a 75% DCF discount — the market ignores it b
+2026-04-09,AI-QualityGrowth,PEGA,Pegasystems Inc.,29% ROIC with PEG 0.8 signals a deeply undervalued,HIGH,39.29,PEG=0.8 with ROIC=29% and FCFMargin=28%
+2026-04-09,AI-QualityGrowth,ADBE,Adobe Inc.,37% ROIC sustained at $94B market cap proves a str,HIGH,229.88,ROIC=37% with GrMgn=89% and FCFMargin=42%
+2026-04-09,AI-QualityGrowth,QLYS,"Qualys, Inc.",28% ROIC at a 75% DCF discount with PEG 1.6 repres,HIGH,79.29,MoS=75% with ROIC=28% and FCFMargin=45%
+2026-04-09,AI-QualityGrowth,HALO,"Halozyme Therapeutics, Inc.",Halozyme's ENHANZE drug-delivery technology is a s,HIGH,66.54,PEG=0.6 with OprMgn=58% and FCFConv=2.0
+2026-04-09,AI-QualityGrowth,DOCS,"Doximity, Inc.",Doximity's network of 80%+ of US physicians create,HIGH,21.45,GrMgn=90% with FCFMargin=48% and NetCash=+22%
+2026-04-09,AI-QualityGrowth,HIG,The Hartford Financial Service,Hartford's commercial lines underwriting superiori,HIGH,140.47,PEG=0.8 with ROIC=28% and FCF=15%
+2026-04-09,AI-QualityGrowth,FICO,Fair Isaac Corporation,FICO's 51% ROIC reflects an unassailable regulator,MEDIUM,1067.94,ROIC=51% with OprMgn=47% and FCFMargin=36%
+2026-04-09,AI-SpecialSit,NTES,"NetEase, Inc.",Market prices this as a China-risk tech stock but ,HIGH,113.48,NetCash=+222% of price with PE=14.5 and FCF yield=10%
+2026-04-09,AI-SpecialSit,HALO,"Halozyme Therapeutics, Inc.",Classic business model misclassification: market p,HIGH,66.54,FwdPE=7.8 vs TrailingPE=23.6 with FCFMargin=46% and PEG=0.6
+2026-04-09,AI-SpecialSit,QLYS,"Qualys, Inc.",A capital-light cybersecurity SaaS with 83% gross ,HIGH,79.29,MoS=75% with FCFMargin=45% and DE=0.2
+2026-04-09,AI-SpecialSit,PTCT,"PTC Therapeutics, Inc.",Revenue inflected from -14% to +115% YoY following,HIGH,71.41,RG=+115% with OprMgn=49% and PE=8.2 at FCF=12%
+2026-04-09,AI-SpecialSit,DUOL,"Duolingo, Inc.",Misclassified as an unprofitable growth app — it h,MEDIUM,89.61,PEG=0.7 with FwdPElook implied and MoS=77%
+2026-04-09,AI-SpecialSit,DLO,DLocal Limited,Emerging-market payments infrastructure business (,HIGH,13.09,MoS=84% with RG accelerating to +47% and ROIC=29%
+2026-04-09,AI-SpecialSit,HRB,"H&R Block, Inc.","Hidden FCF machine: PE=6.7, FCF yield=13%, ROIC=30",HIGH,30.8,PE=6.7 with FCF=13% yield and ROIC=30% at MoS=76%
+2026-04-09,AI-CapAppreciation,PEGA,Pegasystems Inc.,Revenue re-accelerated sharply to +17% from +5% wi,HIGH,39.29,PEG=0.8 with RG accelerating from +5% to +17% and 76% gross margin
+2026-04-09,AI-CapAppreciation,DLO,DLocal Limited,Revenue exploded from +15% to +47% with PEG=0.8 an,HIGH,13.09,MoS=84% with RG surging to +47% and ROIC=29% at PEG=0.8
+2026-04-09,AI-CapAppreciation,HALO,"Halozyme Therapeutics, Inc.",Revenue re-accelerated to +38% from +22% with PEG=,HIGH,66.54,PEG=0.6 with fwd PE=7.8 vs trailing 23.6 and FCFConv=2.0
+2026-04-09,AI-CapAppreciation,PTCT,"PTC Therapeutics, Inc.",Revenue surged +115% from -14% prior year with PE=,HIGH,71.41,PE=8.2 on +115% revenue growth with 91% gross margin and ROIC=37%
+2026-04-09,AI-CapAppreciation,CNX,CNX Resources Corporation,Revenue re-accelerated from -8% to +59% with PEG=0,MEDIUM,38.9,PEG=0.5 with RG going from -8% to +59% and FCF yield=9%
+2026-04-09,AI-CapAppreciation,DOCS,"Doximity, Inc.",Revenue accelerated to +20% from +13% with zero de,HIGH,21.45,RG accelerating to +20% with 48% FCF margin and AltZ=16.80
+2026-04-09,AI-CapAppreciation,HRB,"H&R Block, Inc.",Trades at PE=6.7 and MoS=76% with 30% ROIC and 13%,MEDIUM,30.8,PE=6.7 with MoS=76% and ROIC=30% at PEG=0.5
+2026-04-09,AI-EmergingGrowth,DLO,DLocal Limited,DLocal is the dominant emerging-market payments in,HIGH,13.09,RG=+47% with ROIC=29% and PEG=0.8 — fastest-growing at the cheapest valuation-ad
+2026-04-09,AI-EmergingGrowth,RDDT,"Reddit, Inc.",Reddit owns the internet's largest repository of a,HIGH,138.96,RG=+69% (accelerating from +62%) with GrMgn=91% and FCFMargin=31%
+2026-04-09,AI-EmergingGrowth,DUOL,"Duolingo, Inc.",Duolingo's gamified language learning platform has,HIGH,89.61,RG=+39% with PEG=0.7 and MoS=77% — high-growth compounding at deep discount to i
+2026-04-09,AI-EmergingGrowth,RELY,"Remitly Global, Inc.",Remitly is displacing Western Union and MoneyGram ,HIGH,16.94,FCFConv=4.3 with RG=+29% and MoS=85% — unit economics dramatically improving as 
+2026-04-09,AI-EmergingGrowth,DOCS,"Doximity, Inc.",Doximity is the LinkedIn of US physicians with 80%,HIGH,21.45,GrMgn=90% and FCFMargin=48% — best-in-class unit economics with a defensible pro
+2026-04-09,AI-EmergingGrowth,HALO,"Halozyme Therapeutics, Inc.",Halozyme's ENHANZE drug delivery technology is a c,HIGH,66.54,OprMgn=58% with RG=+38% and PEG=0.6 — royalty model with near-zero marginal cost
+2026-04-09,AI-EmergingGrowth,ESTC,Elastic N.V.,Elastic's search-powered observability and securit,MEDIUM,46.23,ROIC=61% with GrMgn=76% and NetCash=+17% — exceptional capital efficiency in a l
+2026-04-09,AI-CapAppreciation,CF,"CF Industries Holdings, Inc.",Revenue snapped from -10% to +19% as natural gas f,HIGH,121.12,PEG=0.4 with RG reversing from -10% to +19% into spring fertilizer demand peak
+2026-04-09,AI-CapAppreciation,CRDO,Credo Technology Group Holding,Revenue surged from +5% to +126% as hyperscaler AI,MEDIUM,107.29,RG from +5% to +126% with fwd PE collapsing to 15.2 as AI infrastructure buildou
+2026-04-09,AI-EmergingGrowth,PEGA,Pegasystems Inc.,Pegasystems is transitioning from legacy BPM softw,HIGH,39.21,PEG=0.8 with ROIC=29% and RG accelerating from +5% to +17%
+2026-04-09,AI-EmergingGrowth,CRDO,Credo Technology Group Holding,Credo Technology is a pure-play beneficiary of the,MEDIUM,107.29,RG=+126% with GrMgn=68% and FwdPE=15.2 at Mcap=$19.8B
+2026-04-09,AI-SpecialSit,PEGA,Pegasystems Inc.,Business model misclassification: market prices PE,HIGH,39.21,PEG=0.8 with EG5y=+24% and FCFMargin=28% — growth is being priced as if it will 
+2026-04-09,AI-SpecialSit,DOCS,"Doximity, Inc.",Market treats Doximity as a social network vulnera,HIGH,21.3,FCFMargin=48% and GrMgn=90% with NetCash=+23% at PE=17.5 — monopoly network pric
+2026-04-09,AI-SpecialSit,BZ,Kanzhun Limited,Hidden asset play: Kanzhun's operating business (B,MEDIUM,13.14,NetCash=+326% of market cap with GrMgn=85% and FCFMargin=40% — operating busines
+2026-04-09,AI-Judge,PTCT,PTC Therapeutics,Fast Grower,MEDIUM,71.31,"Revenue exploded +115%, ROIC hit 37%, gross margins are 91%, and the stock trade"
+2026-04-11,AI-Judge,HALO,Halozyme Therapeutics,Quality Compounder,HIGH,67.82,"The toll road inside Roche's, J&J's, and AstraZeneca's best-selling biologics — "
+2026-04-11,AI-Judge,PEGA,Pegasystems Inc.,Fast Grower,HIGH,39.37,Enterprise automation software that banks and insurers cannot rip out — mid-tran
+2026-04-11,AI-Judge,DOCS,"Doximity, Inc.",Quality Compounder,HIGH,21.05,"LinkedIn for doctors — 80% of US physicians already inside, pharma pays to reach"
+2026-04-11,AI-Judge,DLO,DLocal Limited,Fast Grower,HIGH,13.12,The only compliant payment rail across 40+ emerging markets — misclassified as a
+2026-04-11,AI-Judge,QLYS,"Qualys, Inc.",IV Discount,HIGH,76.2,A cybersecurity cash machine generating 46% FCF margins at 13x earnings — the ma
+2026-04-11,AI-QualityGrowth,ADBE,Adobe Inc.,Irreplaceable creative and document cloud platform,HIGH,225.35,ROIC=37% sustained with FCFMargin=42% and FCFConv=1.4
+2026-04-11,AI-QualityGrowth,PEGA,Pegasystems Inc.,Enterprise workflow automation with deep switching,HIGH,39.37,PEG=0.7 with ROIC=29% and FCFMargin=28%
+2026-04-11,AI-QualityGrowth,QLYS,"Qualys, Inc.",Cloud-native security and compliance platform with,HIGH,76.2,MoS=76% with FCFMargin=46% and ROIC=28%
+2026-04-11,AI-QualityGrowth,DOCS,"Doximity, Inc.",The dominant professional network for US physician,HIGH,21.05,FCFMargin=49% with GrMgn=90% and NetCash=+23%
+2026-04-11,AI-QualityGrowth,HIG,The Hartford Financial Service,Best-in-class specialty commercial insurer with a ,HIGH,137.23,ROIC=28% with FCF=15% and PEG=0.8
+2026-04-11,AI-QualityGrowth,HALO,"Halozyme Therapeutics, Inc.",ENHANZE drug-delivery technology is a royalty-gene,HIGH,67.82,OprMgn=58% with PEG=0.7 and FCFConv=2.0
+2026-04-11,AI-QualityGrowth,FICO,Fair Isaac Corporation,The FICO score is a regulatory and institutional s,HIGH,922.37,ROIC=51% — highest durable moat signal in the entire candidate set
+2026-04-11,AI-CapAppreciation,PEGA,Pegasystems Inc.,Revenue re-acceleration from 5% to 17% signals an ,HIGH,39.37,RG re-accelerated from +5% to +17% with PEG=0.7 and ROIC=29%
+2026-04-11,AI-CapAppreciation,DLO,DLocal Limited,Revenue surged from +15% to +47% as emerging-marke,HIGH,13.12,RG re-accelerated from +15% to +47% with MoS=84% and NetCash=+19%
+2026-04-11,AI-CapAppreciation,PTCT,"PTC Therapeutics, Inc.",Revenue exploded from -14% to +115% driven by Tran,HIGH,68.69,RG flipped from -14% to +115% with PE=8.1 and ROIC=37%
+2026-04-11,AI-CapAppreciation,HALO,"Halozyme Therapeutics, Inc.",ENHANZE drug-delivery royalty pipeline is accelera,HIGH,67.82,FwdPE=7.7 vs trailing 25.2 with RG re-accelerating to +38%
+2026-04-11,AI-CapAppreciation,DOCS,"Doximity, Inc.",Revenue re-accelerated from +13% to +20% as pharma,HIGH,21.05,FCFMargin=49% with RG re-accelerating from +13% to +20% at PE=16.5
+2026-04-11,AI-CapAppreciation,CQP,"Cheniere Energy Partners, L.P.",Revenue flipped from -10% to +24% as LNG spot pric,MEDIUM,62.95,PEG=0.2 with RG turning from -10% to +24% and MoS=86%
+2026-04-11,AI-CapAppreciation,CF,"CF Industries Holdings, Inc.",Revenue re-accelerated from -10% to +19% as natura,MEDIUM,121.28,RG turned from -10% to +19% with PEG=0.4 and MoS=62%
+2026-04-11,AI-EmergingGrowth,DOCS,"Doximity, Inc.",The dominant professional network for U.S. physici,HIGH,21.05,FCFMargin=49% with RG accelerating from +13% to +20%
+2026-04-11,AI-EmergingGrowth,DUOL,"Duolingo, Inc.",The world's largest language-learning platform wit,HIGH,90.03,RG=+39% sustained (vs +41% prior year) with 72% gross margin at $4.2B market cap
+2026-04-11,AI-EmergingGrowth,RDDT,"Reddit, Inc.",Reddit's 69% revenue growth (accelerating from 62%,HIGH,139.73,RG=+69% with GrMgn=91% and fwd PE collapsing to 9.5x
+2026-04-11,AI-EmergingGrowth,DLO,DLocal Limited,DLocal is the critical payment infrastructure laye,HIGH,13.12,RG accelerating from +15% to +47% with ROIC=29% and NetCash=+19%
+2026-04-11,AI-EmergingGrowth,RELY,"Remitly Global, Inc.",Remitly is displacing Western Union and MoneyGram ,MEDIUM,16.86,EG5y=+39% with fwd PE=8.8x and MoS=85%
+2026-04-11,AI-EmergingGrowth,APPF,"AppFolio, Inc.",AppFolio is the clear vertical SaaS winner in prop,HIGH,143.34,ROIC=22% rising with RG=+20% and FCFConv=1.7x at $5.2B market cap
+2026-04-11,AI-EmergingGrowth,HALO,"Halozyme Therapeutics, Inc.",Halozyme's ENHANZE drug-delivery technology has be,HIGH,67.82,OprMgn=58% with RG=+38% accelerating from +22% and PEG=0.7
+2026-04-11,AI-SpecialSit,HALO,"Halozyme Therapeutics, Inc.",Classic business model misclassification: market p,HIGH,67.82,PEG=0.7 with 58% operating margins and fwd PE=7.7 — pure royalty economics price
+2026-04-11,AI-SpecialSit,PTCT,"PTC Therapeutics, Inc.",Extraordinary financial inflection: revenue explod,HIGH,68.69,ROIC=37% with 91% gross margins at PE=8.1 — profitable rare disease compounder p
+2026-04-11,AI-SpecialSit,DLO,DLocal Limited,Emerging markets payment infrastructure misclassif,HIGH,13.12,MoS=84% with revenue reaccelerating to +47% and NetCash=+19% at PEG=0.8
+2026-04-11,AI-SpecialSit,PEGA,Pegasystems Inc.,Structural pivot from perpetual license to SaaS/cl,HIGH,39.37,PEG=0.7 with ROIC=29% and RevGap=+97% — transition discount on a SaaS compounder
+2026-04-11,AI-SpecialSit,QLYS,"Qualys, Inc.",Hidden FCF machine in cybersecurity — Qualys gener,HIGH,76.2,FCFMargin=46% with MoS=76% and NetCash=+13% at PE=13.8 — hidden FCF fortress
+2026-04-11,AI-SpecialSit,DUOL,"Duolingo, Inc.",Turnaround inflection point almost completely unre,HIGH,90.03,"PEG=0.6 with +39% revenue growth, 36% FCF margins, and NetCash=+25% — first prof"
+2026-04-11,AI-SpecialSit,HRB,"H&R Block, Inc.",Deep IV discount on a misunderstood durable franch,MEDIUM,29.8,"PE=6.1, PEG=0.4, FCF yield=14%, ROIC=30% — serial capital returner at liquidatio"
+2026-04-12,AI-Judge,PEGA,Pegasystems Inc.,Quality Compounder,HIGH,39.37,The market thinks Pega is a tired legacy software vendor — it just completed a c
+2026-04-12,AI-Judge,DOCS,"Doximity, Inc.",Stalwart,HIGH,21.05,"Doximity owns the LinkedIn for doctors — 80% of US physicians are on it, pharma "
+2026-04-12,AI-Judge,HALO,Halozyme Therapeutics,Fast Grower,HIGH,67.82,The market prices Halozyme as a speculative biotech — it is actually a royalty m
+2026-04-12,AI-Judge,QLYS,"Qualys, Inc.",Quality Compounder,HIGH,76.2,"Qualys is the boring, invisible cybersecurity machine generating 46% FCF margins"
+2026-04-12,AI-Judge,DLO,DLocal Limited,Fast Grower,HIGH,13.12,DLocal built the only true payment infrastructure layer across 40+ emerging mark
+2026-04-12,AI-EmergingGrowth,DLO,DLocal Limited,DLocal is the dominant payment infrastructure laye,HIGH,13.12,RG=+47% with ROIC=29% and FCFMargin=37% at $3.8B mcap
+2026-04-12,AI-EmergingGrowth,DOCS,"Doximity, Inc.",Doximity owns the professional identity layer for ,HIGH,21.05,GrMgn=90% with RG=+20% accelerating from +13% and FCFMargin=49%
+2026-04-12,AI-EmergingGrowth,DUOL,"Duolingo, Inc.",Duolingo is building the dominant global consumer ,HIGH,90.03,RG=+39% sustained (prior +41%) with MoS=77% and ROIC rapidly inflecting from 9%
+2026-04-12,AI-EmergingGrowth,RDDT,"Reddit, Inc.",Reddit is the internet's largest repository of aut,HIGH,139.73,RG=+69% (prior +62%) with GrMgn=91% and fwd PE collapsing to 9.5x
+2026-04-12,AI-EmergingGrowth,APPF,"AppFolio, Inc.",AppFolio is the cloud-native platform of record fo,HIGH,143.34,"ROIC=22% rising with RG=+20%, FCFConv=1.7x, and AltZ=21 (fortress balance sheet)"
+2026-04-12,AI-EmergingGrowth,PEGA,Pegasystems Inc.,Pegasystems is an underappreciated enterprise soft,MEDIUM,39.37,"PEG=0.7 with ROIC=29%, GrMgn=76%, and RG inflecting from +5% to +17%"
+2026-04-12,AI-EmergingGrowth,RELY,"Remitly Global, Inc.",Remitly is capturing the $1T+ global remittance ma,MEDIUM,16.86,"MoS=85% with RG=+29%, fwd PE=8.8x, and EG5y=+39% at $3.5B mcap"
+2026-04-12,AI-CapAppreciation,PEGA,Pegasystems Inc.,Revenue re-acceleration from +5% to +17% signals t,HIGH,39.37,RG re-accelerated from +5% to +17% with PEG=0.7 and ROIC=29%
+2026-04-12,AI-CapAppreciation,HALO,"Halozyme Therapeutics, Inc.",ENHANZE drug delivery royalty pipeline acceleratio,HIGH,67.82,FwdPE=7.7 vs trailing 25.2 with RG accelerating to +38%
+2026-04-12,AI-CapAppreciation,PTCT,"PTC Therapeutics, Inc.",Dramatic revenue reversal from -14% to +115% drive,HIGH,68.69,Revenue inflection from -14% to +115% with PE=8.1 and OprMgn=49%
+2026-04-12,AI-CapAppreciation,DOCS,"Doximity, Inc.",Revenue accelerating from +13% to +20% with best-i,HIGH,21.05,FCFMargin=49% with RG re-accelerating from +13% to +20% at PE=16.5
+2026-04-12,AI-CapAppreciation,DLO,DLocal Limited,Revenue exploding from +15% to +47% as LatAm/Afric,HIGH,13.12,RG re-accelerated from +15% to +47% with MoS=84% and PEG=0.8
+2026-04-12,AI-CapAppreciation,CNX,CNX Resources Corporation,Natural gas revenue inflecting from -8% to +59% as,MEDIUM,39.28,Revenue inflected from -8% to +59% with OprMgn=51% and PEG=0.5
+2026-04-12,AI-CapAppreciation,RDDT,"Reddit, Inc.",Revenue sustaining +69% growth on top of +62% prio,MEDIUM,139.73,FwdPE=9.5 vs trailing 50.1 with sustained +69% revenue growth
+2026-04-12,AI-QualityGrowth,ADBE,Adobe Inc.,Irreplaceable creative and document cloud platform,HIGH,225.35,ROIC=37% with FCFMargin=42% and perfectly flat revenue growth trend (11%/11%) co
+2026-04-12,AI-QualityGrowth,PEGA,Pegasystems Inc.,Mission-critical low-code BPM and CRM platform emb,HIGH,39.37,PEG=0.7 with ROIC=29% and FCFConv=1.2 at only $6.7B market cap—deeply undervalue
+2026-04-12,AI-QualityGrowth,QLYS,"Qualys, Inc.","Cloud-native cybersecurity platform with 28% ROIC,",HIGH,76.2,"FCFMargin=46% with MoS=76% and NetCash=+13%—rare combination of quality, value, "
+2026-04-12,AI-QualityGrowth,DOCS,"Doximity, Inc.",Network-effect moat with 80%+ of US physicians on ,HIGH,21.05,GrMgn=90% with FCFMargin=49% and ROIC=20%—pure software economics from a network
+2026-04-12,AI-QualityGrowth,HALO,"Halozyme Therapeutics, Inc.",Proprietary ENHANZE drug delivery technology licen,HIGH,67.82,OprMgn=58% with PEG=0.7 and ROIC=24%—platform royalty model means revenue growth
+2026-04-12,AI-QualityGrowth,HIG,The Hartford Financial Service,Disciplined specialty commercial P&C insurer with ,HIGH,137.23,ROIC=28% sustained in Financial Services sector with PEG=0.8 and FCF=15%—best-in
+2026-04-12,AI-QualityGrowth,FICO,Fair Isaac Corporation,Monopoly-grade scoring infrastructure with 51% ROI,HIGH,922.37,ROIC=51% is the single highest in the candidate universe—this is what a true str
+2026-04-12,AI-SpecialSit,HALO,"Halozyme Therapeutics, Inc.",Classic business model misclassification: market p,HIGH,67.82,PEG=0.7 with fwd PE collapsing to 7.7x vs trailing 25.2x — earnings inflection a
+2026-04-12,AI-SpecialSit,PEGA,Pegasystems Inc.,Structural mis-pricing from a multi-year SaaS tran,HIGH,39.37,ROIC=29% at PE=17x with PEG=0.7 — quality compounder priced as a declining softw
+2026-04-12,AI-SpecialSit,PTCT,"PTC Therapeutics, Inc.",Regulatory and commercial inflection point massive,HIGH,68.69,FCFMargin=40% and ROIC=37% at PE=8.1x — orphan drug platform priced as a binary 
+2026-04-12,AI-SpecialSit,QLYS,"Qualys, Inc.",Hidden FCF machine systematically ignored: 46% FCF,HIGH,76.2,MoS=76% with NetCash=+13% and FCFMargin=46% — fortress balance sheet SaaS at dee
+2026-04-12,AI-SpecialSit,DUOL,"Duolingo, Inc.",Turnaround inflection mispriced: Duolingo just cro,HIGH,90.03,PEG=0.6 with 39% revenue growth and 25% net cash position — profitability inflec
+2026-04-12,AI-SpecialSit,RELY,"Remitly Global, Inc.",Fintech turnaround with the hardest part behind it,MEDIUM,16.86,FwdPE=8.8x vs trailing 52x — earnings normalization inflection with 85% MoS not 
+2026-04-12,AI-SpecialSit,NTES,"NetEase, Inc.",Extreme hidden asset play: NetEase carries net cas,MEDIUM,112.72,NetCash=+223% of market cap with FCFMargin=43% — operating business is effective
+2026-04-12,AI-QualityGrowth,BKNG,Booking Holdings Inc.,Structurally dominant global OTA with 51% ROIC — t,HIGH,173.46,ROIC=51% with FCFMargin=34% and GrMgn=100% — the single strongest moat signal in
+2026-04-12,AI-EmergingGrowth,HALO,"Halozyme Therapeutics, Inc.",Halozyme's ENHANZE drug-delivery technology has be,MEDIUM,67.82,OprMgn=58% with RG=+38% (prior year +22%) and PEG=0.7 at $8.0B mcap
+2026-04-12,AI-CapAppreciation,CQP,"Cheniere Energy Partners, L.P.",LNG revenue surged +24% after -10% prior year as g,HIGH,62.95,PEG=0.2 with MoS=86% and ROIC=22% on re-accelerating revenue +24% vs -10% prior
+2026-04-12,AI-CapAppreciation,CRDO,Credo Technology Group Holding,Hyperscaler AI infrastructure spend is driving 126,MEDIUM,119.59,"RG +126% with fwd PE=17.0 vs trailing 62.1, earnings inflection already underway"
+2026-04-12,AI-SpecialSit,DLO,DLocal Limited,DLocal is a FinTech payments infrastructure compan,HIGH,13.12,PEG=0.8 with RG=+47% and FCFMargin=37% — hypergrowth FinTech priced as a value s
+2026-04-12,AI-SpecialSit,HRB,"H&R Block, Inc.",H&R Block is a misclassified consumer-defensive re,HIGH,29.8,FCF yield=14% with ROIC=30% and PEG=0.4 — recurring-revenue franchise priced as 
+2026-04-12,AI-Judge,BKNG,Booking Holdings Inc.,Quality Compounder,HIGH,173.46,A near-monopoly global OTA with 51% ROIC and 100% gross margins trades at a forw
+2026-04-12,AI-EmergingGrowth,MNDY,monday.com Ltd.,monday.com is transitioning from project managemen,HIGH,58.81,GrMgn=89% with FwdPE=7.4 and NetCash=+45% of market cap
+2026-04-12,AI-CapAppreciation,CF,"CF Industries Holdings, Inc.",Revenue re-accelerated sharply from -10% to +19% a,HIGH,121.28,RG reversal: -10%→+19% with PEG=0.4 and MoS=62%
+2026-04-12,AI-CapAppreciation,PLMR,"Palomar Holdings, Inc.",Premium specialty insurer with revenue re-accelera,HIGH,127.8,RG accelerating +47%→+58% with PEG=0.7 in hard insurance market
+2026-04-12,AI-CapAppreciation,INTU,Intuit Inc.,Revenue re-accelerated from +13% to +16% as AI-ass,MEDIUM,350.94,Fwd PE=8.6 vs 22.6 trailing with RG re-acceleration +13%→+16%
+2026-04-12,AI-SpecialSit,DOCS,"Doximity, Inc.","Physician network with 90% gross margins, 49% FCF ",MEDIUM,21.05,FCFMargin=49% with NetCash=+23% and zero debt at PE=16.5 — premium business at d
+2026-04-12,AI-Judge,PTCT,PTC Therapeutics,Fast Grower,HIGH,68.69,"Revenue exploded from -14% to +115%, ROIC is 37%, FCF margins are 40%, and the s"
+2026-04-12,AI-QualityGrowth,DLO,DLocal Limited,Emerging-market payments infrastructure with propr,MEDIUM,13.12,ROIC=29% with RG=+47% accelerating and PEG=0.8—rare GARP in high-barrier payment
+2026-04-12,AI-SpecialSit,PLMR,"Palomar Holdings, Inc.",Specialty insurance turnaround with a catastrophe-,MEDIUM,127.8,"PEG=0.7 with 58% revenue growth accelerating, zero debt, and 46% FCF margin in a"
+2026-04-13,AI-Judge,HALO,Halozyme Therapeutics,Fast Grower,HIGH,66.77,The market thinks it's a biotech gamble — it's actually a royalty toll booth on 
+2026-04-13,AI-Judge,PEGA,Pegasystems Inc.,Quality Compounder,HIGH,41.34,A mission-critical enterprise software platform in the middle of a subscription 
+2026-04-13,AI-Judge,DLO,DLocal Limited,Fast Grower,HIGH,13.53,The market treats this as a risky EM fintech — it's actually the dominant paymen
+2026-04-13,AI-Judge,PTCT,PTC Therapeutics,Fast Grower,HIGH,69.99,"Revenue exploded 115% last year, ROIC is 37%, FCF margins are 41% — and it's tra"
+2026-04-13,AI-Judge,QLYS,Qualys Inc.,IV Discount,HIGH,80.49,A debt-free cybersecurity SaaS with 46% FCF margins and a 75% DCF margin of safe
+2026-04-13,AI-QualityGrowth,ADBE,Adobe Inc.,37% ROIC sustained by near-impenetrable creative a,HIGH,238.54,ROIC=37% with FCFMargin=42% and FCFConv=1.4
+2026-04-13,AI-QualityGrowth,PEGA,Pegasystems Inc.,29% ROIC with PEG of 0.7 signals deeply undervalue,HIGH,41.34,PEG=0.7 with ROIC=29% and FCFConv=1.2
+2026-04-13,AI-QualityGrowth,QLYS,"Qualys, Inc.","A pure-quality compounder with 28% ROIC, 46% FCF m",HIGH,80.49,FCFMargin=46% with MoS=75% and NetCash=+12%
+2026-04-13,AI-QualityGrowth,BKNG,Booking Holdings Inc.,51% ROIC—the highest in this cohort—driven by a tw,HIGH,177.4,ROIC=51% with FCFMargin=34% and fwd PE=9.0
+2026-04-13,AI-QualityGrowth,DOCS,"Doximity, Inc.",The dominant professional network for U.S. physici,HIGH,22.57,GrMgn=90% with FCFMargin=49% and ROIC=20%
+2026-04-13,AI-QualityGrowth,HIG,The Hartford Financial Service,28% ROIC in insurance is exceptional and reflects ,HIGH,138.31,ROIC=28% with PEG=0.8 and FCF=15%
+2026-04-13,AI-QualityGrowth,HALO,"Halozyme Therapeutics, Inc.",Halozyme's ENHANZE drug-delivery technology is pat,MEDIUM,66.77,PEG=0.7 with fwd PE=7.5 and FCFMargin=46%
+2026-04-13,AI-CapAppreciation,PEGA,Pegasystems Inc.,Revenue re-accelerated sharply from +5% to +17% wh,HIGH,41.34,RG re-acceleration: +5% → +17% with PEG=0.7
+2026-04-13,AI-CapAppreciation,DLO,DLocal Limited,Massive revenue re-acceleration from +15% to +47% ,HIGH,13.53,RG re-acceleration: +15% → +47% with MoS=84%
+2026-04-13,AI-CapAppreciation,HALO,"Halozyme Therapeutics, Inc.",Revenue re-accelerated from +22% to +38% driven by,HIGH,66.77,FwdPE=7.5 vs trailing 24.9 — earnings step-change imminent
+2026-04-13,AI-CapAppreciation,PTCT,"PTC Therapeutics, Inc.",Revenue exploded from -14% to +115% following Tran,HIGH,69.99,PE=8.3 on +115% revenue growth with 37% ROIC
+2026-04-13,AI-CapAppreciation,CF,"CF Industries Holdings, Inc.",Revenue re-accelerated from -10% to +19% as nitrog,HIGH,121.51,PEG=0.4 with RG reversal: -10% → +19%
+2026-04-13,AI-CapAppreciation,PLMR,"Palomar Holdings, Inc.",Specialty insurance compounder with revenue re-acc,HIGH,128.57,RG re-acceleration: +47% → +58% with PEG=0.7
+2026-04-13,AI-CapAppreciation,CRDO,Credo Technology Group Holding,Revenue surged from +5% to +126% on AI datacenter ,MEDIUM,132.84,RG re-acceleration: +5% → +126% with FwdPE=18.8
+2026-04-13,AI-EmergingGrowth,DLO,DLocal Limited,DLocal is the dominant payments infrastructure lay,HIGH,13.53,RG=+47% with ROIC=29% and FCFMargin=37% — rare proof that hypergrowth and capita
+2026-04-13,AI-EmergingGrowth,DOCS,"Doximity, Inc.",Doximity owns the professional identity layer for ,HIGH,22.57,FCFMargin=49% with GrMgn=90% and ROIC=20% rising — platform economics fully visi
+2026-04-13,AI-EmergingGrowth,DUOL,"Duolingo, Inc.",Duolingo is transitioning from a free app to a sub,HIGH,93.29,"PEG=0.7 with RG=+39% sustained, FCFMargin=36%, and 24% net cash buffer — deeply "
+2026-04-13,AI-EmergingGrowth,PLMR,"Palomar Holdings, Inc.",Palomar is a specialty insurance underwriter using,HIGH,128.57,RG=+58% accelerating from +47% prior year with FCFMargin=46% and PEG=0.7 at only
+2026-04-13,AI-EmergingGrowth,RELY,"Remitly Global, Inc.",Remitly is compressing the $700B global remittance,MEDIUM,17.32,FwdPE=9.1 vs trailing 53.3 with RG=+29% and MoS=85% — the earnings inflection is
+2026-04-13,AI-EmergingGrowth,HALO,"Halozyme Therapeutics, Inc.",Halozyme's ENHANZE drug delivery technology is a r,HIGH,66.77,RG=+38% accelerating from +22% with OprMgn=58% and FwdPE=7.5 — highest-quality r
+2026-04-13,AI-EmergingGrowth,MNDY,monday.com Ltd.,monday.com is evolving from a work-management tool,MEDIUM,62.15,GrMgn=89% with FwdPE=7.8 and NetCash=+42% — quality SaaS platform priced at deep
+2026-04-13,AI-SpecialSit,HALO,"Halozyme Therapeutics, Inc.",Market prices HALO as a speculative biotech but it,HIGH,66.77,Fwd PE 7.5x vs trailing 24.9x with 58% operating margin and 82% gross margin — r
+2026-04-13,AI-SpecialSit,PTCT,"PTC Therapeutics, Inc.",Revenue exploded +115% YoY (reversing -14% prior y,HIGH,69.99,Revenue +115% YoY with 91% gross margin and 41% FCF margin at PE=8.3x — market a
+2026-04-13,AI-SpecialSit,QLYS,"Qualys, Inc.",Classic IV discount: a capital-light cybersecurity,HIGH,80.49,"75% DCF margin of safety with 46% FCF margin, 12% net cash/price, and PE=14.6x f"
+2026-04-13,AI-SpecialSit,PEGA,Pegasystems Inc.,Pegasystems is undergoing a classic business model,HIGH,41.34,"PEG=0.7 with 60% ROE, 29% ROIC, 28% FCF margin, and +97% revenue gap signaling s"
+2026-04-13,AI-SpecialSit,DLO,DLocal Limited,DLocal is a payments infrastructure business servi,HIGH,13.53,"84% DCF margin of safety with PEG=0.9, +47% revenue growth, 29% ROIC, and 19% ne"
+2026-04-13,AI-SpecialSit,DUOL,"Duolingo, Inc.",Duolingo is classified as a Turnaround but the tur,HIGH,93.29,PE=10.5x with PEG=0.7 on +39% revenue growth and 36% FCF margin — market still p
+2026-04-13,AI-SpecialSit,HIG,The Hartford Financial Service,Hartford is a misclassified compounder: the market,MEDIUM,138.31,15% FCF yield with 28% ROIC and 49% MoS at PE=10x — best-in-class underwriting e
+2026-04-14,AI-Judge,PEGA,Pegasystems Inc.,Quality Compounder,HIGH,41.58,Every Fortune 500 bank and insurer runs on Pega — and the market thinks it's a s
+2026-04-14,AI-Judge,HALO,Halozyme Therapeutics,Quality Compounder,HIGH,66.98,Halozyme is a pharma toll road disguised as a biotech — the market is charging b
+2026-04-14,AI-Judge,DLO,DLocal Limited,Fast Grower,HIGH,13.65,DLocal is the only payment rail connecting 40 emerging markets — and the market 
+2026-04-14,AI-Judge,PLMR,Palomar Holdings,Fast Grower,HIGH,128.38,The fastest-growing specialty insurer in America trades at the same multiple as 
+2026-04-14,AI-Judge,QLYS,Qualys Inc.,IV Discount,HIGH,81.4,A cybersecurity fortress generating 46% FCF margins trades at a 75% discount to 
+2026-04-14,AI-CapAppreciation,PEGA,Pegasystems Inc.,Revenue re-accelerated sharply from +5% to +17% Yo,HIGH,41.58,RG re-acceleration: +5% → +17% with PEG=0.7
+2026-04-14,AI-CapAppreciation,DLO,DLocal Limited,Revenue exploded from +15% to +47% with ROIC of 29,HIGH,13.65,RG re-acceleration: +15% → +47% with MoS=84%
+2026-04-14,AI-CapAppreciation,PTCT,"PTC Therapeutics, Inc.",Revenue surged from -14% to +115% driven by Transl,HIGH,70.42,RG swing: -14% → +115% at PE=8.3x
+2026-04-14,AI-CapAppreciation,HALO,"Halozyme Therapeutics, Inc.",Revenue accelerated from +22% to +38% with a forwa,HIGH,66.98,Fwd PE=7.6 vs trailing 24.9 with RG=+38%
+2026-04-14,AI-CapAppreciation,CF,"CF Industries Holdings, Inc.",Revenue inflected from -10% to +19% as nitrogen fe,HIGH,121.67,RG inflection: -10% → +19% with PEG=0.4
+2026-04-14,AI-CapAppreciation,PLMR,"Palomar Holdings, Inc.",Specialty insurance compounder with revenue accele,HIGH,128.38,RG acceleration: +47% → +58% at PEG=0.7
+2026-04-14,AI-CapAppreciation,CRDO,Credo Technology Group Holding,Revenue surged from +5% to +126% on AI data center,MEDIUM,134.36,RG re-acceleration: +5% → +126% with Fwd PE=19.1
+2026-04-14,AI-QualityGrowth,ADBE,Adobe Inc.,Unassailable creative and document cloud monopoly ,HIGH,240.11,ROIC=37% with FCFMargin=42% and FCFConv=1.4 — earnings are exceptionally real
+2026-04-14,AI-QualityGrowth,PEGA,Pegasystems Inc.,Mission-critical BPM and CRM software embedded dee,HIGH,41.58,PEG=0.7 with ROIC=29% and FCFMargin=28% — rare quality-growth combination
+2026-04-14,AI-QualityGrowth,QLYS,"Qualys, Inc.",Cloud-native cybersecurity platform with 83% gross,HIGH,81.4,MoS=75% with ROIC=28% and NetCash=+12% — quality compounder at deep value
+2026-04-14,AI-QualityGrowth,BKNG,Booking Holdings Inc.,The dominant global OTA network effect — supplier ,HIGH,177.25,ROIC=51% with GrMgn=100% and fwd PE=8.9 — the most capital-efficient travel busi
+2026-04-14,AI-QualityGrowth,DOCS,"Doximity, Inc.",The dominant professional network for U.S. physici,HIGH,22.66,FCFMargin=49% with GrMgn=90% and NetCash=+21% — asset-light network printing cas
+2026-04-14,AI-QualityGrowth,HIG,The Hartford Financial Service,Hartford's commercial lines underwriting excellenc,HIGH,139.07,ROIC=28% with PEG=0.8 and FCF=15% — highest-quality insurance compounder in the 
+2026-04-14,AI-QualityGrowth,HALO,"Halozyme Therapeutics, Inc.",ENHANZE drug delivery technology is a platform roy,MEDIUM,66.98,OprMgn=58% with PEG=0.7 and FCFConv=2.0 — royalty model with zero competition ri
+2026-04-14,AI-EmergingGrowth,DLO,DLocal Limited,DLocal is the dominant emerging-market payment inf,HIGH,13.65,"RG=+47% with ROIC=29% and MoS=84% — the rarest trifecta of fast growth, proven r"
+2026-04-14,AI-EmergingGrowth,DUOL,"Duolingo, Inc.",Duolingo is building a consumer education platform,HIGH,93.53,MoS=76% with RG=+39% and FCFMargin=36% — profitable hypergrowth at a discount
+2026-04-14,AI-EmergingGrowth,DOCS,"Doximity, Inc.",Doximity owns the professional network of US physi,HIGH,22.66,GrMgn=90% with FCFMargin=49% and ROIC=20% rising — near-monopoly economics in ph
+2026-04-14,AI-EmergingGrowth,RELY,"Remitly Global, Inc.",Remitly is displacing legacy remittance players (W,HIGH,17.31,MoS=85% with fwd PE=9.1 vs trail 53.3 — the market hasn't priced the imminent ea
+2026-04-14,AI-EmergingGrowth,PEGA,Pegasystems Inc.,Pegasystems is an enterprise AI decisioning and wo,HIGH,41.58,PEG=0.7 with ROIC=29% and FCFMargin=28% — quality compounder priced like a value
+2026-04-14,AI-EmergingGrowth,PLMR,"Palomar Holdings, Inc.",Palomar is a specialty insurance disruptor focused,HIGH,128.38,RG=+58% accelerating from +47% with PEG=0.7 and FCFMargin=46% — fastest-growing 
+2026-04-14,AI-EmergingGrowth,MNDY,monday.com Ltd.,monday.com is a work-management platform with plat,MEDIUM,63.55,fwd PE=8.0 vs trail 27.2 with GrMgn=89% and NetCash=+41% — platform economics ab
+2026-04-14,AI-SpecialSit,HALO,"Halozyme Therapeutics, Inc.",Misclassified as biotech when it is actually a pur,HIGH,66.98,FwdPE=7.6 vs trailing PE=24.9 with 46% FCF margin and PEG=0.7
+2026-04-14,AI-SpecialSit,PEGA,Pegasystems Inc.,Classic business model transition mispricing: Pega,HIGH,41.58,RevGap=+97% masking true earnings power with ROIC=29% and PEG=0.7
+2026-04-14,AI-SpecialSit,PTCT,"PTC Therapeutics, Inc.",Rare inflection point: revenue surged +115% (from ,HIGH,70.42,PE=8.3 with ROIC=37% and FCFMargin=41% after +115% revenue inflection
+2026-04-14,AI-SpecialSit,QLYS,"Qualys, Inc.",A deeply misunderstood asset play masquerading as ,HIGH,81.4,MoS=75% with NetCash=+12% and FCFMargin=46% at PEG=1.5
+2026-04-14,AI-SpecialSit,DLO,DLocal Limited,Structural mispricing of an emerging-market paymen,HIGH,13.65,MoS=84% with PEG=0.9 and RG=+47% accelerating from +15% prior year
+2026-04-14,AI-SpecialSit,HRB,"H&R Block, Inc.",Textbook IV discount: a near-monopoly consumer tax,HIGH,31.17,PE=6.4 with FCF=13% yield and ROIC=30% at PEG=0.5
+2026-04-14,AI-SpecialSit,PLMR,"Palomar Holdings, Inc.",Financial inflection point in specialty insurance:,MEDIUM,128.38,PEG=0.7 with RG=+58% accelerating and FCFMargin=46%
+2026-04-14,AI-Judge,DOCS,"Doximity, Inc.",Stalwart,HIGH,22.66,"The LinkedIn of medicine — 80% of US doctors use it, pharma has no alternative f"
+2026-04-14,AI-QualityGrowth,DLO,DLocal Limited,Single-API payment infrastructure connecting globa,MEDIUM,13.65,PEG=0.9 with ROIC=29% and MoS=84%—fastest growing stock with best valuation-qual
+2026-04-14,AI-CapAppreciation,DOCS,"Doximity, Inc.",Physician platform ad revenue re-accelerated to +2,HIGH,22.66,FCFMargin=49% with RG re-accelerating from +13% to +20%
+2026-04-14,AI-SpecialSit,HIG,The Hartford Financial Service,Insurance underwriter at a clear FCF inflection: 1,HIGH,139.07,"FCF=15% yield with PE=10x, PEG=0.8, ROIC=28%, MoS=49% — cheapest high-quality in"
+2026-04-14,AI-SpecialSit,DUOL,"Duolingo, Inc.",Turnaround with hidden profitability inflection: t,MEDIUM,93.53,"PEG=0.7 with first-ever GAAP profit inflection, FCFMargin=36%, NetCash=24%, RG=+"
+2026-04-14,AI-Judge,MNDY,monday.com Ltd.,Turnaround,HIGH,63.55,You are buying a profitable 27%-growth SaaS business for effectively $2 billion 
+2026-04-14,AI-EmergingGrowth,RDDT,"Reddit, Inc.",Unique community-driven platform with irreplaceabl,HIGH,149.29,RG=+69% sustained from +62% prior year with fwd PE=10.1 vs trail PE=53
+2026-04-14,AI-EmergingGrowth,HALO,"Halozyme Therapeutics, Inc.",Capital-light royalty-and-licensing platform whose,HIGH,66.98,OprMgn=58% with RG=+38% accelerating from +22% and fwd PE=7.6
+2026-04-14,AI-CapAppreciation,DUOL,"Duolingo, Inc.",At 17% of 52-week high with 39% revenue growth and,HIGH,93.53,52wPos=17% — deepest beaten-down quality name with intact 39% revenue growth
+2026-04-14,AI-CapAppreciation,MNDY,monday.com Ltd.,Trading at 20% of 52-week high with fwd PE of 8x v,HIGH,63.55,FwdPE=8.0x vs trailing 27.2x — 70% earnings multiple expansion opportunity on ma
+2026-04-14,AI-CapAppreciation,QLYS,"Qualys, Inc.","At 52% of 52-week high with 75% MoS, 46% FCF margi",HIGH,81.4,MoS=75% + FCFMargin=46% — rare combination of deep value and high quality in cyb
+2026-04-14,AI-CapAppreciation,INTU,Intuit Inc.,At 45% of 52-week high with fwd PE of 9x vs 23.6x ,MEDIUM,369.44,FwdPE=9.0x — most extreme forward discount for a 16% revenue grower with 81% gro
+2026-04-14,AI-SpecialSit,MNDY,monday.com Ltd.,Turnaround inflection where trailing ROIC is near ,HIGH,63.55,Net cash = 41% of market cap with fwd PE=8.0 — investors are paying ~$2B for a p
+2026-04-14,AI-SpecialSit,RELY,"Remitly Global, Inc.",Classic turnaround inflection: trailing PE=53 coll,MEDIUM,17.31,Fwd PE=9.1 vs trailing PE=53.3 — a 6x P/E compression opportunity as profitabili
+2026-04-14,AI-SpecialSit,BAH,Booz Allen Hamilton Holding Co,Hidden government IT services compounder being re-,MEDIUM,81.81,MoS=84% with PE=12 and FCF yield=9% — the DOGE panic has created a rare margin-o
+2026-04-14,AI-Judge,DUOL,"Duolingo, Inc.",Turnaround,HIGH,93.95,"At only 17% of its 52-week high, the market has completely abandoned a 39% reven"
+2026-04-14,AI-CapAppreciation,FICO,Fair Isaac Corporation,Dominant credit scoring monopoly at 46% of 52w hig,HIGH,1017.15,Fwd PE=13.5 vs trailing 36.1 — earnings power restoration implies 160% multiple 
+2026-04-14,AI-SpecialSit,BZ,Kanzhun Limited,Pure asset play with a hidden balance sheet — NetC,MEDIUM,13.65,NetCash=+312% of market cap — the entire operating business is essentially free 
+2026-04-14,AI-SpecialSit,PYPL,"PayPal Holdings, Inc.",Turnaround at a verifiable financial inflection — ,MEDIUM,48.08,FCF yield=13% at PE=8.5 with PEG=0.7 — the market is pricing existential risk on
+2026-04-14,AI-SpecialSit,LB,LandBridge Company LLC,Structural misclassification as a simple energy ro,MEDIUM,67.08,FwdPE=13.6 vs TrailingPE=62.8 with FCFMargin=70% and GrMgn=92% — royalty economi
+2026-04-16,AI-Judge,HALO,Halozyme Therapeutics,Fast Grower,HIGH,67.44,The toll-road on Big Pharma's drug delivery that the market still prices as a ri
+2026-04-16,AI-Judge,PEGA,Pegasystems Inc.,Quality Compounder,HIGH,42.71,Mission-critical enterprise AI platform misread as legacy software finally relea
+2026-04-16,AI-Judge,QLYS,"Qualys, Inc.",IV Discount,HIGH,85.58,The most boring stock on this list is also the clearest case of a moat business 
+2026-04-16,AI-Judge,DOCS,"Doximity, Inc.",Stalwart,HIGH,23.75,The LinkedIn for US doctors has already won — 80% network penetration means ever
+2026-04-16,AI-Judge,MNDY,monday.com Ltd.,Turnaround,HIGH,65.01,"At 21% of its 52-week high with 40% of market cap in net cash, the market is pri"
+2026-04-16,AI-QualityGrowth,ADBE,Adobe Inc.,Irreplaceable creative and document cloud platform,HIGH,245.3,ROIC=37% with FCFMargin=42% and PEG=1.5 at PE=13.9 — exceptional quality at a re
+2026-04-16,AI-QualityGrowth,PEGA,Pegasystems Inc.,Mission-critical low-code BPM and CRM platform emb,HIGH,42.71,PEG=0.8 with ROIC=29% and FCFMargin=28% — moat-confirmed growth at a deep discou
+2026-04-16,AI-QualityGrowth,QLYS,"Qualys, Inc.","Cloud-native cybersecurity platform with 28% ROIC,",HIGH,85.58,MoS=74% with FCFMargin=45% and ROIC=28% — the clearest value-quality combination
+2026-04-16,AI-QualityGrowth,HIG,The Hartford Financial Service,Specialty commercial insurance franchise with stru,HIGH,139.4,ROIC=28% with FCF=15% and PEG=0.8 — highest FCF yield on screen with moat-confir
+2026-04-16,AI-QualityGrowth,BKNG,Booking Holdings Inc.,Network-effect-driven online travel marketplace wi,HIGH,186.18,ROIC=51% with GrMgn=100% and OprMgn=34% — the strongest moat economics in the en
+2026-04-16,AI-QualityGrowth,DOCS,"Doximity, Inc.",Dominant physician professional network with 20% R,HIGH,23.75,FCFMargin=49% with GrMgn=90% and NetCash=+20% — asset-light compounder with fort
+2026-04-16,AI-QualityGrowth,HALO,"Halozyme Therapeutics, Inc.",ENHANZE drug delivery technology platform generate,MEDIUM,67.44,PEG=0.7 with OprMgn=58% and FCFMargin=46% — royalty-model economics at a fast-gr
+2026-04-16,AI-EmergingGrowth,DLO,DLocal Limited,The dominant payment infrastructure for emerging m,HIGH,13.5,RG=+47% with ROIC=29% and FCFMargin=37% — growth is profitable
+2026-04-16,AI-EmergingGrowth,DOCS,"Doximity, Inc.",The LinkedIn for US physicians has achieved near-m,HIGH,23.75,GrMgn=90% and FCFMargin=49% at 20% revenue growth — a pure SaaS compounder
+2026-04-16,AI-EmergingGrowth,RDDT,"Reddit, Inc.",Reddit owns the internet's most authentic communit,HIGH,158.58,RG=+69% sustained (RGprev=+62%) with 91% gross margin and fwd PE=10.7x vs traili
+2026-04-16,AI-EmergingGrowth,DUOL,"Duolingo, Inc.",The world's largest language-learning platform wit,HIGH,97.5,"RG=+39% (RGprev=+41%) with FCFMargin=37% and NetCash=+23% — durable growth, no d"
+2026-04-16,AI-EmergingGrowth,MNDY,monday.com Ltd.,"A work-OS platform with 27% revenue growth, 89% gr",MEDIUM,65.01,FCFMargin=26% and fwd PE=8.2x vs trailing 28.5x — profitable pivot not yet price
+2026-04-16,AI-EmergingGrowth,RELY,"Remitly Global, Inc.",The fastest-growing digital remittance platform (2,MEDIUM,18.89,"EG5y=+39% with fwd PE=9.9x — the market is pricing this as a cyclical, not a com"
+2026-04-16,AI-EmergingGrowth,HALO,"Halozyme Therapeutics, Inc.",Halozyme's ENHANZE drug-delivery platform is a tol,HIGH,67.44,OprMgn=58% with RG=+38% and fwd PE=7.6x — a royalty compounder deeply mispriced
+2026-04-16,AI-CapAppreciation,PEGA,Pegasystems Inc.,Revenue re-accelerated sharply from +5% to +17% wi,HIGH,42.71,RG re-acceleration from +5% to +17% with PEG=0.8
+2026-04-16,AI-CapAppreciation,MNDY,monday.com Ltd.,At only 21% of 52-week high with a forward PE of 8,HIGH,65.01,52wPos=21% with fwd PE collapsing to 8.2x vs 28.5x trailing
+2026-04-16,AI-CapAppreciation,HALO,"Halozyme Therapeutics, Inc.",ENHANZE royalty pipeline is accelerating with RG f,HIGH,67.44,PEG=0.7 with fwd PE of 7.6x vs 25.1x trailing on accelerating royalties
+2026-04-16,AI-CapAppreciation,FICO,Fair Isaac Corporation,At 47% of 52-week high with ROIC of 51% and revenu,HIGH,1032,52wPos=47% with ROIC=51% and fwd PE compressing to 13.7x
+2026-04-16,AI-CapAppreciation,INTU,Intuit Inc.,At 48% of 52-week high with revenue re-acceleratin,HIGH,390.28,52wPos=48% with fwd PE=9.5x and RG accelerating to +16%
+2026-04-16,AI-CapAppreciation,PATH,UiPath Inc.,Revenue re-accelerated from +9% to +13% with 52wPo,MEDIUM,10.55,NetCash=+25% with RG re-accelerating from +9% to +13% and PEG=1.1
+2026-04-16,AI-CapAppreciation,ALNY,"Alnylam Pharmaceuticals, Inc.",Revenue exploded from +23% to +65% driven by Leqvi,MEDIUM,335.64,RG surge to +65% with fwd PE of 17.4x vs 141x trailing signaling trough earnings
+2026-04-16,AI-SpecialSit,HALO,"Halozyme Therapeutics, Inc.",Business model misclassification: market prices HA,HIGH,67.44,FwdPE=7.6x vs trailing 25x with 38% revenue growth and 46% FCF margin — royalty 
+2026-04-16,AI-SpecialSit,PTCT,"PTC Therapeutics, Inc.",Regulatory and commercial inflection: revenue expl,HIGH,73.09,"PE=8.7 with ROIC=37%, 91% gross margin, and 41% FCF margin on +115% revenue grow"
+2026-04-16,AI-SpecialSit,PEGA,Pegasystems Inc.,Business model inflection point: Pegasystems compl,HIGH,42.71,"PEG=0.8 with ROIC=29%, 28% FCF margin, and +97% RevGap showing deferred revenue "
+2026-04-16,AI-SpecialSit,DLO,DLocal Limited,Emerging market payments rails misclassified as a ,HIGH,13.5,"PEG=0.9 with ROIC=29%, +47% revenue growth, FCF conversion of 2.1x, and net cash"
+2026-04-16,AI-SpecialSit,QLYS,"Qualys, Inc.",Hidden compounding quality at a deep discount: Qua,HIGH,85.58,"74% DCF margin of safety with 45% FCF margin, net cash=11% of market cap, and RO"
+2026-04-16,AI-SpecialSit,BAH,Booz Allen Hamilton Holding Co,Turnaround misread: the market is pricing BAH as i,MEDIUM,82.64,MoS=85% with FCF yield=9% and ROIC=18% while trading at 63% of 52-week high on t
+2026-04-16,AI-SpecialSit,MNDY,monday.com Ltd.,Turnaround inflection mis-timed: monday.com is at ,MEDIUM,65.01,"Net cash = 40% of market cap, fwd PE = 8.2x with 89% gross margins and FCF yield"
+2026-04-16,AI-Judge,DUOL,"Duolingo, Inc.",Turnaround,HIGH,98.78,Duolingo crossed into GAAP profitability while growing 39% — the stock at 18% of
+2026-04-16,AI-QualityGrowth,GDDY,GoDaddy Inc.,Deeply embedded small-business digital platform wi,MEDIUM,82.33,PEG=0.5 with FCF=14% and EG5y=+24%
+2026-04-16,AI-CapAppreciation,QLYS,"Qualys, Inc.",Beaten-down cybersecurity compounder at 55% of 52w,HIGH,85.17,MoS=74% with FCFMargin=46% at only PE=15.4
+2026-04-16,AI-CapAppreciation,DUOL,"Duolingo, Inc.",At only 18% of 52w high with 75% DCF margin of saf,HIGH,98.78,52wPos=18% with RG=+39% and MoS=75%
+2026-04-16,AI-CapAppreciation,DOCS,"Doximity, Inc.",At only 31% of 52w high despite revenue re-acceler,HIGH,23.9,52wPos=31% with RG accelerating to +20% from +13%
+2026-04-16,AI-EmergingGrowth,PATH,UiPath Inc.,UiPath's robotic process automation platform sits ,MEDIUM,10.61,GrMgn=83% with NetCash=+25% and MoS=55% vs DCF
+2026-04-16,AI-SpecialSit,DUOL,"Duolingo, Inc.",Tagged as a Turnaround but actually a structural i,HIGH,98.78,52wPos=18% with RG=+39% and MoS=75%
+2026-04-16,AI-SpecialSit,HIG,The Hartford Financial Service,Structural mis-pricing of a best-in-class P&C comp,HIGH,138.75,FCF=15% with ROIC=28% and MoS=50% at PEG=0.8
+2026-04-16,AI-EmergingGrowth,ESTC,Elastic N.V.,Search and observability platform deeply embedded ,MEDIUM,47.51,ROIC=61% with GrMgn=76% and NetCash=+16% at only $4.9B market cap
+2026-04-16,AI-CapAppreciation,PTCT,"PTC Therapeutics, Inc.",Explosive revenue re-acceleration from -14% to +11,HIGH,73.57,RG re-accelerating to +115% from -14% with ROIC=37%
+2026-04-16,AI-QualityGrowth,FICO,Fair Isaac Corporation,FICO Score is a regulatory and contractual standar,HIGH,1030.81,"ROIC=51%—highest moat signal in the dataset, reflecting genuine pricing power no"
+2026-04-16,AI-QualityGrowth,INCY,Incyte Corporation,Jakafi's established market position in rare blood,MEDIUM,97.1,PEG=0.7 with ROIC=21% and GrMgn=92%—compelling quality-growth value in a sector 
+2026-04-16,AI-SpecialSit,HRB,"H&R Block, Inc.",Classic IV discount on a misclassified asset: mark,HIGH,30.91,FCF=13% yield with ROIC=30% at PE=6.4 and MoS=77% — exceptional cash economics a
+2026-04-16,AI-CapAppreciation,PTC,PTC Inc.,Industrial IoT and PLM SaaS with revenue re-accele,MEDIUM,136.58,RG acceleration from +10% to +19% with PEG=1.1 and OprMgn=38%
+2026-04-16,AI-SpecialSit,PYPL,"PayPal Holdings, Inc.",PayPal is in a genuine operational turnaround unde,HIGH,49.57,FCF yield=12% with PE=8.8 and 54% MoS — market pricing terminal decline on a bus
+2026-04-16,AI-Judge,NVDA,NVIDIA Corporation,IV Discount,HIGH,198.87,The market is still reading NVDA's rearview mirror — the forward PE is 14.6x on 
+2026-04-16,AI-Judge,MSFT,Microsoft Corporation,Quality Compounder,HIGH,411.22,The cheapest large-cap AI compounder alive — PEG 1.3 on a business with 21% ROIC
+2026-04-16,AI-Judge,META,"Meta Platforms, Inc.",Stalwart,HIGH,671.58,"3 billion daily users, 82% gross margins, PE of 28 — the market is still pricing"
+2026-04-16,AI-Judge,TSM,Taiwan Semiconductor Manufactu,Quality Compounder,HIGH,375.1,Every AI chip in the world is manufactured here — and the market is giving you a
+2026-04-16,AI-Judge,GOOGL,Alphabet Inc.,Quality Compounder,HIGH,337.12,The market prices GOOGL as a mature ad business under AI siege — the reality is 
+2026-04-16,AI-EmergingGrowth,META,"Meta Platforms, Inc.",82% gross margin social platform with 22% revenue ,HIGH,671.58,GrMgn=82% with RG=+22% and ROIC rising to 18%
+2026-04-16,AI-EmergingGrowth,NVDA,NVIDIA Corporation,63% ROIC with 65% revenue growth and 45% FCF margi,HIGH,198.87,ROIC=63% with FCFMargin=45% at RG=+65%
+2026-04-16,AI-EmergingGrowth,MSFT,Microsoft Corporation,Azure and Copilot create a compounding platform fl,HIGH,411.22,FCFMargin=25% with ROIC=21% and GrMgn=69%
+2026-04-16,AI-EmergingGrowth,GOOGL,Alphabet Inc.,Search monopoly generating 18% FCF margins funds a,HIGH,337.12,ROIC=22% with 52wPos=97% signalling institutional conviction
+2026-04-16,AI-EmergingGrowth,TSM,Taiwan Semiconductor Manufactu,33% revenue growth with 25% ROIC and 25% FCF margi,HIGH,375.1,ROIC=25% with RG=+33% and FCFMargin=25%
+2026-04-16,AI-EmergingGrowth,AMZN,"Amazon.com, Inc.",AWS cloud infrastructure growing at high double-di,MEDIUM,248.5,EG5y=+22% with GrMgn=50% inflecting toward high-margin mix
+2026-04-16,AI-EmergingGrowth,AAPL,Apple Inc.,51% ROIC and 28% FCF margin on a $4T installed bas,MEDIUM,266.43,ROIC=51% with FCFMargin=28% and FCFConv=1.1
+2026-04-16,AI-QualityGrowth,MSFT,Microsoft Corporation,Azure cloud + Office365 subscription flywheel crea,HIGH,411.22,ROIC=21% sustained + PEG=1.3 + FCFMargin=25% — rare quality-at-value combination
+2026-04-16,AI-QualityGrowth,TSM,Taiwan Semiconductor Manufactu,The world's only manufacturer capable of leading-e,HIGH,375.1,ROIC=25% + OprMgn=51% + RG=+33% consistent — structural monopoly on advanced sem
+2026-04-16,AI-QualityGrowth,NVDA,NVIDIA Corporation,CUDA software ecosystem lock-in means AI researche,HIGH,198.87,"ROIC=63% — the highest in the entire candidate set, driven by structural softwar"
+2026-04-16,AI-QualityGrowth,GOOGL,Alphabet Inc.,Search advertising network effects (intent data fl,HIGH,337.12,ROIC=22% + NetCash=+1% + 52wPos=97% — quality compounder near highs with structu
+2026-04-16,AI-QualityGrowth,META,"Meta Platforms, Inc.",3+ billion daily active users across Facebook/Inst,HIGH,671.58,GrMgn=82% + OprMgn=41% + RG=+22% consistent — best-in-class advertising economic
+2026-04-16,AI-QualityGrowth,AAPL,Apple Inc.,The iOS/App Store/iCloud ecosystem creates unparal,MEDIUM,266.43,ROIC=51% + FCFConv=1.1 + FCFMargin=28% — ecosystem lock-in generates extraordina
+2026-04-16,AI-QualityGrowth,AMZN,"Amazon.com, Inc.",AWS cloud infrastructure and Prime ecosystem flywh,MEDIUM,248.5,EG5y=+22% + PEG=1.6 — forward earnings power from AWS and advertising not yet re
+2026-04-16,AI-CapAppreciation,MSFT,Microsoft Corporation,Azure AI monetization inflecting with Copilot seat,HIGH,411.22,52wPos=74% + EpsGap=+74% signals conservative guidance with imminent beat cycle
+2026-04-16,AI-CapAppreciation,NVDA,NVIDIA Corporation,Blackwell GPU architecture ramp accelerating into ,HIGH,198.87,Forward PE=14.6 vs trailing PE=40.3 — earnings catching up to price within 2 qua
+2026-04-16,AI-CapAppreciation,GOOGL,Alphabet Inc.,Search revenue resilience plus Gemini AI integrati,HIGH,337.12,RG accelerating +15% vs RGprev +14% with ROIC=22% and net cash positive at PEG=1
+2026-04-16,AI-CapAppreciation,TSM,Taiwan Semiconductor Manufactu,Arizona fab ramp (Fab 21 Phase 2) reduces geopolit,HIGH,375.1,NetCash=+103% of price with ROIC=25% and N2 node ramp catalyst in H2 2026
+2026-04-16,AI-CapAppreciation,META,"Meta Platforms, Inc.",Llama 4 open-source release and AI-driven ad targe,HIGH,671.58,GrMgn=82% + OprMgn=41% with RG=+22% at PE=28 — quality at a reasonable price
+2026-04-16,AI-CapAppreciation,AAPL,Apple Inc.,Revenue re-acceleration from +2% to +6% is confirm,MEDIUM,266.43,RG re-accelerating +6% vs RGprev +2% with ROIC=51% and RevGap=+60% upside signal
+2026-04-16,AI-CapAppreciation,AMZN,"Amazon.com, Inc.",AWS AI inference demand accelerating through mid-2,MEDIUM,248.5,EG5y=+22% at PEG=1.6 with AWS margin expansion catalyst in Q2 2026 earnings
+2026-04-16,AI-SpecialSit,NVDA,NVIDIA Corporation,Market prices trailing PE of 40x but forward PE of,HIGH,198.87,fwd PE 14.6x vs trailing 40.3x — earnings catch-up alone is a 2.7x re-rating cat
+2026-04-16,AI-SpecialSit,MSFT,Microsoft Corporation,Azure cloud + Copilot AI monetization is a royalty,HIGH,411.22,PEG 1.3 with 47% OprMgn and 25% FCFMargin — cheapest large-cap compounder in the
+2026-04-16,AI-SpecialSit,TSM,Taiwan Semiconductor Manufactu,NetCash of +103% of price is a hidden asset the ma,HIGH,375.1,NetCash = +103% of market price — effectively buying the world's best semiconduc
+2026-04-16,AI-SpecialSit,GOOGL,Alphabet Inc.,Market prices GOOGL as a mature ad company at risk,HIGH,337.12,Net cash positive (+1%) at PEG 1.7 with 22% ROIC — hidden asset value in Waymo/C
+2026-04-16,AI-SpecialSit,META,"Meta Platforms, Inc.",Post-2022 efficiency restructuring has permanently,HIGH,671.58,82% GrMgn + 41% OprMgn at PEG 1.6 — best margin profile in Communication Service
+2026-04-16,AI-SpecialSit,AMZN,"Amazon.com, Inc.",Amazon is a classic business model misclassificati,MEDIUM,248.5,PEG 1.6 vs Consumer Cyclical sector PEG of 6.0 — sector misclassification alone 
+2026-04-16,AI-SpecialSit,WMT,Walmart Inc.,Walmart is misclassified as a low-margin grocer wh,MEDIUM,124.76,"20% DCF margin of safety — only stock in the candidate set with positive MoS, si"
+2026-04-16,AI-EmergingGrowth,GOOG,Alphabet Inc.,Identical fundamental thesis to GOOGL but Class C ,MEDIUM,334.47,52wPos=96% with PEG=1.7 and OprMgn=32% — momentum and value alignment rare in me
+2026-04-16,AI-Judge,BKNG,Booking Holdings Inc.,Quality Compounder,HIGH,185.92,The highest ROIC travel platform in the world at 51% is trading near fair value 
+2026-04-16,AI-Judge,ADBE,Adobe Inc.,Quality Compounder,HIGH,246.63,The world's irreplaceable creative platform at 37% ROIC is trading at a 28% DCF 
+2026-04-16,AI-SpecialSit,RELY,"Remitly Global, Inc.",Turnaround with hidden profitability inflection: f,MEDIUM,19.08,FwdPE=10.0 vs trailing PE=58.2 with RG=+29% and FCFConv=4.3
+2026-04-16,AI-Judge,DLO,DLocal Limited,Fast Grower,HIGH,13.65,DLocal is the invisible payments infrastructure for 40+ emerging markets — growi
+2026-04-16,AI-QualityGrowth,DLO,DLocal Limited,29% ROIC with 47% revenue growth reflects a struct,MEDIUM,13.65,ROIC=29% with RG=+47% and PEG=0.9
