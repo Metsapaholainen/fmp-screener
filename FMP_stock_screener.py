@@ -1652,9 +1652,11 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             # FCF yield: prefer 1/P_FCF (current-price-based) over pre-computed yield
             # (pre-computed uses stale market cap from last report date — distorts fast-movers
             #  and payment processors where gross TPV flows inflate raw FCF figures)
+            # Negative FCF is now preserved: P/FCF < 0 → fcfYield < 0 (cash-burning).
+            # Capped at [-0.50, +0.50] to filter data errors (P/FCF near zero = extreme yield).
             "fcfYield": (lambda _pfcf, _fy: (
-                1.0 / _pfcf if (_pfcf and _pfcf > 0)
-                else (_fy if (_fy is not None and 0 < _fy <= 0.25) else None)
+                round(max(min(1.0 / _pfcf, 0.50), -0.50), 4) if (_pfcf and abs(_pfcf) >= 2.0)
+                else (_fy if (_fy is not None and -0.50 <= _fy <= 0.50) else None)
             ))(
                 _first(km.get("priceToFreeCashFlowsRatioTTM"), rtm.get("priceToFreeCashFlowsRatioTTM")),
                 _first(km.get("freeCashFlowYieldTTM"))
@@ -1709,8 +1711,9 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             ),
             # FCF Margin = FCF Yield × P/S ≈ FCF / Revenue (how much of each revenue dollar becomes FCF)
             # Formula: FCF/Revenue = (FCF/MktCap) × (MktCap/Revenue) = fcfYield × P/S
-            "fcfMargin": (lambda _fy, _ps: round(_fy * _ps, 3)
-                          if (_fy and _fy > 0 and _ps and _ps > 0) else None)(
+            # Negative margins are now preserved — a -15% FCF margin means burning 15c per $1 revenue.
+            "fcfMargin": (lambda _fy, _ps: round(max(min(_fy * _ps, 1.0), -1.0), 3)
+                          if (_fy is not None and _ps and _ps > 0) else None)(
                 (1.0 / _first(km.get("priceToFreeCashFlowsRatioTTM"), rtm.get("priceToFreeCashFlowsRatioTTM")))
                 if _first(km.get("priceToFreeCashFlowsRatioTTM"), rtm.get("priceToFreeCashFlowsRatioTTM")) else
                 _first(km.get("freeCashFlowYieldTTM")),
