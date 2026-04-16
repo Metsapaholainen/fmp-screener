@@ -99,6 +99,25 @@ PORTFOLIO_MAX_POSITIONS = 10         # hard cap
 TOP_N = 50  # main tab results
 SECTOR_N = 30  # per-sector results
 
+# ── Fast Grower: small-cap scoring & filter constants ────────────────────
+FG_MICRO_CAP_BONUS        = 12    # $100M–$500M: most underfollowed, highest 10x potential
+FG_SMALL_CAP_BONUS        =  8    # $500M–$2B:   still neglected by institutional coverage
+FG_SMALL_MID_BONUS        =  3    # $2B–$5B:     marginal recognition; slight nudge
+FG_MICRO_CAP_MAX          = 500e6
+FG_SMALL_CAP_MAX          =   2e9
+FG_SMALL_MID_MAX          =   5e9
+FG_RELAXED_FCF_REV_GROWTH = 0.25  # minimum rev growth to qualify for FCF exception
+
+def _cap_size_label(mktcap: float) -> str:
+    """Return a human-readable market cap tier label for display."""
+    if mktcap >= 200e9: return "Mega"
+    if mktcap >=  10e9: return "Large"
+    if mktcap >=   2e9: return "Mid"
+    if mktcap >= 500e6: return "Small"
+    if mktcap >= 100e6: return "Micro"
+    return "Nano"
+
+
 # ─────────────────────────────────────────────
 # RUN TIMER  (phase-by-phase elapsed + ETA)
 # ─────────────────────────────────────────────
@@ -1934,6 +1953,14 @@ def write_table(ws, rows, headers, start_row, header_color="1A237E", widths=None
                     cell.fill = RED_FILL
             elif h == "MktCap ($B)" and isinstance(v, (int, float)):
                 cell.number_format = "$#,##0.0"
+            elif h == "Cap Size" and isinstance(v, str):
+                if v in ("Micro", "Small"):
+                    cell.fill = PatternFill("solid", fgColor="E8F5E9")
+                    cell.font = Font(bold=True, name="Arial", size=9, color="1B5E20")
+                elif v == "Mid":
+                    cell.fill = PatternFill("solid", fgColor="FFF9C4")
+                elif v in ("Large", "Mega"):
+                    cell.fill = PatternFill("solid", fgColor="FFCDD2")
             elif h == "Rating" and isinstance(v, str):
                 if "Strong Buy" in str(v):
                     cell.fill = PatternFill("solid", fgColor="C8E6C9")
@@ -2029,6 +2056,7 @@ def format_stock_row(s: dict) -> dict:
         "Altman Z": s.get("altmanZ"),
         "Rating": s.get("recommendation"),
         "MktCap ($B)": s.get("mktCapB"),
+        "Cap Size": _cap_size_label(s.get("mktCap", 0)),
         "🏦 Insider": ins_str,
     }
 
@@ -6921,10 +6949,18 @@ def main():
                 return False  # isolated spike — not a structural fast grower
 
         # ── KILL CRITERIA: hard rejections — mediocre businesses filtered out ──
-        # Kill 1: FCF must be positive — "Growth without cash = illusion"
+        # Kill 1: FCF must be positive — with one exception for genuine high-growth small caps.
+        # Lynch would not have excluded early Amazon/Salesforce for reinvesting aggressively.
+        # Exception: mktcap < $2B AND rev growth > 25% AND FCF yield > -5% (not deeply burning).
         fcf = s.get("fcfYield")
         if fcf is not None and fcf <= 0:
-            return False  # burning cash to grow is not a fast grower, it's a cash-burner
+            _small = mktcap < FG_SMALL_CAP_MAX
+            _fast  = (rg is not None and rg > FG_RELAXED_FCF_REV_GROWTH)
+            _mild  = fcf > -0.05  # FCF yield better than -5% — not deeply destroying cash
+            if not (_small and _fast and _mild):
+                return False
+            # Exception granted — scoring still penalises: 0 FCF yield pts,
+            # -3 for FCF margin < 2%, likely -5 for low FCF conversion → net -8 to -11 pts.
 
         # Kill 2: Revenue consistency — 3 of 5 years must show positive growth
         rc = s.get("revConsistency")
@@ -7071,10 +7107,14 @@ def main():
         sc += peg_sc_fg
 
         # FCF data missing entirely = uncertainty penalty (different from FCF ≤ 0 which is a kill)
-        # A legitimate fast grower should have measurable FCF; None means FMP has no data
+        # A legitimate fast grower should have measurable FCF; None means FMP has no data.
+        # Micro-caps frequently have incomplete FMP coverage despite real FCF — reduce penalty.
         fcf_fg = s.get("fcfYield")
         if fcf_fg is None:
-            sc -= 5  # can't verify earnings quality without FCF data
+            if s.get("mktCap", 0) < FG_MICRO_CAP_MAX:
+                sc -= 2   # reduced: data gap reflects thin coverage, not poor quality
+            else:
+                sc -= 5   # full penalty for mid/large caps — no excuse for missing FCF data
 
         # Negative forward EPS growth = earnings expected to shrink — contradicts "fast grower" thesis
         eg5_fg = s.get("epsGrowth5y") or 0
@@ -7158,6 +7198,17 @@ def main():
         if s.get("insiderBuys", 0) >= 3:   sc += 6
         elif s.get("insiderBuys", 0) >= 1: sc += 3
 
+        # ── Market cap size bonus: surfaces underfollowed small caps ─────────
+        # Smaller companies have more analytical blind spots = more mispricing = more alpha.
+        # Additive to quality score — a junk small-cap still scores low overall.
+        _mc_fg = s.get("mktCap", 0)
+        if _mc_fg < FG_MICRO_CAP_MAX:
+            sc += FG_MICRO_CAP_BONUS    # $100M–$500M: most neglected
+        elif _mc_fg < FG_SMALL_CAP_MAX:
+            sc += FG_SMALL_CAP_BONUS    # $500M–$2B: still under-covered
+        elif _mc_fg < FG_SMALL_MID_MAX:
+            sc += FG_SMALL_MID_BONUS    # $2B–$5B: marginal nudge
+
         return sc
 
     _fg_headers = [
@@ -7166,9 +7217,9 @@ def main():
         "FCF Yield", "FCF Margin", "FCF Conv.", "FCF Consist.",
         "Rev Growth", "Rev Gr Prev", "Rev Growth 5Y", "EPS Growth 5Y",
         "Rev Consist.", "Grwth Gap", "Shares Δ", "Beat Rate", "52w vs High", "ROE", "Gross Margin",
-        "P/FCF", "MktCap ($B)", "Score", "🏦 Insider",
+        "P/FCF", "MktCap ($B)", "Cap Size", "Score", "🏦 Insider",
     ]
-    _fg_widths = [5, 8, 22, 15, 8, 7, 6, 7, 7, 8, 8, 9, 8, 9, 9, 10, 11, 11, 9, 8, 8, 8, 9, 7, 11, 7, 10, 6, 14]
+    _fg_widths = [5, 8, 22, 15, 8, 7, 6, 7, 7, 8, 8, 9, 8, 9, 9, 10, 11, 11, 9, 8, 8, 8, 9, 7, 11, 7, 10, 7, 6, 14]
 
     fast_growers = build_lynch_tab(wb, stocks, "Fast Growers", "4", _fast_grower_filter, _fast_grower_score,
                                    "1B5E20", "Revenue >20% or multi-year 15%+ CAGR. Lynch 10-baggers. PEG is king.",
