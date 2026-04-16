@@ -2638,7 +2638,12 @@ WHAT YOU ARE LOOKING FOR:
 - The story is still early: the company has been executing for 2-5 years but the market hasn't noticed yet
 - Earnings growth is the real engine: sustained EPS growth quarter after quarter is what drives 10x returns
 - Simple competitive advantage — not a fancy moat story, just a business that is clearly better at something in its niche: lower cost, faster service, local dominance, proprietary process, loyal repeat customers
-- Room to expand: more geographies, more product lines, more customers — the runway is long and obvious
+- Expansion runway (multi-lever growth): at least 2 of the following must be clearly present and not yet exhausted:
+    → Geographic expansion (EU→US, US→EU, global rollout, underpenetrated regions)
+    → New product lines or adjacencies (not a pivot — a natural extension of what they already do well)
+    → Pricing power (can raise prices without losing customers — proven by margin stability or improvement)
+    → Market share gains (growing faster than the market, taking share from larger incumbents)
+    → Platform or network effects (each new user/customer/partner makes the product more valuable)
 - Low to moderate institutional ownership: smart money has started noticing but hasn't fully piled in yet — still early enough for meaningful upside
 - Market cap $50M–$2B: below the radar of most fund managers who can't move the needle at this size
 - EPS and revenue both growing 15-40%+ per year for 2+ consecutive years — not a one-year blip
@@ -2671,7 +2676,7 @@ For each pick you MUST answer three questions:
 2. WHAT is the simple competitive advantage? (not "network effects" or "AI platform" — something a local business owner would recognise)
 3. WHAT is the earnings growth story? (EPS growing X%/yr because of Y — concrete, not vague)
 
-Lynch-style brief_case format: "Growing [X]%/yr, trading at PEG [Y], still underfollowed because [Z]. Competitive edge: [simple advantage]. Story is early: [what milestone has NOT happened yet that will drive the next leg]."
+Lynch-style brief_case format: "Growing [X]%/yr, trading at PEG [Y], still underfollowed because [Z]. Competitive edge: [simple advantage]. Growth levers: [name which 2+ of the 5 apply]. Story is early: [what milestone has NOT happened yet that will drive the next leg]."
 
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
