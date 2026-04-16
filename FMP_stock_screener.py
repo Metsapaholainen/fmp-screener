@@ -7854,6 +7854,12 @@ def main():
         if not _is_common_stock(s): return False
         # Exclude sectors where revenue growth is commodity-price driven
         if (s.get("sector") or "") in ("Real Estate", "Basic Materials"): return False
+        # Exclude Financial Services: banks, BDCs, and investment vehicles dominate
+        # FMP's gross margin metric (net interest margin ≈ 80-100% → false quality signal)
+        # and have structurally low PEGs that are not comparable to operating businesses.
+        # Lynch's 10-baggers were operating companies — Dunkin Donuts, Home Depot, Chrysler —
+        # not capital allocators. Fintech/payment companies appear under Technology.
+        if (s.get("sector") or "") == "Financial Services": return False
 
         mktcap = s.get("mktCap", 0)
         # Pure small-cap focus: $50M floor (nano excluded — too illiquid), $2B ceiling
