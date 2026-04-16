@@ -2639,7 +2639,7 @@ WHAT YOU ARE LOOKING FOR:
 - Earnings growth is the real engine: sustained EPS growth quarter after quarter is what drives 10x returns
 - Simple competitive advantage — not a fancy moat story, just a business that is clearly better at something in its niche: lower cost, faster service, local dominance, proprietary process, loyal repeat customers
 - Room to expand: more geographies, more product lines, more customers — the runway is long and obvious
-- Not yet heavily institutionalised: low institutional ownership means smart money hasn't piled in yet — that's the opportunity
+- Low to moderate institutional ownership: smart money has started noticing but hasn't fully piled in yet — still early enough for meaningful upside
 - Market cap $50M–$2B: below the radar of most fund managers who can't move the needle at this size
 - EPS and revenue both growing 15-40%+ per year for 2+ consecutive years — not a one-year blip
 
