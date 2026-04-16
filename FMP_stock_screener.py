@@ -5894,7 +5894,7 @@ function sortTable(th) {
   var rows  = Array.from(tbody.querySelectorAll('tr'));
   var col   = Array.from(th.parentNode.children).indexOf(th);
   var asc   = th.dataset.asc !== 'true';
-  var dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  var dateRe = /^\\d{4}-\\d{2}-\\d{2}$/;
   rows.sort(function(a, b) {
     var av = a.children[col] ? a.children[col].innerText.replace(/[%$,]/g,'').trim() : '';
     var bv = b.children[col] ? b.children[col].innerText.replace(/[%$,]/g,'').trim() : '';
@@ -6167,11 +6167,24 @@ document.querySelectorAll('th').forEach(th => th.addEventListener('click', funct
                            f'<div class="synopsis">{_synopsis}</div>'
                            f'</div>') if _synopsis else ""
 
+        # Geopolitical & macro context block
+        _macro_ctx_text = (ai or {}).get("macro_context", "")
+        _geo_block = (
+            f'<div style="margin-bottom:14px;background:#f3e5f5;border-left:4px solid #7b1fa2;'
+            f'border-radius:4px;padding:10px 14px">'
+            f'<h2 style="margin-bottom:6px;font-size:.75rem;color:#4a148c">'
+            f'🌍 GEOPOLITICAL &amp; MACRO CONTEXT</h2>'
+            f'<p style="color:#4a148c;font-style:italic;margin:0;font-size:.82rem;line-height:1.6">'
+            f'{_macro_ctx_text}</p>'
+            f'</div>'
+        ) if _macro_ctx_text else ""
+
         return f"""
 <section id="macro">
   <div class="section-title">🌍 Macro Dashboard — FRED data as of {mc.get('as_of','?')}</div>
   {_outlook_block}
   {_synopsis_block}
+  {_geo_block}
   <h2 style="margin-bottom:8px;margin-top:4px;font-size:.75rem">LIVE MACRO INDICATORS</h2>
   <div class="macro-grid">{tiles_html}</div>
   <p class="interp">{interp}</p>
