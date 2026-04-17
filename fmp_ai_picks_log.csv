@@ -595,3 +595,9 @@ date,source,ticker,company,strategy,conviction,entry_price,headline
 2026-04-17,AI-WallStBlind,QFIN,"Qfin Holdings, Inc.",Chinese fintech lender with 74% gross margins and ,MEDIUM,13.88,PE=1.0 with OprMgn=39% and GrMgn=74% at $1.8B mcap — China ADR stigma creates ab
 2026-04-17,AI-Burry,VIPS,Vipshop Holdings Limited,Chinese discount e-commerce operator with NetCash=,MEDIUM,15.3,NetCash=+307% of market cap — the cash alone exceeds the stock price implying th
 2026-04-17,AI-SpecialSit,PLMR,"Palomar Holdings, Inc.",Specialty insurance compounder at inflection: Palo,MEDIUM,131.41,"PEG=0.7 with 58% revenue growth re-accelerating, 46% FCF margin, and zero net de"
+2026-04-17,AI-Judge,ANIP,"ANI Pharmaceuticals, Inc.",10-Bagger,HIGH,78.07,Revenue accelerating from 26% to 44% at a PEG of 0.5 — the market is pricing thi
+2026-04-17,AI-LynchBWYK,NU,Nu Holdings Ltd.,The market is applying a mature-bank multiple to a,HIGH,15.43,PEG=0.8 on 43% revenue growth with 33% projected 5-year EPS growth
+2026-04-17,AI-InsiderTrack,BBWI,"Bath & Body Works, Inc.",Market treating BBWI as a structurally broken reta,MEDIUM,18.04,FCF yield=24% at PE=5.8 with cluster insider buying at 52% of 52-week high
+2026-04-17,AI-InsiderTrack,GDDY,GoDaddy Inc.,GoDaddy's pivot to AI-assisted SMB tools is drivin,MEDIUM,84.26,EG5y=+24% at PEG=0.5 with insider buying at 44% of 52-week high
+2026-04-17,AI-TenBagger,AFYA,Afya Limited,Brazil's dominant medical school operator with a r,MEDIUM,15.75,33% operating margin with PEG=0.6 at $1.4B — Lynch-style 'tollbooth' business hi
+2026-04-17,AI-NickSleep,MNDY,monday.com Ltd.,Market sees a money-losing SaaS (OprMgn=-0%) but m,HIGH,66.37,GrMgn=89% + NetCash=+40% of Mcap + RG=+27% with intentionally near-zero OprMgn

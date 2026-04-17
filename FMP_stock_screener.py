@@ -2954,8 +2954,13 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
     # ── Step 5: Three specialist agents (parallel) ──────────────────────────
     SPECIALIST_JSON_SCHEMA = (
         '{"picks":['
-        '{"ticker":"X","company":"Name","brief_case":"one sentence why","'
-        'key_metric":"the single most compelling number","conviction":"HIGH|MEDIUM"}'
+        '{"ticker":"X","company":"Name",'
+        '"rationale":"1-2 sentences citing YOUR framework\'s specific metrics — '
+        'e.g. Magic Formula: ROIC X% + EY Y%; SpecialSit: catalyst name + timeline; '
+        'InsiderTrack: who bought $X on date; Pabrai: floor $X vs upside $Y = N:1. '
+        'This must reflect YOUR investing lens, not generic text.",'
+        '"brief_case":"one sentence — the market-misunderstanding thesis",'
+        '"key_metric":"the single most compelling number","conviction":"HIGH|MEDIUM"}'
         ',...]}'
     )
 
@@ -2980,6 +2985,7 @@ QUALITY FILTER:
 Pick your TOP 7 stocks through a QUALITY GROWTH lens.
 Prioritise: ROIC > 15%, consistent multi-year revenue growth, FCF conversion, PEG < 1.5, durable competitive moats.
 For each pick, explain: what structural advantage drives the high ROIC, and why can this compound for 3-5 more years?
+In `rationale`: cite ROIC%, gross margin%, FCF conversion% — then name in one clause whether the moat is pricing power, network effects, or switching costs.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3005,6 +3011,7 @@ Use the news above (if present) to identify SPECIFIC catalysts — M&A, FDA deci
 HARD RULE: Every pick must have a SPECIFIC, NAMED special situation (not generic "undervalued"). State what the catalyst is, when you expect it to materialise, and why the market is mispricing it today.
 Pick your TOP 7 stocks through a SPECIAL SITUATION lens. Return fewer than 7 if no others meet the standard.
 For each pick, explain: WHAT is the specific special situation, and WHY has the market not yet priced it in?
+In `rationale`: name the specific catalyst (e.g. "strategic review announced Apr-10", "FDA PDUFA date Q3 2026", "spinoff of X division"), state the expected timeline, and quantify the pricing gap (e.g. "current EV $2B vs sum-of-parts $3.5B").
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3027,6 +3034,7 @@ QUALITY & CATALYST FILTER:
 Pick your TOP 7 stocks through a CAPITAL APPRECIATION lens.
 Focus on: beaten-down entries (52wPos), re-acceleration signals (RG > RGprev), cycle troughs, specific near-term catalysts.
 For each pick, name the SPECIFIC catalyst (not just "recovery") and the timeframe you expect it to play out.
+In `rationale`: state the 52w position (e.g. "at 58% of 52w high"), revenue growth acceleration ("RG: 8%→19%"), and name the specific catalyst with expected timeframe.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3050,6 +3058,7 @@ QUALITY FILTER:
 Pick your TOP 7 stocks through an EMERGING GROWTH lens.
 Focus on: $100M–$15B market cap, revenue growth > 20%, rising ROIC, large TAM, scalable economics, network effects.
 For each pick, explain: WHY is this company in a position to become the dominant player in its market over 3-5 years?
+In `rationale`: cite revenue growth % (and whether accelerating), current ROIC and direction (rising/stable), and estimated TAM vs current revenue run-rate (e.g. "$400M rev into $20B TAM = 2% penetration").
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3107,6 +3116,7 @@ For each pick answer three questions:
 3. WHAT is the earnings growth story? (EPS growing X%/yr because of Y)
 
 State market cap explicitly in key_metric field.
+In `rationale`: state the market cap ($XM), estimate sell-side analyst coverage (0-2 analysts = undiscovered), cite revenue or EPS growth %, and name in one phrase why Wall Street hasn't found this yet (boring sector / tiny float / no IR / recent spin-off).
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3133,6 +3143,7 @@ If fewer than 7 stocks qualify, return fewer. Zero picks is fine if nothing meet
 Apply the Goldman Sachs small-cap hidden gem framework. Every pick must have Mcap under $2B.
 For each: name the industry tailwind, the specific competitive differentiator, and the catalyst in the next 6-12 months.
 State market cap in key_metric field.
+In `rationale`: state market cap ($XM), name the industry tailwind in 2-3 words (e.g. "defense modernisation", "nearshoring"), cite the specific competitive differentiator (not generic), and name the catalyst with estimated timeline.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3153,6 +3164,7 @@ FOCUS: the best Lynch pick is a company whose product you use every day, whose s
 
 Apply Lynch's 'buy what you know' framework. Look for companies with simple, understandable business models that serve everyday consumer or workplace needs, growing steadily with real earnings.
 Pick your TOP 7 stocks. For each: describe the business in one simple sentence, identify the everyday observation that validates the thesis, and explain why the valuation is still reasonable.
+In `rationale`: write the "everyday observation" insight (e.g. "every dentist office uses this software"), then confirm with PEG ratio and whether it's still under 1.5.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3174,6 +3186,7 @@ FOCUS: find the companies whose products are being talked about in group chats b
 Apply social arbitrage thinking. Find companies with revenue acceleration (current growth > prior year), high beat rates, and consumer/behavioral trends that institutional analysts haven't yet quantified.
 If RECENT CONSUMER NEWS is provided above, use it to validate or discover which companies are riding real-world trends right now.
 Pick your TOP 7 stocks. For each: describe the specific consumer or behavioral trend driving adoption, why the analyst consensus is too conservative, and what the revenue inflection signal looks like in the data.
+In `rationale`: name the specific real-world trend (e.g. "Gen-Z shift to X"), state revenue growth % and whether it's accelerating, and quantify the analyst gap (e.g. "consensus models 10% growth vs trend suggesting 25%+").
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3199,6 +3212,7 @@ If the list contains fewer than 7 qualifying small-caps, return fewer picks. Zer
 
 Apply Mayer's 100-bagger framework. Every pick MUST have market cap under $2B. Prioritize: ROIC >15%, large reinvestable TAM, owner-operator management, no excessive dilution, compounding earnings power.
 Pick up to 7 potential 100-baggers (only from stocks with Mcap < $2B). For each: state the market cap explicitly in key_metric, assess ROIC quality, and explain the TAM that justifies decades of growth.
+In `rationale`: cite ROIC%, state market cap vs estimated TAM (e.g. "$350M cap / $15B TAM = 2.3% penetration"), note if founder/owner-operator leads (% ownership), and annual dilution rate. These are Mayer's four 100-bagger signals.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3220,6 +3234,7 @@ FOCUS: ignore near-term earnings pressure — disruptive innovators often look e
 Apply ARK's disruptive innovation framework. Find pure-play companies in AI, robotics, genomics, energy storage, or blockchain with network effects, expanding TAMs, and execution capability.
 If RECENT TECH NEWS is provided above, use it to identify which innovation platforms are accelerating RIGHT NOW and which companies are best positioned to benefit.
 Pick your TOP 7 disruptive innovators. For each: identify which innovation platform(s) they're riding, describe the Wright's Law cost curve they're on, and explain why their competitive position strengthens with scale.
+In `rationale`: name the innovation platform (AI / genomics / robotics / energy / etc.), describe the cost-curve dynamic in one clause (e.g. "unit cost falling 40%/yr"), and explain the network-effect or winner-take-most dynamic that makes scale an advantage.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3243,6 +3258,7 @@ HARD RULE — DISQUALIFICATION: Any stock with ROIC < 20% OR earnings yield < 10
 
 Apply Greenblatt's Magic Formula: find stocks with BOTH high ROIC (quality) AND high earnings yield (value). The combination of these two metrics, simultaneously present, is the rare opportunity.
 Pick your TOP 7 Magic Formula stocks. For each: explicitly confirm the ROIC (must be ≥20%) and earnings yield (must be ≥10%), assess whether the ROIC is structural or cyclical, and verify earnings quality via FCF conversion.
+In `rationale`: lead with "ROIC: X% | EY: Y%" — these two numbers are the entire thesis. Then add FCF conversion% and one clause on whether ROIC is structural or cyclical.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3263,6 +3279,7 @@ FOCUS: Pabrai is famous for "heads I win big, tails I don't lose much." The key 
 
 Apply Pabrai's asymmetric bet framework. Find stocks where downside is protected by real assets, cash, or essential business value, while upside is driven by a specific catalyst that the market is underpricing.
 Pick your TOP 7 asymmetric bets. For each: quantify the downside protection (what's the floor and why), identify the specific catalyst driving the upside, and estimate the upside/downside ratio.
+In `rationale`: format as "Floor: $X (reason) | Upside: $Y (catalyst) → N:1 asymmetry". The floor must be a specific number or range justified by assets/cash/liquidation value, not vague.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3284,6 +3301,7 @@ FOCUS: Marks' insight is that the market is not about being right — it's about
 
 Apply Howard Marks' second-level thinking. Find stocks where the consensus narrative is clearly wrong — companies being priced for failure that are actually recovering, or neglected names with improving fundamentals that Wall Street has given up on.
 Pick your TOP 7 contrarian opportunities. For each: state what the consensus believes, explain specifically why it's wrong, and identify the data point or trend that will force the market to reprice.
+In `rationale`: format as "Consensus: '[what the crowd thinks]' | Reality: [specific data that proves them wrong] → repricing trigger: [event/metric]".
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3305,6 +3323,7 @@ FOCUS: Sleep identified Amazon and Costco before most because he looked for THIS
 
 Apply Nick Sleep's Scale Economics Shared framework. Find companies that become MORE customer-friendly as they grow — where scale benefits are passed to customers rather than captured as margin, creating a self-reinforcing flywheel.
 Pick your TOP 7 SES compounders. For each: describe the specific flywheel mechanism, provide evidence of customer obsession over margin maximization, and explain why scale makes the competitive advantage stronger not weaker.
+In `rationale`: name the flywheel in one clause (e.g. "more users → lower unit cost → lower prices → more users"), cite gross margin trend (intentionally flat/declining as scale grows = evidence of sharing), and name one specific instance of customer obsession over margin extraction.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3326,6 +3345,7 @@ FOCUS: Burry's edge was doing deep quantitative work that others avoided — rea
 
 Apply Burry's deep value + catalyst framework. Find stocks with hidden assets, temporary earnings distortions, or specific upcoming catalysts that will force the market to reprice.
 Pick your TOP 7 catalyst-driven deep value plays. For each: identify the hidden asset or earnings normalization opportunity, name the SPECIFIC catalyst and its estimated timeline, and explain why the market has mispriced this.
+In `rationale`: cite EV/EBITDA or P/B multiple, name the specific hidden asset or earnings distortion (e.g. "one-time write-down suppressed EPS", "real estate on balance sheet at cost"), and name the catalyst with timeline (e.g. "asset sale expected H2 2026").
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3348,6 +3368,7 @@ FOCUS: insider buying is one of the most reliable signals in markets — these a
 Apply insider buying and smart money tracking. Focus on stocks with cluster insider buying signals, significant purchase sizes relative to insider net worth, and confirmation from improving fundamental trends.
 If RECENT INSIDER NEWS is provided above, cross-reference it with the candidate list — stocks appearing in both the candidate pool AND recent insider news are your highest-priority targets.
 Pick your TOP 7 stocks with the strongest insider/smart money signals. For each: describe the specific buying pattern (who, how much, timing), explain what the insiders likely know that the market doesn't, and confirm with the fundamental data.
+In `rationale`: state who bought (CEO/CFO/Director/10%+ holder), the dollar amount and approximate date, whether it's cluster (multiple insiders) or single buyer, and one fundamental data point confirming the signal. Format: "[Role] $X (~date) — [cluster/single]. Confirmation: [data point]."
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3373,6 +3394,7 @@ If fewer than 7 qualify, return fewer picks. Zero is fine if nothing qualifies.
 
 Apply the Wall Street Blindspot framework. Every pick must have Mcap under $2B.
 For each: explain the specific structural reason Wall Street misses this, confirm business quality, and describe how the coverage gap creates pricing opportunity. State market cap in key_metric.
+In `rationale`: state market cap ($XM), estimated sell-side analyst count (0-2), name the specific reason for no coverage (too small / spin-off / boring sector / non-US-listed / recent IPO), and cite one business quality metric (e.g. EBITDA margin%, FCF yield%, revenue retention rate).
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
     ]
@@ -6814,6 +6836,11 @@ tr.alt td { background: #161622; }
 .badge-actnow { background: #b71c1c; color: #fff; }
 .badge-weeks  { background: #e65100; color: #fff; }
 .badge-months { background: #1565c0; color: #fff; }
+.badge-micro  { background: #4e342e; color: #bcaaa4; }
+.badge-small  { background: #1b5e20; color: #c8e6c9; }
+.badge-mid    { background: #0d47a1; color: #bbdefb; }
+.badge-large  { background: #4a148c; color: #e1bee7; }
+.badge-mega   { background: #e65100; color: #fff;    }
 .badge-watch  { background: #37474f; color: #cfd8dc; }
 .badge-bull   { background: #1b5e20; color: #a5d6a7; }
 .badge-bear   { background: #b71c1c; color: #ef9a9a; }
@@ -6886,7 +6913,9 @@ tr.alt td { background: #161622; }
 .agent-pick-card .ap-ticker { font-weight: 700; color: #fff; font-size: .85rem; }
 .agent-pick-card .ap-co { color: #9e9e9e; font-size: .72rem; white-space: nowrap;
                            overflow: hidden; text-overflow: ellipsis; }
-.agent-pick-card .ap-thesis { color: #bdbdbd; font-size: .72rem; margin-top: 4px; line-height: 1.4; }
+.agent-pick-card .ap-rationale { color: #c5cae9; font-size: .72rem; margin-top: 5px;
+                                  line-height: 1.45; font-style: italic; }
+.agent-pick-card .ap-thesis { color: #9e9e9e; font-size: .70rem; margin-top: 4px; line-height: 1.4; }
 .agent-pick-card .ap-metric { font-size: .68rem; color: #78909c; margin-top: 4px; }
 .xcard { cursor: pointer; transition: border-color .15s; }
 .xcard:hover { filter: brightness(1.07); }
@@ -7042,6 +7071,17 @@ function showMacroDetail(el, id) {
         c = (c or "MEDIUM").upper()
         return f'<span class="badge {"badge-high" if c=="HIGH" else "badge-med"}">{c}</span>'
 
+    def _cap_badge(mktcap):
+        """Return a coloured cap-size badge for Master Manager pick cards."""
+        mc = mktcap or 0
+        if   mc >= 200e9: lbl, cls = "Mega",  "badge-mega"
+        elif mc >=  10e9: lbl, cls = "Large", "badge-large"
+        elif mc >=   2e9: lbl, cls = "Mid",   "badge-mid"
+        elif mc >= 300e6: lbl, cls = "Small", "badge-small"
+        elif mc >       0: lbl, cls = "Micro", "badge-micro"
+        else: return ""
+        return f'<span class="badge {cls}">{lbl} Cap</span>'
+
     def _strategy_table(rows, cols, title_id, title_label, description=""):
         """Render a strategy tab as a sortable table."""
         if not rows:
@@ -7172,6 +7212,7 @@ function showMacroDetail(el, id) {
                 prc  = s2.get("price")
                 conv2 = (pp.get("conviction") or "MEDIUM").upper()
                 conv_color = "#1b5e20" if conv2 == "HIGH" else "#0d47a1"
+                rationale2 = pp.get("rationale", "") or pp.get("brief_case", "")
                 pick_cards_html.append(f"""
 <div class="agent-pick-card" style="border-left-color:#{color_hex}">
   <div style="display:flex;justify-content:space-between;align-items:center">
@@ -7179,7 +7220,7 @@ function showMacroDetail(el, id) {
     <span style="font-size:.65rem;background:{conv_color};color:#fff;border-radius:3px;padding:1px 5px">{conv2}</span>
   </div>
   <div class="ap-co">{pp.get("company",s2.get("name",tk))[:32]}</div>
-  <div class="ap-thesis">{pp.get("brief_case","")[:160]}</div>
+  <div class="ap-rationale">{rationale2[:200]}</div>
   <div class="ap-metric">{pp.get("key_metric","")[:60]}{"  ·  $"+f"{prc:.0f}" if prc else ""}{"  ·  $"+f"{mc_b:.1f}B" if mc_b else ""}</div>
 </div>""")
 
@@ -7200,7 +7241,7 @@ function showMacroDetail(el, id) {
      color:#9e9e9e;margin-bottom:14px;line-height:1.6">
     <b style="color:#90caf9">17 specialist agents</b> each apply a distinct investment philosophy
     to the same universe of {len(stocks):,} stocks. Their unfiltered picks are synthesised by the
-    <b style="color:#90caf9">Judge</b> into the final <b style="color:#90caf9">AI Top Picks</b>.
+    <b style="color:#90caf9">Master Manager</b> into the final <b style="color:#90caf9">AI Top Picks</b>.
   </p>
   {"".join(sections_html)}
 </section>"""
@@ -7617,6 +7658,7 @@ function showMacroDetail(el, id) {
             peg_str   = _num(s.get("peg"))
             pe_str    = _num(s.get("pe"))
             roic_str  = _pct(s.get("roic"))
+            cap_badge = _cap_badge(s.get("mktCap", 0))
 
             # Attribution chips
             _agents_for_t = _spec_map.get(t, [])
@@ -7640,6 +7682,7 @@ function showMacroDetail(el, id) {
   <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
     <span class="mm-rank">#{i+1}</span>
     <span class="mm-ticker">{t}</span>
+    {cap_badge}
     <span class="mm-co">{co} · {sec}</span>
     {_conv_badge(conv)} {_urgency_badge(urg)}
     <span class="badge badge-hold" style="font-size:.63rem">{strat}</span>
@@ -7765,6 +7808,7 @@ function showMacroDetail(el, id) {
                 meta_parts = [x for x in [key_m[:80] if key_m else "", price_disp, mktcap_disp] if x]
                 meta_str = "  ·  ".join(meta_parts)
 
+                rationale3 = pp.get("rationale", "") or brief
                 pick_cards_html.append(f"""
 <div class="agent-pick-card xcard" style="border-left-color:#{color_hex}" onclick="toggleExpand(this)">
   <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -7775,8 +7819,9 @@ function showMacroDetail(el, id) {
     <span style="font-size:.63rem;background:{conv_color};color:#fff;border-radius:3px;padding:1px 5px;white-space:nowrap">{conv2}</span>
   </div>
   <div class="ap-co">{pp.get("company", s2.get("name", tk))[:34]}</div>
+  <div class="ap-rationale">{rationale3[:220]}</div>
   <div class="xbody" style="display:none">
-    <div class="ap-thesis">{brief}</div>
+    <div class="ap-thesis" style="margin-top:6px">{brief}</div>
     <div class="ap-metric" style="margin-top:6px">{meta_str}</div>
   </div>
 </div>""")
