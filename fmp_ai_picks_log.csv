@@ -587,3 +587,11 @@ date,source,ticker,company,strategy,conviction,entry_price,headline
 2026-04-17,AI-Burry,BBWI,"Bath & Body Works, Inc.",Trading at PE=5.8x with 21% ROIC and 24% FCF yield,MEDIUM,18.04,FCF=24% with ROIC=21% at PE=5.8 — balance sheet transformation catalyst in 12-18
 2026-04-17,AI-SpecialSit,EXEL,"Exelixis, Inc.",Single-drug dependency discount massively overstat,HIGH,44.38,ROIC=30% with GrMgn=96% and MoS=81% — royalty-like biotech priced as binary sing
 2026-04-17,AI-SpecialSit,NU,Nu Holdings Ltd.,The largest digital bank in Latin America is at a ,MEDIUM,15.43,FwdPE=8.2 vs TrailingPE=25.8 — 17-point PE compression incoming as earnings norm
+2026-04-17,AI-Judge,PTCT,"PTC Therapeutics, Inc.",Fast Grower,HIGH,71.7,A rare disease biotech that just posted 115% revenue growth with 91% gross margi
+2026-04-17,AI-MagicFormula,PTCT,"PTC Therapeutics, Inc.",ROIC=37% and PE=8.7 (earnings yield ~11.5%) with 9,MEDIUM,71.7,ROIC=37% with 91% gross margin and 40% FCF margin
+2026-04-17,AI-GoldmanSC,VITL,"Vital Farms, Inc.",Pasture-raised ethical food brand sustaining 25% r,MEDIUM,12.47,Mcap $0.6B | 25% RevGr | PEG 0.4 | DE 0.2
+2026-04-17,AI-NickSleep,PCTY,Paylocity Holding Corporation,HR and payroll platform earns float on client fund,MEDIUM,100.66,"ROIC=18%, GrMgn=69%, FCFMargin=26%, 5yr revenue CAGR=10% with zero net debt — ca"
+2026-04-17,AI-WallStBlind,VITL,"Vital Farms, Inc.",Pasture-raised egg and butter brand with 25% reven,MEDIUM,12.47,PE=8.5 with 25% revenue growth at $0.6B mcap — premium CPG brand priced like com
+2026-04-17,AI-WallStBlind,QFIN,"Qfin Holdings, Inc.",Chinese fintech lender with 74% gross margins and ,MEDIUM,13.88,PE=1.0 with OprMgn=39% and GrMgn=74% at $1.8B mcap — China ADR stigma creates ab
+2026-04-17,AI-Burry,VIPS,Vipshop Holdings Limited,Chinese discount e-commerce operator with NetCash=,MEDIUM,15.3,NetCash=+307% of market cap — the cash alone exceeds the stock price implying th
+2026-04-17,AI-SpecialSit,PLMR,"Palomar Holdings, Inc.",Specialty insurance compounder at inflection: Palo,MEDIUM,131.41,"PEG=0.7 with 58% revenue growth re-accelerating, 46% FCF margin, and zero net de"

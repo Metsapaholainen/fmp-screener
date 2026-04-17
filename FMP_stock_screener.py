@@ -2,7 +2,7 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
 ║  📈 FMP STOCK SCREENER — Professional Fundamentals Edition     ║
-║  Lynch + Buffett strategies powered by Financial Modeling Prep  ║
+║  17 AI specialists + Master Manager · Financial Modeling Prep  ║
 ║  No hardcoded data — everything from FMP API + AI analysis     ║
 ╚══════════════════════════════════════════════════════════════════╝
 
@@ -3426,26 +3426,31 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
     )
 
     # ── Step 7: Judge agent — final synthesis ───────────────────────────────
-    judge_system = f"""You are a chief investment officer synthesising recommendations from seventeen specialist analysts.
+    judge_system = f"""You are the Master Manager — a chief investment officer and final decision-maker who synthesises recommendations from seventeen specialist analysts into a single, high-conviction portfolio list.
 Today is {datetime.date.today()}.
 Your seventeen specialists are: Quality Growth, Special Situation, Capital Appreciation, Emerging Growth, 10-Bagger Hunter, Goldman SC Scanner, Lynch Buy What You Know, Social Arbitrage, 100-Bagger Framework, Disruptive Innovation, Magic Formula, Pabrai Asymmetric Bet, Marks Second-Level, Scale Economics Shared, Burry Deep Value, Insider & Smart Money, Wall St Blindspot.
 
 YOUR INVESTMENT PHILOSOPHY:
-- Quality first: ROIC > 15% sustained is the clearest indicator of durable competitive advantage
-- PEG < 1.5 = growth at a reasonable price; confirm with ROIC before acting
-- Multi-specialist consensus = highest conviction — when 2-3 analysts independently converge on the same name, that is institutional-grade signal
-- A great business at a fair price beats a fair business at a great price
-- Catalyst matters: prefer picks where a specific event in 1-6 months can unlock value
-- Size is irrelevant: a $100B compounder at PEG 0.8 beats a $1B name at PEG 0.8 with half the ROIC
-- Small caps from the 10-Bagger Hunter deserve equal consideration — if the fundamentals are genuine, small size is an advantage not a disqualifier
+- Quality first: ROIC > 15% sustained is the clearest indicator of durable competitive advantage; it is the CORE decision variable — check ROIC before anything else
+- Valuation discipline: PEG < 1.5 is the entry gate, but ALSO check P/FCF < 25 and EV/EBITDA < 15 for non-hypergrowth stocks; a cheap-looking PEG with no FCF is a warning sign, not a buy signal
+- In elevated rate environments (10Y yield > 4%): require FCF yield > 4% or an explicit growth-justified premium — any business must earn its risk premium over Treasuries
+- A great business at a fair price beats a fair business at a great price every time (Buffett), but an average business at a "cheap" price destroys capital (value trap)
+- Catalyst discipline: prefer picks where a specific, identifiable event in 1-6 months can unlock value — "cheap" without a catalyst is a portfolio deadweight
+- Size neutrality: a $100B compounder at PEG 0.8 and 35% ROIC beats a $1B name at PEG 0.8 with 15% ROIC; size is irrelevant to quality
+
+CONSENSUS PRIORITY RULES — apply strictly:
+- 3+ specialists independently nominate the same stock → MUST include unless a hard-kill criterion fires; assign CORE tier
+- 2 specialists agree → HIGH priority; include if quality + valuation pass both gates; assign CORE or SATELLITE
+- 1 specialist only → requires your own independent justification beyond the specialist's thesis; assign SATELLITE at best
+- Master Manager-only pick (zero specialist endorsement) → assign WATCH only; never assign CORE
 
 QUALITY STANDARD — hard filter before including any pick:
-- Structural moat: pricing power, network effects, switching costs, brand, or cost leadership — NOT cyclical tailwind
-- Competitive position: market leader or dominant niche, not a commoditised also-ran
-- Survivability: would this business remain competitively relevant through a recession and an aggressive new entrant?
-- For 10-Bagger candidates: gross margin > 30% + operating margin > 0 replaces FCF as the quality gate
+- Structural moat: pricing power, network effects, switching costs, brand, or cost leadership — NOT a cyclical tailwind or one-time margin boost
+- Competitive position: market leader or clear dominant niche player — a commoditised also-ran is not investable regardless of how cheap it looks
+- Survivability: would this business remain competitively relevant through a recession AND an aggressive well-funded new entrant simultaneously?
+- For 10-Bagger candidates: gross margin > 30% + positive operating income replaces FCF as the quality gate — but dilution < 5%/yr is non-negotiable
 
-YOUR ROLE: Synthesise the seventeen specialist reports into a final 5-20 pick list that is diversified across lenses (quality + special situations + appreciation + emerging + small-cap + deep value + contrarian + insider signals), prioritises consensus names, and includes at least one pick from each specialist where quality meets the bar."""
+YOUR ROLE: Synthesise the seventeen specialist reports into a final 5-20 pick list diversified across lenses (quality + special situations + appreciation + emerging growth + small-cap + deep value + contrarian + insider signals). Prioritise consensus names rigorously. Include at least one pick from each specialist lens where quality meets the bar. Never pad the list — 8 genuine picks beat 20 forced ones."""
 
     # ── Build macro context block for judge (from live FRED data) ──────────
     macro_block = ""
@@ -3476,38 +3481,34 @@ SECTOR VALUATIONS (cheapest → most expensive by PEG):
 {sector_block}
 {macro_block}
 YOUR TASK:
-1. Assess the macro environment using the LIVE indicators above (rates, yield curve, VIX, CPI, unemployment) — what does the market misunderstand?
+1. Assess the macro environment using the LIVE indicators above (rates, yield curve, VIX, CPI, unemployment) — what does the market misunderstand, and which environments favour which strategy lenses?
 2. Select 5-20 of the BEST investments — quality over quantity. Do NOT fill slots.
-   If only 5-6 stocks truly meet the quality bar this week, output just those.
-   Lynch never forced picks — sometimes there were 5 great ideas, sometimes 15.
-   Only include a pick if you would genuinely invest your own money in it today.
-   Prioritise consensus picks (endorsed by 2+ specialists). Balance across strategies.
-   Include contrarian and deep-value picks IF they genuinely meet the quality bar — do not force them.
-3. For each pick: write a Lynch-style story — what does the market NOT understand? What is the catalyst?
-4. Assess competitive position: who are their main competitors, and what makes this company hard to displace?
-5. Survivability check: how would this business hold up through a recession or a well-funded new competitor?
+   If only 5-6 stocks truly meet the quality bar, output just those — the Master Manager never forces picks.
+   Only include a pick if you would genuinely allocate real capital to it today at this price.
+   Apply CONSENSUS PRIORITY RULES strictly (see system prompt). Balance across strategies.
+   Include contrarian and deep-value picks ONLY if they genuinely meet quality AND valuation gates — forced value picks destroy portfolios.
+3. For each pick: articulate the market-misunderstanding thesis — what specific thing does the consensus miss? What is the verifiable catalyst?
+4. Assess competitive position with specifics: who are the top 2-3 competitors, and what structural advantage makes this company hard to displace?
+5. Survivability check: be explicit — what happens to revenues and FCF in a -20% GDP recession scenario?
 
-Key principles:
-- Consensus picks (★ from multiple specialists) get priority unless fundamentals are broken
-- Differentiate urgency meaningfully — not everything can be ACT NOW
-- 52wPos < 0.75 = beaten down = more bad news priced in = lower risk entry
-- Avoid: high D/E + no FCF + decelerating growth = value trap
-- Avoid: commodity businesses with no pricing power, or companies losing market share to better competitors
-- Do NOT ignore large-cap quality compounders — a $100B company at Fwd PEG 0.8 with 35% ROIC and 10% FCF yield is a better risk-adjusted pick than a small cap at the same PEG with half the ROIC. Size is not a disqualifier.
-- QUALITY FILTERS — apply these before including any pick:
-  1. ROIC > 15% preferred (✅ROIC flag in data) — HIGH ROIC first, then check PEG; ROIC is the core decision-maker
-  2. PEG < 1.5 preferred — valuation confirms ROIC is priced fairly; PEG alone without ROIC is unreliable
-  3. FCF conversion ≥ 0.6 preferred (FCFConv in data) — earnings must convert to real cash; growth without cash = illusion
-  4. Flag ⚠GrwthGap and ⚠EpsGap picks explicitly — analyst estimates significantly more optimistic than track record
-- KILL CRITERIA — hard rejections (do NOT include picks that fail these):
-  ❌ FCF negative → reject (cash-burning growth is not investable)
-  ❌ ROIC < 8% → reject unless extraordinary turnaround case with explicit justification
-  ❌ Revenue declining majority of years (revConsistency < 0.40) → reject
+QUALITY FILTERS — verify before including any pick:
+  1. ROIC > 15% preferred (✅ROIC flag in data) — this is the primary quality gate; check it first
+  2. Valuation: PEG < 1.5 AND (P/FCF < 25 OR EV/EBITDA < 15) — two valuation confirmations required for non-hypergrowth
+  3. FCF conversion ≥ 0.6 (FCFConv in data) — earnings quality gate; growth without FCF conversion is accounting, not business performance
+  4. Flag ⚠GrwthGap and ⚠EpsGap picks explicitly — analyst optimism significantly ahead of track record is a red flag, not a buy signal
+  5. Rate adjustment: if 10Y > 4%, verify FCF yield > 4% or explicitly justify why growth premium is warranted
+
+KILL CRITERIA — hard rejections, no exceptions:
+  ❌ FCF negative (unless 10-Bagger candidate with gross margin > 30% AND operating income positive)
+  ❌ ROIC < 8% — reject unless it is a genuine financial inflection-point turnaround with explicit evidence in the data
+  ❌ Revenue declining majority of years (revConsistency < 0.40) — structural decline, not cyclical
+  ❌ High D/E (> 2.5) + negative FCF + decelerating growth = value trap; reject
+  ❌ Commodity business with zero pricing power and no cost moat — permanently uninvestable at any PEG
 
 Respond with ONLY valid JSON (no markdown, no preamble):
 {{
   "synopsis": "2-3 sentences: what does the market get wrong right now? Where is the real opportunity?",
-  "sector_rotation": "1-2 sentences: which sectors are at trough/peak and why — be specific with data",
+  "sector_rotation": "1-2 sentences: which sectors are at trough/peak and why — cite specific data",
   "macro_context": "2-3 sentences: how do current rates, yield curve, VIX, and inflation create specific opportunities or risks?",
   "macro_dashboard": {{
     "rate_environment": "1 sentence: what do current Treasury yields mean for equity valuations right now",
@@ -3529,13 +3530,14 @@ Respond with ONLY valid JSON (no markdown, no preamble):
       "sector": "Sector",
       "strategy": "Fast Grower | 10-Bagger | Stalwart | Turnaround | Asset Play | Cyclical | Slow Grower | IV Discount | Quality Compounder",
       "endorsed_by": "QualityGrowth + SpecialSit | EmergingGrowth only | CapAppreciation + QualityGrowth | etc.",
-      "headline": "Lynch-style one-liner anyone can understand in 10 seconds",
-      "story": "2-3 sentences: WHAT DOES THE MARKET NOT UNDERSTAND? Why cheap or overlooked?",
-      "industry_context": "1-2 sentences: where is this industry in its cycle?",
-      "competitive_position": "1 sentence: market position vs peers — what makes them hard to displace?",
-      "survivability": "1 sentence: how durable is this business under recession or competitive pressure?",
-      "catalyst": "The specific event or metric shift in next 1-6 months that unlocks value",
-      "watch": "The single biggest risk that breaks this thesis — be specific",
+      "position_tier": "CORE | SATELLITE | WATCH",
+      "headline": "One-liner market-misunderstanding thesis — what is the market missing in plain English?",
+      "story": "2-3 sentences: WHAT DOES THE MARKET NOT UNDERSTAND? What specific mispricing exists today?",
+      "industry_context": "1-2 sentences: where is this industry in its cycle, and what drives the next phase?",
+      "competitive_position": "1-2 sentences: top competitors named, and what specifically makes this company hard to displace",
+      "survivability": "1 sentence: explicit assessment — how do revenues and FCF hold in a downturn?",
+      "catalyst": "The specific named event or metric shift in next 1-6 months that unlocks value",
+      "watch": "The single biggest risk that breaks this thesis — name it specifically",
       "conviction": "HIGH | MEDIUM",
       "urgency": "ACT NOW | WITHIN WEEKS | WITHIN MONTHS | WATCH | AVOID"
     }}
@@ -3543,7 +3545,8 @@ Respond with ONLY valid JSON (no markdown, no preamble):
   "disclaimer": "Brief disclaimer"
 }}
 
-Urgency guide: ACT NOW=catalyst imminent + entry compelling; WITHIN WEEKS=good window 1-4wks; WITHIN MONTHS=patient build; WATCH=need confirmation; AVOID=thesis broken."""
+Position tier guide: CORE=3+ specialists endorse OR 2 specialists + exceptional quality; SATELLITE=1-2 specialists + quality pass; WATCH=Master Manager view only, no specialist endorsement.
+Urgency guide: ACT NOW=catalyst imminent + entry compelling today; WITHIN WEEKS=good entry window 1-4wks; WITHIN MONTHS=patient accumulation thesis; WATCH=wait for confirmation signal; AVOID=thesis broken or kill criterion fires."""
 
     try:
         print("    Calling judge agent for final synthesis...")
@@ -3920,7 +3923,7 @@ def build_ai_picks_tab(wb, ai_result: dict, stocks: dict, ws=None):
             if "bull"    in s: parts.append("Bull")
             if "value"   in s: parts.append("Val")
             if "contra"  in s: parts.append("Cont")
-        return "+".join(parts) if parts else "Judge"
+        return "+".join(parts) if parts else "Master Manager"
 
     # Consensus fill: 3 agents=dark green, 2=amber, 1=blue, judge only=grey
     _AGENTS_FILL = {3: "1B5E20", 2: "E65100", 1: "1565C0", 0: "546E7A"}
@@ -4077,7 +4080,7 @@ def build_ai_picks_tab(wb, ai_result: dict, stocks: dict, ws=None):
         conv     = (p.get("conviction") or "MEDIUM").upper()
         urgency  = (p.get("urgency") or "WATCH").upper()
         agents   = _agents_short(p.get("endorsed_by", ""))
-        n_agents = agents.count("+") + (0 if agents == "Judge" else 1)
+        n_agents = agents.count("+") + (0 if agents == "Master Manager" else 1)
         rf       = ALT_FILL if i % 2 == 0 else PLAIN_FILL
         # Use live price if available, fall back to cached
         live_price = live_prices.get(t) or s.get("price")
@@ -4294,7 +4297,7 @@ def build_overview_tab(ws, stocks, iv_rows, stalwarts, fast_growers, turnarounds
     r = 1
 
     # ── Title bar ──────────────────────────────────────────────────
-    r = _hdr(r, f"  FMP Stock Screener  —  Lynch + Buffett Strategies    {today}",
+    r = _hdr(r, f"  FMP Stock Screener  —  Professional Fundamentals Edition    {today}",
              "0D1B2A", font_size=13, height=30)
     r = _text_row(r,
                   f"Universe: {len(stocks):,} US stocks  |  FMP API calls: {fmp_call_count}"
@@ -5342,7 +5345,7 @@ def build_picks_tracking(wb, stocks):
         "AI-Burry":            "🕳️ Deep Value",
         "AI-InsiderTrack":     "👁️ Insider",
         "AI-WallStBlind":      "🔍 WallStBlind",
-        "AI-Judge":            "⚖️ Judge",
+        "AI-Judge":            "⚖️ Master Manager",
         # legacy labels kept for old log entries
         "AI-Bull":             "🐂 Bull (legacy)",
         "AI-Value":            "🛡️ Value (legacy)",
@@ -7972,7 +7975,7 @@ function showMacroDetail(el, id) {
         import csv as _csv
 
         _AGENT_ICONS = {
-            "AI-Judge":           "⚖️ Judge",
+            "AI-Judge":           "⚖️ Master Manager",
             "AI-QualityGrowth":   "🌱 Qual.Growth",
             "AI-EmergingGrowth":  "🚀 Emerg.Growth",
             "AI-CapAppreciation": "📈 Cap.Apprecn",
@@ -8226,7 +8229,7 @@ function showMacroDetail(el, id) {
     <h1>📈 FMP Stock Screener</h1>
     <small>{now} · {len(stocks):,} stocks · {fmp_call_count} API calls</small>
   </div>
-  <small style="color:#9fa8da">Lynch + Buffett</small>
+  <small style="color:#9fa8da">17 Specialists · Master Manager</small>
 </div>
 <nav class="nav">{nav_html}</nav>
 {_ai_section()}
