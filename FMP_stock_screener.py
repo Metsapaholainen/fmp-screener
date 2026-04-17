@@ -7581,11 +7581,11 @@ function showMacroDetail(el, id) {
         # ── Geo/macro context block ────────────────────────────────────────
         _macro_ctx_text = (ai or {}).get("macro_context", "")
         _geo_block = (
-            f'<div style="margin-bottom:14px;background:#f3e5f5;border-left:4px solid #7b1fa2;'
+            f'<div style="margin-bottom:14px;background:#1a1f2e;border-left:3px solid #455a64;'
             f'border-radius:4px;padding:10px 14px">'
-            f'<h2 style="margin-bottom:6px;font-size:.75rem;color:#4a148c">'
+            f'<h2 style="margin-bottom:6px;font-size:.75rem;color:#78909c">'
             f'🌍 GEOPOLITICAL &amp; MACRO CONTEXT</h2>'
-            f'<p style="color:#4a148c;font-style:italic;margin:0;font-size:.82rem;line-height:1.6">'
+            f'<p style="color:#b0bec5;font-style:italic;margin:0;font-size:.82rem;line-height:1.6">'
             f'{_macro_ctx_text}</p>'
             f'</div>'
         ) if _macro_ctx_text else ""
