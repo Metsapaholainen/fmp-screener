@@ -1,0 +1,63 @@
+name: Daily FMP Screener
+
+on:
+  schedule:
+    # 20:00 UTC = 23:00 Helsinki (EEST, UTC+3 in summer)
+    # Runs Mon–Fri on market weekdays
+    - cron: '0 20 * * 1-5'
+  workflow_dispatch:   # Manual "Run workflow" button in GitHub UI
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25   # screener takes ~10 min; 25 gives headroom
+
+    steps:
+      # ── 1. Check out this private repo (code + data files) ──────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need write access to commit data files back after the run
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Python ────────────────────────────────────────────────────────────
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── 3. Restore FMP cache between runs (saves ~200 API calls/day) ─────────
+      - name: Cache FMP data
+        uses: actions/cache@v4
+        with:
+          path: fmp_screener_cache.json
+          # Cache key rotates daily so we always get fresh prices at day-start
+          # but keep the cache within a day if re-runs happen
+          key: fmp-cache-${{ github.run_id }}
+          restore-keys: fmp-cache-
+
+      # ── 4. Run the screener ──────────────────────────────────────────────────
+      - name: Run screener
+        env:
+          FMP_API_KEY:       ${{ secrets.FMP_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # GITHUB_REPO = the PUBLIC pages repo ("Metsapaholainen/fmp-screener")
+          GITHUB_REPO:       ${{ secrets.PAGES_REPO }}
+          # GITHUB_TOKEN here is a PAT with write access to the PUBLIC pages repo
+          GITHUB_TOKEN:      ${{ secrets.PAGES_TOKEN }}
+          NTFY_TOPIC:        ${{ secrets.NTFY_TOPIC }}
+        run: python FMP_stock_screener.py
+
+      # ── 5. Commit updated data files back to THIS private repo ───────────────
+      - name: Save data files
+        run: |
+          git config user.name  "fmp-screener[bot]"
+          git config user.email "fmp-screener[bot]@users.noreply.github.com"
+          git add fmp_picks_log.csv fmp_ai_picks_log.csv fmp_portfolio.json
+          # Only commit if something actually changed
+          git diff --staged --quiet || git commit -m "run: $(date '+%Y-%m-%d')"
+          git push

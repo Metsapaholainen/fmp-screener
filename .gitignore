@@ -15,9 +15,10 @@ venv/
 # Claude Code
 .claude/
 
-# Screener outputs (timestamped runs — only index.html is tracked)
+# Screener outputs (timestamped runs — not tracked, index.html is in the public Pages repo)
 fmp_screener_*.html
 fmp_screener_*.xlsx
+index.html
 
 # Large runtime cache (~40 MB, regenerated each run)
 fmp_screener_cache.json
