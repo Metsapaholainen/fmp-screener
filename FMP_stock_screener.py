@@ -11,7 +11,7 @@ Covers: NASDAQ + NYSE + AMEX (full US market ~3,500+ stocks)
 
 Tabs:
   1. Overview          — AI market pulse + top picks + tab summaries
-  2. IV Discount       — DCF intrinsic value + Piotroski ≥7, top 50
+  2. IV Discount       — DCF intrinsic value + Lynch quality (rev consistency, FCF conv, buybacks), top 50
   2b. IV by Sector     — Same, 30 per sector
   3. Stalwarts         — PEG 1-2, rev 8-20%, >$2B (Lynch category)
   4. Fast Growers      — PEG <1.5, rev >20% (Lynch category)
@@ -2478,9 +2478,11 @@ def format_stock_row(s: dict) -> dict:
 # ─────────────────────────────────────────────
 
 def build_iv_discount(wb, stocks):
-    """Tab 2: Intrinsic Value Discount — Buffett style: good businesses at fair/cheap prices.
-    Primary signal: DCF Margin of Safety. Confirmed by: FCF yield, ROE, ROIC, low P/E.
-    Tighter quality gates than before — avoids value traps.
+    """Tab 2: Intrinsic Value Discount — Buffett/Lynch style: good businesses below DCF value.
+    Primary signal: DCF Margin of Safety.
+    Gate: Piotroski ≥ 6 (value-trap filter only — not in scoring).
+    Scoring: MoS + Lynch quality (rev consistency, FCF conversion, EPS growth, buybacks)
+             + FCF yield + ROIC + ROE + multi-metric cheapness + D/E + beat rate.
     """
     print("\n📊 Building Tab: IV Discount Picks...")
     qualified = []
@@ -2522,11 +2524,38 @@ def build_iv_discount(wb, stocks):
         # 1. Margin of Safety — the primary signal (40 pts max at 60% MoS)
         score += min(mos * 60, 40)
 
-        # 2. Piotroski financial health — confirms the DCF story is real
-        if pio and pio >= 9:   score += 14
-        elif pio and pio >= 8: score += 10
-        elif pio and pio >= 7: score += 7
-        elif pio and pio >= 6: score += 3
+        # 2. Lynch-style business quality — replaces raw Piotroski in scoring
+        #    (Piotroski still guards the gate above; here we reward Lynch metrics)
+        #
+        # 2a. Revenue consistency — Lynch's first litmus test: "does it grow every year?"
+        rc = s.get("revConsistency")
+        if rc is not None:
+            if rc >= 0.80:   score += 10   # nearly all years positive — very rare quality signal
+            elif rc >= 0.60: score += 6
+            elif rc >= 0.40: score += 2
+            else:            score -= 4    # more bad years than good — value trap warning
+
+        # 2b. FCF conversion — Lynch wanted "real" earnings; FCF ≈ net income = no accounting tricks
+        fcc = s.get("fcfConversion")
+        if fcc is not None:
+            if fcc >= 0.80:   score += 8   # FCF tracks earnings — credible fundamentals
+            elif fcc >= 0.60: score += 4
+            elif fcc < 0.40:  score -= 5   # FCF << earnings: capex drain or accrual tricks
+
+        # 2c. EPS growth 5Y — Lynch's "PEG company" requires visible earnings growth history
+        eg5 = s.get("epsGrowth5y")
+        if eg5 is not None:
+            if eg5 > 0.15:   score += 7   # Fast Grower territory — Lynch's sweet spot
+            elif eg5 > 0.08: score += 4
+            elif eg5 > 0:    score += 2
+            elif eg5 < -0.05: score -= 4  # shrinking EPS = business getting worse, not just cheap
+
+        # 2d. Share buybacks (negative sharesGrowth = shares retiring = management confidence)
+        sg = s.get("sharesGrowth")
+        if sg is not None:
+            if sg < -0.03:   score += 5   # active buybacks — Lynch loved this signal
+            elif sg < 0:     score += 2
+            elif sg > 0.10:  score -= 4   # heavy dilution = not a quality business
 
         # 3. FCF yield — cash generation confirms DCF assumptions are credible
         if fcf and fcf > 0.12:   score += 12
@@ -2584,16 +2613,17 @@ def build_iv_discount(wb, stocks):
     ws.sheet_view.showGridLines = False
     sr = add_title(ws,
                    "💎 Intrinsic Value Discount — Good Businesses Trading Below DCF Value",
-                   f"Filter: MoS≥5%, Piotroski≥6, Altman Z≥1.5, positive FCF/ROE/ROIC/PE. "
-                   f"Score: MoS+Piotroski+FCF+ROIC+ROE+multi-metric value+beat rate. {datetime.date.today()}")
+                   f"Filter: MoS≥5%, Piotroski≥6 (value-trap gate), Altman Z≥1.5, positive FCF/ROE/ROIC/PE. "
+                   f"Score: MoS + Lynch quality (Rev Consistency, FCF Conversion, EPS growth, buybacks) "
+                   f"+ FCF yield + ROIC + ROE + multi-metric cheapness + D/E + beat rate. {datetime.date.today()}")
 
     headers = [
         "Rank", "Ticker", "Company", "Sector", "Price", "IV", "MoS",
         "P/E", "EV/EBITDA", "PEG", "P/B", "FCF Yield", "ROIC", "ROE", "D/E",
-        "Beat Rate", "Piotroski", "Rev Growth", "EPS Growth 5Y",
+        "Beat Rate", "Rev Consist.", "FCF Conv.", "EPS Growth 5Y",
         "MktCap ($B)", "Score", "🏦 Insider",
     ]
-    widths = [5, 8, 22, 15, 8, 8, 7, 7, 9, 6, 6, 8, 7, 7, 7, 8, 7, 8, 9, 10, 6, 14]
+    widths = [5, 8, 22, 15, 8, 8, 7, 7, 9, 6, 6, 8, 7, 7, 7, 8, 9, 8, 9, 10, 6, 14]
     write_table(ws, qualified[:TOP_N], headers, sr, header_color="1A237E", widths=widths)
     print(f"  ✅ IV Discount tab done — {min(len(qualified), TOP_N)} stocks (from {len(qualified)} qualifying)")
 
@@ -9500,8 +9530,9 @@ Sharpe on alpha series. Click any column header to sort.</p>
 {_ai_section()}
 {_macro_section()}
 {_strategy_table(iv_rows,   STRAT_COLS + ["IV","D/E","EV/EBITDA"],   "iv",       "📊 IV Discount Picks",
-    "DCF intrinsic value discount ≥15% · Piotroski ≥7 · MktCap >$100M · "
-    "Scored on: value gap, quality (ROIC/FCF/Piotroski), growth. Top 50.")}
+    "DCF intrinsic value discount ≥5% · Piotroski ≥6 (value-trap gate only) · Altman Z ≥1.5. "
+    "Ranked on: MoS + Lynch quality (rev consistency, FCF conversion, EPS growth, buybacks) "
+    "+ FCF yield + ROIC + ROE + multi-metric cheapness. Top 50.")}
 {_strategy_table(stalwarts,  STRAT_COLS,                               "stalwart", "🏛 Stalwarts",
     "Revenue growth 5–25% · MktCap >$2B · P/E <50 · FCF positive · Piotroski ≥5 · "
     "Rev consistency ≥60% · Excl. Basic Materials. Lynch 'boring but reliable' category.")}
