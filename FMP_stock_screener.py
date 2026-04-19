@@ -16,7 +16,7 @@ Tabs:
   3. Stalwarts         — PEG 1-2, rev 8-20%, >$2B (Lynch category)
   4. Fast Growers      — PEG <1.5, rev >20% (Lynch category)
   5. Slow Growers      — Dividend >2%, stable (Lynch category)
-  6. Cyclicals         — Low P/E in cyclical sectors (Lynch category)
+  6. Cyclicals         — HIGH/no P/E in cyclical sectors = trough earnings = Lynch BUY signal
   7. Turnarounds       — Down >40%, recovering (Lynch category)
   8. Asset Plays       — P/B <1, hidden value (Lynch category)
   9. Sector Valuations — 11 SPDR ETFs with PEG/FCF/growth
@@ -2162,6 +2162,9 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             # ── New enrichment fields ──────────────────────────────────────
             # EV/EBITDA — better than P/E for cyclicals + capital-intensive sectors
             "evEbitda": _first(km.get("evToEbitdaTTM")),
+            # EV/Revenue — useful when earnings near zero (cyclical trough, turnarounds)
+            "evRevenue": _first(km.get("evToSalesTTM"), km.get("evToSalesRatioTTM"),
+                                rtm.get("evToSalesRatioTTM"), rtm.get("evToSalesTTM")),
             # P/FCF — cash-flow based valuation (more reliable than P/E for many sectors)
             # Prefer direct ratio; fall back to 1/fcfYield when ratio is unavailable
             "pFcf": (lambda _r, _fy: (
@@ -2426,6 +2429,7 @@ def format_stock_row(s: dict) -> dict:
         "P/E": s.get("pe"),
         "P/B": s.get("pb"),
         "EV/EBITDA": s.get("evEbitda"),
+        "EV/Rev": s.get("evRevenue"),
         "P/FCF": s.get("pFcf"),
         "ROE": s.get("roe"),
         "ROIC": s.get("roic"),
@@ -9511,8 +9515,9 @@ Sharpe on alpha series. Click any column header to sort.</p>
     "Dividend yield ≥2% · Stable multi-year earnings · Large established companies. "
     "Lynch category: own for income + capital preservation, not growth.")}
 {_strategy_table(cyclicals,  STRAT_COLS,                               "cycl",     "🔄 Cyclicals",
-    "Low P/E in cyclical sectors (Industrials, Energy, Materials, Consumer Cyclical). "
-    "Lynch: buy cyclicals when P/E is LOW (trough earnings) — sell when P/E looks cheap at peak.")}
+    "Cyclical sectors (Industrials, Energy, Materials, Consumer Cyclical) at earnings trough. "
+    "Lynch: P/E is INVERTED for cyclicals — HIGH or missing P/E = depressed earnings = BUY. "
+    "LOW P/E = peak earnings = SELL. Best entry: decline decelerating + FCF positive + net debt &lt; 3× EBITDA.")}
 {_strategy_table(turnarounds, STRAT_COLS,                              "turn",     "🔁 Turnarounds",
     "Down ≥40% from 52W high · Revenue recovering (positive growth trend) · Piotroski ≥4. "
     "Lynch: near-bankrupt companies that survive can be 10x — but require highest conviction.")}
@@ -10875,11 +10880,22 @@ def main():
     # Also BUY when P/E is not available (reporting losses = maximum trough opportunity).
     # The goal is to catch cyclicals before earnings recover, not after.
     def _cyclical_filter(s):
+        """Lynch trough-buying filter for cyclicals.
+
+        KEY INSIGHT: For cyclicals, the P/E signal is INVERTED vs normal stocks.
+          - Low P/E  → earnings at PEAK  → Lynch would SELL
+          - High P/E → earnings DEPRESSED → Lynch would BUY
+          - No P/E   → maximum trough   → best entry (if balance sheet survives)
+
+        We require at least one confirmed trough signal AND balance-sheet survival.
+        """
         if not _is_common_stock(s): return False
         pio = s.get("piotroski")
         pb  = s.get("pb")
         pe  = s.get("pe")
         az  = s.get("altmanZ")
+        nde = s.get("netDebtEbitda")  # net debt / EBITDA — survival metric
+        cr  = s.get("currentRatio")   # liquidity
 
         # Must be in a recognised cyclical sector
         if s.get("sector") not in CYCLICAL_SECTORS:
@@ -10897,104 +10913,177 @@ def main():
         if az is not None and az < 0.8:
             return False
 
-        # Lynch BUY trough signals (need at least one):
-        # A) Elevated P/E  (10–60) — earnings depressed but company not dead
-        trough_pe    = (pe and 10 < pe < 65)
-        # B) No PE / reporting losses — maximum earnings trough
-        loss_trough  = (not pe and pb and 0 < pb < 2.0)
-        # C) Very low P/B + revenue declining — sector in downturn but assets preserved
-        asset_trough = (pb and 0 < pb < 0.9)
+        # Hard debt survival gate: net debt > 6× EBITDA at trough = bankruptcy risk
+        # (Cyclicals with heavy leverage go bust before the cycle turns)
+        if nde is not None and nde > 6.0:
+            return False
+
+        # Liquidity gate: current ratio < 0.8 = can't pay near-term obligations
+        if cr is not None and cr < 0.8:
+            return False
+
+        # ── Trough signal: need at least one of three ───────────────────
+        # A) Elevated P/E (≥15) — earnings depressed, NOT at cycle peak
+        #    Note: P/E 10–14 is excluded — that's more likely MID/PEAK for cyclicals
+        trough_pe    = (pe is not None and pe >= 15)
+
+        # B) No P/E / reporting losses + asset backing (P/B < 1.5)
+        #    Maximum trough — company unprofitable but assets > liabilities
+        loss_trough  = (pe is None and pb is not None and 0 < pb < 1.5)
+
+        # C) P/B < 0.9 — extreme asset discount regardless of earnings
+        #    Sector so beaten down that stock trades below liquidation value
+        asset_trough = (pb is not None and 0 < pb < 0.9)
 
         return trough_pe or loss_trough or asset_trough
 
     def _cyclical_score(s):
-        sc = 0
+        """Score cyclicals for trough depth, survival quality, and early recovery signals.
+
+        Scoring philosophy (Lynch):
+          1. Deepest trough = best entry (high/no P/E preferred)
+          2. Balance sheet must survive 2+ more years of downcycle
+          3. Deceleration of decline signals approaching bottom (buy BEFORE recovery)
+          4. Price near multi-year lows means more of the pain is priced in
+          5. Insider buying = management knows something is improving
+        """
+        sc  = 0
         pe  = s.get("pe")
         pb  = s.get("pb")
         fcf = s.get("fcfYield")
         de  = s.get("de")
+        nde = s.get("netDebtEbitda")
         rg  = s.get("revGrowth")
+        rg_prev = s.get("revGrowthPrev")   # prior-year revenue growth (for deceleration signal)
+        cr  = s.get("currentRatio")
 
-        # ── P/E trough signal (INVERTED vs normal stocks) ──────────────
-        # Lynch: high P/E at trough is a BUY, low P/E at peak is a SELL
-        if not pe:
-            sc += 18   # no earnings / loss = deepest trough = best entry point
-        elif 20 < pe < 50:
-            sc += 22   # classic trough band — depressed but not terminal
-        elif 15 < pe <= 20:
-            sc += 16   # slightly elevated — early-trough territory
-        elif 10 < pe <= 15:
-            sc += 8    # moderate — above average but maybe mid-cycle
-        elif pe <= 10:
-            sc += 2    # low PE = peak earnings — Lynch would be SELLING, not buying
+        # ── 1. P/E TROUGH SIGNAL (INVERTED vs normal stocks) ───────────
+        # Lynch: high P/E at trough = BUY;  low P/E at peak = SELL
+        if pe is None:
+            sc += 22   # no earnings / loss = maximum trough = best entry
         elif pe > 50:
-            sc += 10   # very elevated — extreme trough or speculative losses
+            sc += 15   # extreme trough or heavy losses — still a buy if assets OK
+        elif 25 < pe <= 50:
+            sc += 22   # classic cyclical trough band — primary buy zone
+        elif 15 < pe <= 25:
+            sc += 14   # elevated — early/mid trough, still attractive
+        elif 10 < pe <= 15:
+            sc -= 4    # mid-to-peak territory — Lynch would be cautious
+        elif pe <= 10:
+            sc -= 10   # low P/E = peak earnings — Lynch would SELL, not buy
 
-        # ── P/B: asset value preserved during earnings decline ──────────
-        if pb and 0 < pb < 0.5:    sc += 18  # extreme asset discount
-        elif pb and 0 < pb < 0.8:  sc += 13
-        elif pb and 0 < pb < 1.2:  sc += 8
-        elif pb and 0 < pb < 2.0:  sc += 4
+        # ── 2. ASSET FLOOR (P/B) ────────────────────────────────────────
+        # Book value is the downside floor when earnings are depressed
+        if pb is not None and 0 < pb < 0.5:    sc += 18  # extreme asset discount
+        elif pb is not None and 0 < pb < 0.8:  sc += 13
+        elif pb is not None and 0 < pb < 1.2:  sc += 8
+        elif pb is not None and 0 < pb < 2.0:  sc += 3
 
-        # ── FCF: still generating cash despite earnings compression ─────
-        # Cash flow positive while earnings are down = best quality signal for cyclicals
-        if fcf and fcf > 0.10:    sc += 18  # exceptional — earning cash at trough
-        elif fcf and fcf > 0.07:  sc += 14
-        elif fcf and fcf > 0.04:  sc += 9
-        elif fcf and fcf > 0.01:  sc += 4
+        # ── 3. FCF: cash generation at trough = quality signal ──────────
+        # A cyclical generating positive FCF while earnings are depressed
+        # is NOT in distress — it will survive and recover strongly
+        if fcf is not None and fcf > 0.10:    sc += 18
+        elif fcf is not None and fcf > 0.07:  sc += 13
+        elif fcf is not None and fcf > 0.04:  sc += 8
+        elif fcf is not None and fcf > 0.01:  sc += 3
+        elif fcf is not None and fcf < -0.05: sc -= 8   # burning cash = survival risk
 
-        # ── Revenue trend: at/near trough (declining or flat) is GOOD ───
-        # Lynch: buy before revenue recovers, not after
-        if rg and -0.20 <= rg < 0:      sc += 8   # revenue declining = near trough
-        elif rg is None or rg == 0:      sc += 4   # flat = possibly at bottom
-        elif rg and -0.40 <= rg < -0.20: sc += 5   # severe decline — maybe near bottom
-        elif rg and 0 < rg < 0.08:       sc += 2   # slight recovery starting
-        elif rg and rg >= 0.08:           sc -= 3  # revenue recovering = you may be late
+        # ── 4. REVENUE TREND + DECELERATION (approaching-bottom signal) ─
+        # Lynch: buy BEFORE revenue recovers, not after.
+        # Best signal: decline decelerating (e.g. -20% → -8%) = bottom approaching
+        decline_decelerating = (
+            rg is not None and rg_prev is not None
+            and rg < 0 and rg_prev < 0          # both declining years
+            and rg > rg_prev                     # decline is getting smaller
+        )
+        if decline_decelerating:
+            sc += 12  # strongest signal — approaching the trough inflection point
 
-        # ── Debt survival: must be able to outlast the downcycle ────────
-        if de is not None and de < 0.3:   sc += 9
-        elif de is not None and de < 0.7: sc += 6
-        elif de is not None and de < 1.5: sc += 3
+        # Current revenue trend score
+        if rg is None or rg == 0:
+            sc += 5    # flat / no data — possibly at the floor
+        elif -0.20 <= rg < 0:
+            sc += 8    # mild decline — near trough
+        elif -0.40 <= rg < -0.20:
+            sc += 5    # severe decline — maybe near bottom
+        elif rg < -0.40:
+            sc += 2    # catastrophic decline — deep trough but survival risk rises
+        elif 0 < rg <= 0.05:
+            sc -= 2    # slight recovery — might be late
+        elif 0.05 < rg <= 0.15:
+            sc -= 6    # recovery underway — Lynch would be reducing, not buying
+        elif rg > 0.15:
+            sc -= 12   # strong recovery = peak approaching — time to SELL not BUY
 
-        # ── Piotroski: fundamental health despite depressed earnings ────
+        # ── 5. DEBT SURVIVAL: outlast the downcycle ─────────────────────
+        # Net debt/EBITDA is the primary survival metric at trough
+        if nde is not None:
+            if nde < 0:           sc += 10  # net cash = can't go bankrupt
+            elif nde < 1.0:       sc += 8
+            elif nde < 2.0:       sc += 5
+            elif nde < 3.5:       sc += 2
+            elif nde < 5.0:       sc -= 3   # stretched — one more bad year is dangerous
+            # > 6x already blocked by filter
+
+        # Supplementary: D/E ratio
+        if de is not None and de < 0.3:   sc += 5
+        elif de is not None and de < 0.7: sc += 3
+        elif de is not None and de < 1.5: sc += 1
+
+        # ── 6. LIQUIDITY: can pay bills during the trough ───────────────
+        if cr is not None and cr > 2.0:   sc += 6
+        elif cr is not None and cr > 1.5: sc += 4
+        elif cr is not None and cr > 1.2: sc += 2
+
+        # ── 7. PIOTROSKI: fundamental health score ──────────────────────
         pio = s.get("piotroski")
-        if pio and pio >= 8:   sc += 8
-        elif pio and pio >= 6: sc += 5
-        elif pio and pio >= 4: sc += 2
+        if pio is not None and pio >= 8:   sc += 8
+        elif pio is not None and pio >= 6: sc += 5
+        elif pio is not None and pio >= 4: sc += 2
 
-        # ── Dividend maintained at trough = financial strength signal ───
+        # ── 8. DIVIDEND MAINTAINED: financial strength at trough ────────
         div = s.get("divYield")
-        if div and div > 0.05:   sc += 6
-        elif div and div > 0.02: sc += 3
+        if div is not None and div > 0.06:   sc += 7
+        elif div is not None and div > 0.03: sc += 4
+        elif div is not None and div > 0.01: sc += 2
 
-        # ── EV/EBITDA: at trough, EV/EBITDA is high (same logic as P/E) ───
+        # ── 9. EV/REVENUE: useful when earnings near zero ───────────────
+        # EV/Revenue < 0.5 means you're paying < 50c per $1 of revenue — deep value
+        ev_rev = s.get("evRevenue")
+        if ev_rev is not None and 0 < ev_rev < 0.3:   sc += 10  # extreme cheapness on sales
+        elif ev_rev is not None and 0 < ev_rev < 0.6: sc += 7
+        elif ev_rev is not None and 0 < ev_rev < 1.0: sc += 4
+
+        # ── 10. EV/EBITDA: elevated = earnings depressed (same inversion) ─
         ev_eb = s.get("evEbitda")
-        if ev_eb and ev_eb > 20:    sc += 5   # elevated EV/EBITDA = earnings depressed
-        elif ev_eb and ev_eb > 12:  sc += 3
+        if ev_eb is not None and ev_eb > 25:    sc += 5
+        elif ev_eb is not None and ev_eb > 15:  sc += 3
 
-        # ── 52-week positioning: near lows = more of the trough is priced in ──
-        pvs52h = s.get("priceVs52H")  # price / 52wk high
-        if pvs52h and pvs52h < 0.55:    sc += 10  # >45% off 52wk high = deep trough
-        elif pvs52h and pvs52h < 0.70:  sc += 7
-        elif pvs52h and pvs52h < 0.85:  sc += 4
+        # ── 11. 52-WEEK POSITION: near lows = pain is priced in ─────────
+        pvs52h = s.get("priceVs52H")
+        if pvs52h is not None and pvs52h < 0.45:   sc += 12  # >55% off 52wk high
+        elif pvs52h is not None and pvs52h < 0.60: sc += 8
+        elif pvs52h is not None and pvs52h < 0.75: sc += 4
 
-        # ── Insider buying at trough = management confidence ────────────
-        if s.get("insiderBuys", 0) >= 3:   sc += 10
-        elif s.get("insiderBuys", 0) >= 1: sc += 5
+        # ── 12. INSIDER BUYING: management knows cycle is turning ────────
+        if s.get("insiderBuys", 0) >= 3:   sc += 12
+        elif s.get("insiderBuys", 0) >= 1: sc += 6
 
         return sc
 
     _cy_headers = [
         "Rank", "Ticker", "Company", "Sector", "Price",
-        "P/E", "EV/EBITDA", "P/B", "FCF Yield", "D/E", "Rev Growth",
-        "Div Yield", "52w Pos", "Piotroski", "Altman Z",
-        "MktCap ($B)", "Score", "🏦 Insider",
+        "P/E", "EV/EBITDA", "EV/Rev", "P/B", "FCF Yield",
+        "Net Debt/EBITDA", "Curr Ratio", "Rev Growth", "Rev Gr Prev",
+        "Div Yield", "52w Pos", "Piotroski", "Score", "🏦 Insider",
     ]
-    _cy_widths = [5, 8, 22, 15, 8, 7, 9, 6, 8, 7, 9, 8, 7, 8, 8, 10, 6, 14]
+    _cy_widths = [5, 8, 22, 15, 8, 7, 9, 7, 6, 8, 11, 9, 9, 10, 8, 7, 8, 6, 14]
 
     cyclicals = build_lynch_tab(wb, stocks, "Cyclicals", "6", _cyclical_filter, _cyclical_score,
                                 "E65100",
-                                "Lynch trough-buying: BUY at high/no P/E (depressed earnings) + low P/B + positive FCF.",
+                                "Lynch trough-buying: BUY at HIGH/NO P/E (depressed earnings). "
+                                "Low P/E = peak earnings = SELL signal for cyclicals. "
+                                "Best entry: decline decelerating + P/B < 1.2 + FCF positive + net debt < 3× EBITDA.",
                                 custom_headers=_cy_headers, custom_widths=_cy_widths)
 
     # ─── Turnarounds: recovering businesses — distinct from IV Discount ────────
