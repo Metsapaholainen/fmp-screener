@@ -11,7 +11,9 @@
       "entry_date": "2026-04-08",
       "rationale": "Best-in-class cloud security platform with 28% ROIC, 9.6% FCF yield, and PEG of 0.89 \u2014 deeply undervalued relative to quality. Sticky SaaS model with near-100% gross margins and zero net debt. MoS of ",
       "conviction": "HIGH",
-      "sell_trigger": "Revenue growth falls below 5% for two consecutive quarters, or ROIC drops below 18%, or a major competitive displacement by CrowdStrike/SentinelOne in"
+      "sell_trigger": "Revenue growth falls below 5% for two consecutive quarters, or ROIC drops below 18%, or a major competitive displacement by CrowdStrike/SentinelOne in",
+      "lynch_category": "Stalwart+FastGrower+Turnaround",
+      "sector": "Technology"
     },
     {
       "ticker": "HIG",
@@ -21,7 +23,9 @@
       "entry_date": "2026-04-08",
       "rationale": "Exceptional capital-light insurer with 28% ROIC, 15.2% FCF yield, and PEG of 0.74. Commercial insurance pricing remains firm and Hartford's combined ratio discipline is best-in-class. MoS of 48% with ",
       "conviction": "HIGH",
-      "sell_trigger": "Combined ratio rises above 100% for two consecutive quarters, or commercial P&C pricing turns negative, or ROIC falls below 20%"
+      "sell_trigger": "Combined ratio rises above 100% for two consecutive quarters, or commercial P&C pricing turns negative, or ROIC falls below 20%",
+      "lynch_category": "Stalwart+Cyclical",
+      "sector": "Financial Services"
     },
     {
       "ticker": "ADBE",
@@ -31,7 +35,9 @@
       "entry_date": "2026-04-08",
       "rationale": "37% ROIC and 10.6% FCF yield at a PEG of 0.79 is genuinely rare for a dominant creative/document software franchise. AI integration (Firefly) is a revenue catalyst rather than a threat. Recurring subs",
       "conviction": "HIGH",
-      "sell_trigger": "FCF margin compresses below 25%, AI-native competitors (Canva, Figma post-acquisition alternative) achieve material enterprise penetration, or revenue"
+      "sell_trigger": "FCF margin compresses below 25%, AI-native competitors (Canva, Figma post-acquisition alternative) achieve material enterprise penetration, or revenue",
+      "lynch_category": "Stalwart+FastGrower+Turnaround",
+      "sector": "Technology"
     },
     {
       "ticker": "HALO",
@@ -41,7 +47,9 @@
       "entry_date": "2026-04-08",
       "rationale": "ENHANZE drug delivery technology is a pure-play royalty-like business with 24% ROIC, 8.6% FCF yield, and PEG of 0.63. Partners include J&J, Roche, Pfizer \u2014 blue-chip validation. 38% revenue growth wit",
       "conviction": "HIGH",
-      "sell_trigger": "Key partner (J&J DARZALEX subcutaneous) loses market share to competing formulations, royalty rates renegotiated materially downward, or ROIC falls be"
+      "sell_trigger": "Key partner (J&J DARZALEX subcutaneous) loses market share to competing formulations, royalty rates renegotiated materially downward, or ROIC falls be",
+      "lynch_category": "FastGrower+Turnaround",
+      "sector": "Healthcare"
     },
     {
       "ticker": "HRB",
@@ -51,7 +59,9 @@
       "entry_date": "2026-04-08",
       "rationale": "30% ROIC, 12.6% FCF yield, PEG of 0.31, and 75% MoS \u2014 one of the most compelling value/quality combinations in the screen. Dominant tax preparation franchise with ~20M clients annually, pricing power,",
       "conviction": "HIGH",
-      "sell_trigger": "IRS free filing program materially expands to include complex returns (threatening DIY segment), or FCF yield drops below 7%, or ROIC falls below 22%"
+      "sell_trigger": "IRS free filing program materially expands to include complex returns (threatening DIY segment), or FCF yield drops below 7%, or ROIC falls below 22%",
+      "lynch_category": "SlowGrower+Turnaround",
+      "sector": "Consumer Cyclical"
     },
     {
       "ticker": "PEGA",
@@ -61,7 +71,9 @@
       "entry_date": "2026-04-08",
       "rationale": "Enterprise AI/automation software with exceptional 29% ROIC and PEG of 0.51. Transition to cloud ACV model is accelerating revenue quality. 17% revenue growth with high-value Fortune 500 clients in fi",
       "conviction": "HIGH",
-      "sell_trigger": "ACV growth decelerates below 10% for two consecutive quarters, cloud transition stalls, or major client churn in core financial services vertical"
+      "sell_trigger": "ACV growth decelerates below 10% for two consecutive quarters, cloud transition stalls, or major client churn in core financial services vertical",
+      "lynch_category": "Stalwart+FastGrower",
+      "sector": "Technology"
     },
     {
       "ticker": "CQP",
@@ -71,7 +83,9 @@
       "entry_date": "2026-04-08",
       "rationale": "22% ROIC, 8.7% FCF yield, and PEG of 0.24 with 86% MoS. LNG demand is structurally growing as Europe diversifies away from Russian gas and Asian demand accelerates. CQP's long-term take-or-pay contrac",
       "conviction": "HIGH",
-      "sell_trigger": "Henry Hub price collapses below $1.50 for sustained period impacting economics, key long-term contracts cancelled or renegotiated, or ROIC falls below"
+      "sell_trigger": "Henry Hub price collapses below $1.50 for sustained period impacting economics, key long-term contracts cancelled or renegotiated, or ROIC falls below",
+      "lynch_category": "Stalwart+FastGrower+Turnaround",
+      "sector": "Energy"
     },
     {
       "ticker": "DOCS",
@@ -81,7 +95,9 @@
       "entry_date": "2026-04-08",
       "rationale": "20% ROIC, 7.3% FCF yield, PEG of 0.78, and 20% revenue growth. Doximity is the LinkedIn for physicians with ~80% of US doctors on platform \u2014 an extraordinarily durable network effect moat. Pharma digi",
       "conviction": "MEDIUM",
-      "sell_trigger": "Physician network engagement declines materially, pharma digital ad budgets cut by >15%, or revenue growth falls below 12%"
+      "sell_trigger": "Physician network engagement declines materially, pharma digital ad budgets cut by >15%, or revenue growth falls below 12%",
+      "lynch_category": "Stalwart+FastGrower",
+      "sector": "Healthcare"
     },
     {
       "ticker": "DLO",
@@ -91,7 +107,9 @@
       "entry_date": "2026-04-08",
       "rationale": "29% ROIC, 10.9% FCF yield, PEG of 0.77, and 47% revenue growth with 85% MoS. Dominant cross-border payments infrastructure for emerging markets (LatAm, Africa, Asia). Network effects in local payment ",
       "conviction": "MEDIUM",
-      "sell_trigger": "Total Payment Volume growth falls below 20%, regulatory action in key EM markets (Brazil, Mexico), or gross profit per dollar of TPV compresses materi"
+      "sell_trigger": "Total Payment Volume growth falls below 20%, regulatory action in key EM markets (Brazil, Mexico), or gross profit per dollar of TPV compresses materi",
+      "lynch_category": "FastGrower+Turnaround",
+      "sector": "Technology"
     },
     {
       "ticker": "ESTC",
@@ -101,7 +119,9 @@
       "entry_date": "2026-04-09",
       "rationale": "ESTC offers the highest ROIC in the candidate universe at 61% \u2014 exceptional capital efficiency \u2014 with 5.0% FCF yield, PEG of 0.46, and 17% revenue growth. Elastic's search and observability platform (",
       "conviction": "HIGH",
-      "sell_trigger": "ROIC falls below 30% for two consecutive quarters, revenue growth decelerates below 10% on a trailing basis, or FCF turns consistently negative \u2014 indi"
+      "sell_trigger": "ROIC falls below 30% for two consecutive quarters, revenue growth decelerates below 10% on a trailing basis, or FCF turns consistently negative \u2014 indi",
+      "lynch_category": "FastGrower",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -238,5 +258,5 @@
       "rationale": "ESTC offers the highest ROIC in the candidate universe at 61% \u2014 exceptional capital efficiency \u2014 with 5.0% FCF yield, PEG of 0.46, and 17% revenue growth. Elastic's search and observability platform ("
     }
   ],
-  "last_updated": "2026-04-17"
+  "last_updated": "2026-04-18"
 }

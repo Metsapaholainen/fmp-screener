@@ -22,6 +22,15 @@ fmp_screener_*.xlsx
 # Large runtime cache (~40 MB, regenerated each run)
 fmp_screener_cache.json
 
-# Logs
-run_output.txt
+# Logs & run output files
+run_output*.txt
+run_output*.log
 debug_output.txt
+
+# Backtest & replay outputs (ephemeral analysis artifacts)
+fmp_backtest_*.csv
+fmp_replay_*.html
+fmp_replay_*_nav.csv
+
+# Backup files
+*.bak

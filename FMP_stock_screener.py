@@ -86,8 +86,12 @@ FMP_BASE = "https://financialmodelingprep.com/stable"
 
 CACHE_FILE = "fmp_screener_cache.json"
 CACHE_DAYS = 1
-PICKS_LOG = "fmp_picks_log.csv"
+PICKS_LOG    = "fmp_picks_log.csv"
 AI_PICKS_LOG = "fmp_ai_picks_log.csv"
+
+# B6: Version stamp on every pick row — bump when prompts or scoring logic changes
+# so backtest / attribution can group pre/post change comparisons correctly.
+PROMPT_VERSION = "3.0.0"   # Phase A+B+C complete
 PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fmp_portfolio.json")
 OUTPUT_DIR = "."
 
@@ -95,6 +99,8 @@ OUTPUT_DIR = "."
 PORTFOLIO_INITIAL_CASH = 100_000.0   # paper money starting balance
 PORTFOLIO_TARGET_POSITION = 10_000.0 # ~$10K per position (equal weight)
 PORTFOLIO_MAX_POSITIONS = 10         # hard cap
+PORTFOLIO_SLIPPAGE_RATE  = 0.001     # C3: 0.1% slippage per trade (bid/ask spread model)
+PORTFOLIO_COMMISSION     = 1.00      # C3: $1 flat commission per trade
 
 TOP_N = 50  # main tab results
 SECTOR_N = 30  # per-sector results
@@ -251,6 +257,120 @@ CYCLICAL_SECTORS = {
     "Real Estate", "Financial Services",
 }
 
+_LYNCH_ASSET_HEAVY_SECTORS = {
+    "Financial Services", "Real Estate", "Energy", "Basic Materials",
+    "Utilities", "Industrials",
+}
+
+
+def _classify_lynch(s: dict) -> str:
+    """Classify a stock into one or more of Peter Lynch's six categories.
+
+    Returns '+'-joined labels, e.g. "FastGrower+Stalwart".  Empty string
+    if the stock matches no category (rare — but possible for early-stage
+    shells or data-starved micro-caps).
+
+    Each predicate is a SIMPLIFIED mirror of the corresponding tab filter
+    in build_lynch_tabs — it trades a little precision for self-containment
+    (no closures over tab-internal state) and is cheap enough to call on
+    every stock in the universe.
+    """
+    labels = []
+    rg      = s.get("revGrowth")
+    rg5     = s.get("revGrowth5y")
+    rg5h    = s.get("fiveYRevGrowth")
+    eg5     = s.get("epsGrowth5y")
+    pe      = s.get("pe")
+    pb      = s.get("pb")
+    tb      = s.get("tangibleBook")
+    price   = s.get("price", 0) or 0
+    pio     = s.get("piotroski")
+    fcf     = s.get("fcfYield")
+    dy      = s.get("divYield")
+    eg      = s.get("epsGrowth")
+    nig     = s.get("netIncomeGrowth")
+    az      = s.get("altmanZ")
+    mos     = s.get("mos")
+    mc      = s.get("mktCap", 0) or 0
+    sector  = s.get("sector") or ""
+    ncr     = s.get("netCashRatio")
+    cr      = s.get("currentRatio")
+    de      = s.get("de")
+    gnn     = s.get("grahamNetNet")
+    rc      = s.get("revConsistency")
+
+    # ── Stalwart: >$2B, 5–25% rev growth, FCF-positive, quality floor ────
+    if (mc > 2e9
+            and rg is not None and 0.05 <= rg <= 0.25
+            and (fcf is None or fcf > 0)
+            and sector != "Basic Materials"
+            and (pio is None or pio >= 5)
+            and (rc is None or rc >= 0.60)):
+        labels.append("Stalwart")
+
+    # ── Fast Grower: strong growth signal + size band + not commodity-led ─
+    if (100e6 <= mc <= 150e9
+            and sector not in ("Real Estate", "Basic Materials")):
+        strong_current = (rg is not None and rg > 0.20)
+        strong_5yr     = (rg5 is not None and rg5 > 0.15
+                          and (rg is None or rg > 0.10))
+        strong_5yr_h   = (rg5h is not None and rg5h > 0.15
+                          and (rg is None or rg > 0.10))
+        eps_led        = (eg5 is not None and eg5 > 0.15
+                          and (rg is None or rg > 0.08))
+        if strong_current or strong_5yr or strong_5yr_h or eps_led:
+            labels.append("FastGrower")
+
+    # ── Slow Grower: mature dividend-payer, low growth ──────────────────
+    if (dy is not None and 0.02 < dy < 0.15
+            and (rg is None or rg < 0.10)
+            and (pio is None or pio >= 5)
+            and (fcf is None or fcf > dy * 0.5)):
+        labels.append("SlowGrower")
+
+    # ── Cyclical: in cyclical sector, >$500M, not bankrupt, trough signal ─
+    if (sector in CYCLICAL_SECTORS
+            and mc > 500e6
+            and (pio is None or pio >= 4)
+            and (az is None or az >= 0.8)):
+        trough_pe    = (pe is not None and 10 < pe < 65)
+        loss_trough  = (pe is None and pb is not None and 0 < pb < 2.0)
+        asset_trough = (pb is not None and 0 < pb < 0.9)
+        if trough_pe or loss_trough or asset_trough:
+            labels.append("Cyclical")
+
+    # ── Turnaround: cheap, not bankrupt, showing recovery signals ───────
+    if mc >= 300e6 and (pio is None or pio < 8) and (az is None or az >= 0.5):
+        deep_discount = (mos is not None and mos > 0.20)
+        asset_cheap   = (pb is not None and 0 < pb < 0.8)
+        if deep_discount or asset_cheap:
+            recovery = 0
+            if rg is not None and rg > 0.03:  recovery += 1
+            if eg is not None and eg > 0:     recovery += 1
+            if nig is not None and nig > 0:   recovery += 1
+            if fcf is not None and fcf > 0:   recovery += 1
+            if rg5 is not None and rg5 > 0.05: recovery += 1
+            if pio is not None and pio >= 5:  recovery += 1
+            if recovery >= 2:
+                labels.append("Turnaround")
+
+    # ── Asset Play: hidden value in balance sheet ───────────────────────
+    if mc >= 150e6 and (pio is None or pio >= 4):
+        below_book     = (pb is not None and 0 < pb < 1.0)
+        below_tangible = (tb is not None and tb > 0 and price > 0
+                          and (tb / price) >= 0.95)
+        cash_fortress  = (cr is not None and cr > 3.0
+                          and de is not None and de < 0.3
+                          and pb is not None and 0 < pb < 2.0)
+        net_cash_play  = (ncr is not None and ncr > 0.25)
+        graham_nn      = (gnn is not None and price > 0
+                          and gnn > price * 0.5)
+        if below_book or below_tangible or cash_fortress or net_cash_play or graham_nn:
+            labels.append("AssetPlay")
+
+    return "+".join(labels)
+
+
 # ─────────────────────────────────────────────
 # FMP API CLIENT
 # ─────────────────────────────────────────────
@@ -300,6 +420,70 @@ def fetch_spy_history(from_date: str) -> dict:
     except Exception:
         pass
     return {}
+
+
+# B2: In-memory cache for historical price lookups (keyed ticker → {date→close})
+# Populated lazily by fetch_price_on_date; survives for the lifetime of one run.
+_hist_price_cache: dict = {}
+_delisted_tickers: set  = set()   # C5: tickers with empty FMP history (presumed delisted)
+_DELISTED_RETURN  = -1.0          # C5: conservative assumption when data is absent post-delist
+
+
+def fetch_price_on_date(ticker: str, date_str: str) -> float | None:
+    """Return the EOD close price for *ticker* on *date_str* (YYYY-MM-DD) or the
+    nearest trading day up to 5 calendar days forward.
+
+    Fetches FMP /historical-price-eod/light once per ticker (full range) and
+    caches in module-level _hist_price_cache so repeated calls for the same
+    ticker are free.  Returns None on any failure so callers degrade gracefully.
+    """
+    global _fmp_call_count, _hist_price_cache
+    if not FMP_KEY or not ticker or not date_str:
+        return None
+
+    # Populate cache for this ticker if not already done
+    if ticker not in _hist_price_cache:
+        try:
+            # Fetch ~2 years of history — enough for 180d checkpoints on any pick
+            from_dt = (datetime.date.today() - datetime.timedelta(days=730)).isoformat()
+            r = requests.get(
+                f"{FMP_BASE}/historical-price-eod/light",
+                params={"symbol": ticker, "from": from_dt,
+                        "to": datetime.date.today().isoformat(), "apikey": FMP_KEY},
+                timeout=20,
+            )
+            _fmp_call_count += 1
+            if r.status_code == 200:
+                data = r.json()
+                if isinstance(data, list):
+                    _hist_price_cache[ticker] = {
+                        rec["date"]: float(rec.get("price") or rec.get("close") or 0)
+                        for rec in data
+                        if rec.get("date") and (rec.get("price") or rec.get("close"))
+                    }
+                else:
+                    _hist_price_cache[ticker] = {}   # mark as attempted / empty
+            else:
+                _hist_price_cache[ticker] = {}       # mark as attempted / error
+        except Exception:
+            _hist_price_cache[ticker] = {}
+
+    prices = _hist_price_cache.get(ticker, {})
+    if not prices:
+        return None
+
+    # Find price on date_str or up to +5 trading-day tolerance
+    try:
+        target = datetime.date.fromisoformat(date_str)
+    except ValueError:
+        return None
+
+    for delta in range(6):   # 0 = exact, 1-5 = next available trading day
+        candidate = (target + datetime.timedelta(days=delta)).isoformat()
+        price = prices.get(candidate)
+        if price:
+            return price
+    return None
 
 
 def fetch_52w_ranges(tickers: list) -> dict:
@@ -2003,7 +2187,21 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             # 52-week positioning
             "priceVs52H": price_vs_52h,  # price / 52wk high; <0.7 = beaten down
             "priceVs52L": price_vs_52l,  # price / 52wk low; >1.5 = well off lows
+            # ── A3: Average daily dollar volume (liquidity proxy) ──────────
+            # Uses volume field captured at universe fetch (screener or profile.volAvg).
+            # $1M/day is the minimum the user can realistically trade; small-cap
+            # agents use it as a hard filter to avoid illiquid micro-caps.
+            "avgDollarVol": (lambda _v, _p: round(_v * _p, 0)
+                             if (_v and _p and _v > 0 and _p > 0) else None)(
+                u.get("volume") or u.get("volAvg"), price
+            ),
         }
+        # ── A2: Explicit Lynch category — computed after all other fields ──
+        # Self-contained classifier; safe to call even when fields are None.
+        try:
+            stocks[t]["lynchCategory"] = _classify_lynch(stocks[t])
+        except Exception:
+            stocks[t]["lynchCategory"] = ""
 
     print(f"  ✅ Assembled {len(stocks)} stocks with full data")
     return stocks
@@ -2266,6 +2464,7 @@ def format_stock_row(s: dict) -> dict:
         "Rating": s.get("recommendation"),
         "MktCap ($B)": s.get("mktCapB"),
         "Cap Size": _cap_size_label(s.get("mktCap", 0)),
+        "Lynch Cat": s.get("lynchCategory", ""),
         "🏦 Insider": ins_str,
     }
 
@@ -2497,7 +2696,8 @@ def _repair_truncated_json(text: str) -> dict:
 
 
 def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
-                         market_intel: dict = None) -> dict:
+                         market_intel: dict = None,
+                         agent_perf: dict = None) -> dict:  # B1/B4: per-agent attribution
     """Multi-agent AI stock analysis: 5 specialist agents (parallel) + 1 judge.
     - Quality Growth: sustained compounders with ROIC leadership
     - Special Situation: event-driven, misunderstood, inflection-point plays
@@ -2694,6 +2894,61 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
             else:
                 parts.append(f"OprMgn={_om_ai:.0%}")
 
+        # ── A1: Surface previously-hidden fields for the AI agents ─────────
+        # Revenue consistency — fraction of last 5 years with positive growth
+        _rc_ai = s.get("revConsistency")
+        if _rc_ai is not None:
+            if _rc_ai >= 0.80:   parts.append(f"✅RevConsist={_rc_ai:.0%}")
+            elif _rc_ai < 0.40:  parts.append(f"⚠RevConsist={_rc_ai:.0%}(erratic)")
+            else:                parts.append(f"RevConsist={_rc_ai:.0%}")
+        # Share dilution — positive = issuing stock (bad), negative = buybacks (good)
+        _shg_ai = s.get("sharesGrowth")
+        if _shg_ai is not None:
+            if _shg_ai > 0.15:   parts.append(f"🚩Dil=+{_shg_ai:.0%}(heavy)")
+            elif _shg_ai > 0.05: parts.append(f"⚠Dil=+{_shg_ai:.0%}")
+            elif _shg_ai < -0.02: parts.append(f"✅Buyback={_shg_ai:+.0%}")
+        # Current ratio — short-term liquidity; <1.0 = possible cash crunch
+        _cr_ai = s.get("currentRatio")
+        if _cr_ai is not None:
+            if _cr_ai < 1.0:     parts.append(f"⚠CR={_cr_ai:.1f}(low)")
+            elif _cr_ai > 2.5:   parts.append(f"CR={_cr_ai:.1f}(strong)")
+            else:                parts.append(f"CR={_cr_ai:.1f}")
+        # Net Debt / EBITDA — leverage quality; >4 = over-leveraged
+        _nde_ai = s.get("netDebtEbitda")
+        if _nde_ai is not None:
+            if _nde_ai < 0:      parts.append(f"✅NDE={_nde_ai:.1f}(net cash)")
+            elif _nde_ai > 4.0:  parts.append(f"🚩NDE={_nde_ai:.1f}(over-levered)")
+            elif _nde_ai > 2.5:  parts.append(f"⚠NDE={_nde_ai:.1f}")
+            else:                parts.append(f"NDE={_nde_ai:.1f}")
+        # Dividend yield — income component
+        _dy_ai = s.get("divYield")
+        if _dy_ai is not None and _dy_ai > 0:
+            if _dy_ai > 0.06:    parts.append(f"⚠DY={_dy_ai:.1%}(high—check coverage)")
+            elif _dy_ai > 0.025: parts.append(f"DY={_dy_ai:.1%}")
+        # Graham Net-Net — cheapest-possible valuation per share (>0 = below net working capital)
+        _gnn_ai = s.get("grahamNetNet")
+        _price_ai = s.get("price")
+        if _gnn_ai is not None and _price_ai and _gnn_ai > 0 and _price_ai > 0:
+            _gnn_ratio = _gnn_ai / _price_ai
+            if _gnn_ratio > 1.0: parts.append(f"💎GrahamNN={_gnn_ai:.1f}(>price—deep value)")
+            elif _gnn_ratio > 0.66: parts.append(f"✅GrahamNN={_gnn_ai:.1f}")
+        # Piotroski weakness flag — business quality check
+        _pio_ai = s.get("piotroski")
+        if _pio_ai is not None and _pio_ai < 4:
+            parts.append(f"🚩PioWeak={_pio_ai}(fundamentals deteriorating)")
+
+        # A3: Average daily dollar volume — liquidity check for small-caps
+        _adv_ai = s.get("avgDollarVol")
+        if _adv_ai is not None and _adv_ai > 0:
+            if _adv_ai < 500_000:
+                parts.append(f"🚩ADV=${_adv_ai/1e3:.0f}K(illiquid)")
+            elif _adv_ai < 1_000_000:
+                parts.append(f"⚠ADV=${_adv_ai/1e3:.0f}K(thin)")
+            elif _adv_ai >= 10_000_000:
+                parts.append(f"ADV=${_adv_ai/1e6:.0f}M")
+            else:
+                parts.append(f"ADV=${_adv_ai/1e6:.1f}M")
+
         # Size + sector
         mc = s.get("mktCapB") or r.get("MktCap ($B)")
         if mc:
@@ -2701,6 +2956,10 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         sector = s.get("sector") or r.get("Sector", "")
         if sector:
             parts.append(f"[{sector}]")
+        # A2: Lynch category — helps agents match framework to business type
+        _lc_ai = s.get("lynchCategory")
+        if _lc_ai:
+            parts.append(f"[Lynch={_lc_ai}]")
 
         return "  " + " | ".join(parts)
 
@@ -2955,6 +3214,9 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
     SPECIALIST_JSON_SCHEMA = (
         '{"picks":['
         '{"ticker":"X","company":"Name",'
+        '"business_synopsis":"2-3 sentences: what does this company do, how does it make money, who are its customers? Pure factual description — no investment thesis here.",'
+        '"industry":"Specific industry or sub-sector (e.g. Cloud Security, Specialty Pharma, Industrial Automation)",'
+        '"key_competitors":"Top 2-3 competitor names, comma-separated (e.g. Salesforce, HubSpot, Zoho)",'
         '"rationale":"1-2 sentences citing YOUR framework\'s specific metrics — '
         'e.g. Magic Formula: ROIC X% + EY Y%; SpecialSit: catalyst name + timeline; '
         'InsiderTrack: who bought $X on date; Pabrai: floor $X vs upside $Y = N:1. '
@@ -2964,11 +3226,57 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         ',...]}'
     )
 
+    # ── B4: Agent-performance feedback block ────────────────────────────────
+    # Build a one-liner per agent from B1 attribution data.  Display-only (R1 decision):
+    # each specialist sees how their past picks performed so they can self-calibrate.
+    _AGENT_DISPLAY = {
+        "AI-QualityGrowth":   "QualityGrowth",  "AI-SpecialSit":      "SpecialSit",
+        "AI-CapAppreciation": "CapAppreciation", "AI-EmergingGrowth":  "EmergingGrowth",
+        "AI-TenBagger":       "TenBagger",       "AI-GoldmanSC":       "GoldmanSC",
+        "AI-LynchBWYK":       "LynchBWYK",       "AI-SocialArb":       "SocialArb",
+        "AI-Mayer100x":       "Mayer100x",       "AI-CathieWood":      "CathieWood",
+        "AI-MagicFormula":    "MagicFormula",    "AI-Pabrai":          "Pabrai",
+        "AI-HowardMarks":     "HowardMarks",     "AI-NickSleep":       "NickSleep",
+        "AI-Burry":           "Burry",           "AI-InsiderTrack":    "InsiderTrack",
+        "AI-WallStBlind":     "WallStBlind",
+    }
+    _perf_lines = {}   # agent_short_name → one-liner string
+    if agent_perf:
+        for src, stats in agent_perf.items():
+            short = _AGENT_DISPLAY.get(src)
+            if not short:
+                continue
+            n    = stats.get("n_picks", 0)
+            if n < 5:
+                continue   # not enough history for meaningful feedback
+            alpha  = stats.get("alpha")
+            sharpe = stats.get("sharpe")
+            wr     = stats.get("win_rate")
+            h90    = stats.get("hit_90d")
+            parts  = [f"{n} picks"]
+            if alpha  is not None: parts.append(f"alpha {alpha:+.1%}")
+            if sharpe is not None: parts.append(f"Sharpe {sharpe:.2f}")
+            if wr     is not None: parts.append(f"win-rate {wr:.0%}")
+            if h90    is not None: parts.append(f"90d hit-rate {h90:.0%}")
+            note = ""
+            if alpha is not None and alpha < -0.02:
+                note = " ⚠ Alpha negative — tighten quality bar; fewer, higher-conviction picks."
+            elif sharpe is not None and sharpe < 0:
+                note = " ⚠ Risk-adjusted return negative — raise the bar on entry price and catalyst specificity."
+            _perf_lines[short] = "  ".join(parts) + note
+
+    def _perf_header(agent_name: str) -> str:
+        """Return a performance context line for agent_name, or empty string."""
+        line = _perf_lines.get(agent_name, "")
+        if not line:
+            return ""
+        return f"\nYOUR RECENT TRACK RECORD (display only — context for self-calibration):\n{line}\n"
+
     specialists_cfg = [
         (
             "QualityGrowth",
             "🌱 Quality Growth",
-            f"""You are a quality-growth equity analyst. Today is {datetime.date.today()}.
+            f"""You are a quality-growth equity analyst. Today is {datetime.date.today()}.{_perf_header("QualityGrowth")}
 YOUR LENS — find durable compounders growing consistently at above-average rates:
 - ROIC > 15% sustained over multiple years = the clearest moat signal available
 - Revenue consistency (5/5 positive years) + FCF conversion > 0.8 = earnings are real and repeatable
@@ -2982,6 +3290,8 @@ QUALITY FILTER:
 - Would this business sustain its economics through a recession or an aggressive well-funded competitor?""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by ROE + gross margin + FCF quality — your lens):\n{_pool_quality_growth}
 
+HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (marked NDE> in candidate data) = over-levered. Do NOT pick unless it's an insurance company or REIT where the metric is meaningless. Quality compounders do not run balance sheets at 4×+ leverage.
+
 Pick your TOP 7 stocks through a QUALITY GROWTH lens.
 Prioritise: ROIC > 15%, consistent multi-year revenue growth, FCF conversion, PEG < 1.5, durable competitive moats.
 For each pick, explain: what structural advantage drives the high ROIC, and why can this compound for 3-5 more years?
@@ -2991,7 +3301,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "SpecialSit",
             "⚡ Special Situation",
-            f"""You are a special-situations equity analyst. Today is {datetime.date.today()}.
+            f"""You are a special-situations equity analyst. Today is {datetime.date.today()}.{_perf_header("SpecialSit")}
 YOUR LENS — find event-driven, misunderstood, and inflection-point opportunities:
 - Business model misclassification: market prices as one thing, fundamentals prove another (e.g. royalty biz priced as biotech)
 - Restructurings / spinoffs / strategy pivots where the new economics are not yet priced in
@@ -3017,7 +3327,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "CapAppreciation",
             "📈 Capital Appreciation",
-            f"""You are a capital-appreciation equity analyst. Today is {datetime.date.today()}.
+            f"""You are a capital-appreciation equity analyst. Today is {datetime.date.today()}.{_perf_header("CapAppreciation")}
 YOUR LENS — find near-term re-rating candidates where a specific catalyst drives price appreciation:
 - 52wPos < 0.65 + improving fundamentals = beaten-down quality at the best entry point
 - Revenue re-acceleration (RG > RGprev) = early signal of an earnings upgrade cycle starting
@@ -3028,19 +3338,26 @@ YOUR LENS — find near-term re-rating candidates where a specific catalyst driv
 QUALITY & CATALYST FILTER:
 - Every pick needs a SPECIFIC catalyst in the next 1-6 months — not vague "recovery"
 - The business must be fundamentally sound (positive FCF, manageable debt) to act on the catalyst
-- Distinguish genuine re-ratings (earnings power restoring) from dead-cat bounces (no earnings recovery)""",
+- Distinguish genuine re-ratings (earnings power restoring) from dead-cat bounces (no earnings recovery)
+B3 HARD RULES — NON-NEGOTIABLE:
+- "Recovery" alone WITHOUT a named, dated event (earnings, contract, FDA date, etc.) = REJECT
+- Catalyst must be verifiable and within 6 months: "Q2 earnings on May 15 likely to beat by 15%" ✅ vs "expects recovery" ❌
+- Dead-cat bounce test: FCF must be positive OR turning positive within 2 quarters — do not buy structural deterioration
+- Revenue MUST be re-accelerating (current RG > prior-year RG): flat-to-declining revenue is not a re-rating catalyst
+ANTI-PATTERN TO AVOID: do not pick stocks purely on cheapness (low PEG/PE) without a dated catalyst; the market already knows it's cheap.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by 52w momentum + rev acceleration + fwd earnings — your lens):\n{_pool_cap_appreciation}
 
 Pick your TOP 7 stocks through a CAPITAL APPRECIATION lens.
 Focus on: beaten-down entries (52wPos), re-acceleration signals (RG > RGprev), cycle troughs, specific near-term catalysts.
-For each pick, name the SPECIFIC catalyst (not just "recovery") and the timeframe you expect it to play out.
-In `rationale`: state the 52w position (e.g. "at 58% of 52w high"), revenue growth acceleration ("RG: 8%→19%"), and name the specific catalyst with expected timeframe.
+EVERY pick must state: (1) the NAMED, DATED catalyst, (2) 52w position %, (3) revenue growth trend (accelerating/flat/decelerating).
+In `rationale`: state "52wPos: X%", "RG: prev→current%", and "Catalyst: [specific event, expected date]".
+If you cannot name a specific catalyst with a timeframe — skip that stock.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
             "EmergingGrowth",
             "🚀 Emerging Growth",
-            f"""You are an emerging-growth equity analyst. Today is {datetime.date.today()}.
+            f"""You are an emerging-growth equity analyst. Today is {datetime.date.today()}.{_perf_header("EmergingGrowth")}
 YOUR LENS — find smaller, faster-growing companies at the early stage of becoming compounders:
 - Market cap $100M–$15B with revenue growing > 20% — still small enough to 5–10x but profitable enough to validate the model
 - ROIC rising YoY (even if not yet at 15%) = the moat is forming, not yet priced by market
@@ -3064,7 +3381,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "TenBagger",
             "🎯 10-Bagger Hunter",
-            f"""You are a Peter Lynch-style small-cap 10-bagger analyst. Today is {datetime.date.today()}.
+            f"""You are a Peter Lynch-style small-cap 10-bagger analyst. Today is {datetime.date.today()}.{_perf_header("TenBagger")}
 HARD SIZE RULE: You ONLY consider companies with market cap $50M–$2B. Any stock with Mcap > $2B is already discovered, already covered, and is NOT a 10-bagger candidate — disqualify it immediately.
 
 YOUR ONE RULE: find companies that are underfollowed, misunderstood, and early in their growth cycle.
@@ -3105,7 +3422,10 @@ PHILOSOPHY:
 - If a hedge fund manager would be embarrassed to pitch it at a conference, that's a good sign""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (pre-filtered $50M–$2B only):\n{sc_candidates_block}
 
-HARD RULE — NON-NEGOTIABLE: Market cap must be $50M–$2B. Any stock with Mcap > $2B is IMMEDIATELY DISQUALIFIED — do not include it.
+HARD RULES — NON-NEGOTIABLE (DISQUALIFY IMMEDIATELY, do not pick regardless of story):
+- Market cap must be $50M–$2B. Mcap > $2B = DISQUALIFIED — not a 10-bagger candidate.
+- ADV < $1M/day = DISQUALIFIED. Illiquid stocks cannot be traded — ADV tag in candidate data marks these.
+- Dilution > +15%/yr (Dil=+15%+) = DISQUALIFIED. Growth funded by share issuance kills 10-bagger math.
 If fewer than 7 stocks qualify, return fewer picks. Zero picks is acceptable if nothing meets the bar.
 
 Pick up to 7 stocks with genuine 10-bagger potential (5–15x over 3–7 years). Every pick must have Mcap under $2B.
@@ -3122,7 +3442,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "GoldmanSC",
             "🏦 Goldman SC Scanner",
-            f"""You are a Goldman Sachs-style small-cap research analyst. Today is {datetime.date.today()}.
+            f"""You are a Goldman Sachs-style small-cap research analyst. Today is {datetime.date.today()}.{_perf_header("GoldmanSC")}
 HARD SIZE RULE: You ONLY consider companies with market cap between $100M and $2B. Any stock with Mcap > $2B is NOT a small-cap and must be immediately skipped — it already has full analyst coverage and is outside your mandate.
 YOUR LENS — find hidden gems before Wall Street discovers them:
 - Market cap $100M–$2B: big enough to be legitimate, small enough to still multiply 10x
@@ -3137,7 +3457,10 @@ YOUR LENS — find hidden gems before Wall Street discovers them:
 FOCUS: find companies that will be on Goldman's coverage list in 3 years — right now they're too small to matter to the Street, which is exactly why the opportunity exists.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (pre-filtered $100M–$2B only):\n{sc_candidates_block}
 
-HARD RULE — NON-NEGOTIABLE: Market cap must be $100M–$2B. Any stock with Mcap ≥ $2B is DISQUALIFIED — skip it entirely.
+HARD RULES — NON-NEGOTIABLE (DISQUALIFY IMMEDIATELY):
+- Market cap must be $100M–$2B. Mcap ≥ $2B = DISQUALIFIED — skip it entirely.
+- ADV < $1M/day = DISQUALIFIED. Hidden gems you can't trade aren't opportunities. Check the ADV tag.
+- Dilution > +15%/yr = DISQUALIFIED. Constant share issuance offsets operating leverage entirely.
 If fewer than 7 stocks qualify, return fewer. Zero picks is fine if nothing meets the bar.
 
 Apply the Goldman Sachs small-cap hidden gem framework. Every pick must have Mcap under $2B.
@@ -3149,7 +3472,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "LynchBWYK",
             "🛒 Lynch Buy What You Know",
-            f"""You are a Peter Lynch-style analyst applying 'buy what you know'. Today is {datetime.date.today()}.
+            f"""You are a Peter Lynch-style analyst applying 'buy what you know'. Today is {datetime.date.today()}.{_perf_header("LynchBWYK")}
 YOUR LENS — find investment opportunities hiding in plain sight in everyday products and services:
 - Simple business model: can you explain what the company does in one sentence to a 10-year-old?
 - Consumer/workplace observation: products people are buying more of, apps being adopted, brands gaining share
@@ -3162,15 +3485,22 @@ YOUR LENS — find investment opportunities hiding in plain sight in everyday pr
 FOCUS: the best Lynch pick is a company whose product you use every day, whose stock nobody at a cocktail party has mentioned, and which is growing 15-25% per year while trading at a PEG under 1.0.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by PEG + consumer sector + real earnings — your lens):\n{_pool_lynch}
 
+HARD RULES — NON-NEGOTIABLE (Lynch's own red lines):
+- PEG ≥ 1.0 = REJECT. Lynch's single hardest rule: "A company with earnings growing 15%/yr and P/E of 15 is better than one growing 30%/yr and P/E 40." If PEG (or Fwd PEG) ≥ 1.0, DO NOT PICK — regardless of how good the story is.
+- EPS growth < 10%/yr OR > 50%/yr = REJECT. Lynch's sweet spot is 15–25%. Below 10% is not a growth story; above 50% is an unsustainable spike that will mean-revert.
+- B2B-SaaS or complex financial-engineering business you cannot describe in ONE sentence to a 10-year-old = REJECT. "Buy what you KNOW" means consumer-observable or occupation-observable businesses.
+- FAVOURED: companies where you have seen the product (or a family member has), whose use case is obvious, where the brand has walk-in-the-store evidence.
+- BONUS (not required): at least one insider purchase in the last 90 days = +conviction. Management buying with their own dollars is the cleanest confirmation of a "buy what you know" thesis.
+
 Apply Lynch's 'buy what you know' framework. Look for companies with simple, understandable business models that serve everyday consumer or workplace needs, growing steadily with real earnings.
-Pick your TOP 7 stocks. For each: describe the business in one simple sentence, identify the everyday observation that validates the thesis, and explain why the valuation is still reasonable.
-In `rationale`: write the "everyday observation" insight (e.g. "every dentist office uses this software"), then confirm with PEG ratio and whether it's still under 1.5.
+Pick your TOP 7 stocks. For each: describe the business in ONE simple sentence (10-year-old test), identify the everyday observation that validates the thesis, and explain why the valuation is still reasonable (PEG < 1.0).
+In `rationale`: write the "everyday observation" insight (e.g. "every dentist office uses this software"), then state PEG (must be <1.0), EPS growth% (must be 10–50%), and whether any insider has bought recently.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
             "SocialArb",
             "📱 Social Arbitrage",
-            f"""You are a Chris Camillo-style social arbitrage analyst. Today is {datetime.date.today()}.
+            f"""You are a Chris Camillo-style social arbitrage analyst. Today is {datetime.date.today()}.{_perf_header("SocialArb")}
 YOUR LENS — find companies whose products are going viral before Wall Street quantifies it:
 - Consumer trend momentum: revenue acceleration (current RevGrowth > prior year) = trend hitting mainstream
 - Brand and product velocity: companies in consumer sectors where adoption is outpacing analyst estimates
@@ -3180,19 +3510,24 @@ YOUR LENS — find companies whose products are going viral before Wall Street q
 - The information gap: what the market KNOWS vs what is HAPPENING in the real world (social, behavioral data)
 - Platform momentum: apps, marketplaces, or brands where user growth is compounding faster than reported revenue
 - Sentiment divergence: stock price down or flat while fundamental trend data is clearly accelerating
-FOCUS: find the companies whose products are being talked about in group chats before they appear in sell-side notes — revenue acceleration + small size + low coverage = social arbitrage opportunity.""",
+B3 HARD RULES — NON-NEGOTIABLE:
+- Revenue growth must be ACCELERATING YoY by ≥5 percentage points (e.g. 10%→15%+, not 15%→15%)
+- Business must be consumer-facing OR consumer-adjacent (B2B SaaS with no consumer touchpoint = wrong lens)
+- Market cap must be <$15B — you are finding information gaps, not validating well-covered large-caps
+- Beat rate must be >60% — analysts must be consistently wrong (underestimating) for the arbitrage to exist
+ANTI-PATTERN: do not pick a stock because it has "strong brand" or "viral product" without the revenue data confirming actual adoption — anecdote without acceleration is not social arbitrage.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by rev acceleration + beat rate + consumer/tech momentum — your lens):\n{_pool_social_arb}{(chr(10)*2 + _consumer_intel) if _consumer_intel else ""}
 
-Apply social arbitrage thinking. Find companies with revenue acceleration (current growth > prior year), high beat rates, and consumer/behavioral trends that institutional analysts haven't yet quantified.
-If RECENT CONSUMER NEWS is provided above, use it to validate or discover which companies are riding real-world trends right now.
-Pick your TOP 7 stocks. For each: describe the specific consumer or behavioral trend driving adoption, why the analyst consensus is too conservative, and what the revenue inflection signal looks like in the data.
-In `rationale`: name the specific real-world trend (e.g. "Gen-Z shift to X"), state revenue growth % and whether it's accelerating, and quantify the analyst gap (e.g. "consensus models 10% growth vs trend suggesting 25%+").
+Apply social arbitrage thinking. Find companies with revenue acceleration (current growth ≥ prior year +5pp), high beat rates (>60%), and consumer/behavioral trends that institutional analysts haven't yet quantified.
+If RECENT CONSUMER NEWS is provided above, prioritise companies whose products appear there — real-world trend confirmation is your edge.
+Pick your TOP 7 stocks. For each: name the SPECIFIC consumer or behavioral trend (e.g. "Gen-Z shift to X, causing 22% rev acceleration"), state rev growth direction, and quantify the analyst gap (e.g. "consensus: 10% growth; data suggests 25%+").
+In `rationale`: confirm (1) revenue is accelerating YoY by ≥5pp, (2) sector is consumer-facing, (3) named behavioral trend.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
             "Mayer100x",
             "💯 100-Bagger Framework",
-            f"""You are a Christopher Mayer-style 100-bagger analyst. Today is {datetime.date.today()}.
+            f"""You are a Christopher Mayer-style 100-bagger analyst. Today is {datetime.date.today()}.{_perf_header("Mayer100x")}
 HARD SIZE RULE: You ONLY consider companies with market cap UNDER $2 BILLION. A $3B company cannot be a 100-bagger starting point — the math doesn't work. If a company has Mcap ≥ $2B, skip it immediately without analysis.
 YOUR LENS — find companies with genuine 100x potential based on Mayer's historical research:
 - Small starting market cap: under $2B — 100x is mathematically impossible from $50B
@@ -3207,7 +3542,11 @@ YOUR LENS — find companies with genuine 100x potential based on Mayer's histor
 FOCUS: Mayer found that 100-baggers typically took 20-25 years. You're looking for the starting conditions — small size, high ROIC, owner-operated, large TAM, reinvestment runway — not the arrival.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (pre-filtered <$2B):\n{sc_candidates_block}
 
-HARD RULE — NON-NEGOTIABLE: Any stock with market cap ≥ $2B is DISQUALIFIED. Do NOT pick it regardless of quality.
+HARD RULES — NON-NEGOTIABLE (DISQUALIFY IMMEDIATELY):
+- Mcap ≥ $2B = DISQUALIFIED. 100x math doesn't work from there.
+- ADV < $1M/day = DISQUALIFIED. 100-baggers you can't exit at scale are lottery tickets.
+- Dilution > +15%/yr = DISQUALIFIED. Mayer is emphatic: dilution above modest levels makes 100x mathematically impossible.
+- Net Debt/EBITDA > 4 = DISQUALIFIED. Leveraged 100-baggers don't exist; debt compounds against you.
 If the list contains fewer than 7 qualifying small-caps, return fewer picks. Zero picks is acceptable if no stock meets the bar.
 
 Apply Mayer's 100-bagger framework. Every pick MUST have market cap under $2B. Prioritize: ROIC >15%, large reinvestable TAM, owner-operator management, no excessive dilution, compounding earnings power.
@@ -3218,29 +3557,35 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "CathieWood",
             "🚀 Disruptive Innovation",
-            f"""You are an ARK Invest-style disruptive innovation analyst. Today is {datetime.date.today()}.
+            f"""You are an ARK Invest-style disruptive innovation analyst. Today is {datetime.date.today()}.{_perf_header("CathieWood")}
 YOUR LENS — find companies at the center of major technological platforms with exponential return potential:
 - Five innovation platforms: AI/machine learning, robotics/automation, energy storage, blockchain, genomics/multiomics
 - Wright's Law: identify technologies on cost-decline curves driving exponential adoption
-- Pure-play companies: 80%+ of revenue from the disruptive technology (not a legacy business with an AI label)
+- Pure-play companies: ≥50% of revenue from the disruptive technology segment (not a legacy business with an AI label)
 - Convergence opportunities: companies at the intersection of 2+ platforms (AI + healthcare, AI + robotics)
 - TAM expansion: is the addressable market growing as the technology matures (not shrinking)
 - Network effects or data moats: companies that get stronger as they scale
 - Execution capability: management delivering on ambitious technology roadmaps
 - Wright's Law analysis: every doubling of production cuts costs by a predictable percentage — which company is riding this curve?
+B3 HARD RULES — NON-NEGOTIABLE:
+- ≥50% of revenue must come from the named disruptive segment. A legacy tech company with an AI product line is NOT a disruptive innovator — it is a legacy company with a marketing label.
+- Must be named to at least ONE of the five innovation platforms (AI/ML, robotics/automation, energy storage, blockchain, genomics). "Digital transformation" or "cloud" alone does not qualify.
+- If the company's LARGEST revenue segment is a traditional/legacy business, REJECT regardless of AI narrative.
+- Dilution > +20%/yr = DISQUALIFIED. Pre-revenue disruptors funded entirely by share issuance destroy shareholder value before the innovation pays off.
+ANTI-PATTERN: do not pick profitable legacy tech (e.g. large enterprise software, traditional semiconductor) that has added an AI feature or acquired an AI start-up. That is NOT disruptive innovation — it is incumbency defence.
 FOCUS: ignore near-term earnings pressure — disruptive innovators often look expensive on current metrics but cheap on 5-year projections. The key is identifying the right technology curve AND the company best positioned to ride it.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by tech/healthcare sector + growth + scalable margins — your lens):\n{_pool_cathie_wood}{(chr(10)*2 + _tech_intel) if _tech_intel else ""}
 
 Apply ARK's disruptive innovation framework. Find pure-play companies in AI, robotics, genomics, energy storage, or blockchain with network effects, expanding TAMs, and execution capability.
 If RECENT TECH NEWS is provided above, use it to identify which innovation platforms are accelerating RIGHT NOW and which companies are best positioned to benefit.
-Pick your TOP 7 disruptive innovators. For each: identify which innovation platform(s) they're riding, describe the Wright's Law cost curve they're on, and explain why their competitive position strengthens with scale.
-In `rationale`: name the innovation platform (AI / genomics / robotics / energy / etc.), describe the cost-curve dynamic in one clause (e.g. "unit cost falling 40%/yr"), and explain the network-effect or winner-take-most dynamic that makes scale an advantage.
+Pick your TOP 7 disruptive innovators. BEFORE finalising each pick, confirm: (1) ≥50% revenue from the named disruptive segment, (2) named platform is one of the five (AI/robotics/genomics/energy/blockchain), (3) dilution ≤20%/yr. Drop any pick that fails.
+In `rationale`: lead with "Platform: [name] | Segment Rev: X%" to confirm the pure-play rule passes. Then describe the cost-curve dynamic (e.g. "unit cost falling 40%/yr") and the network-effect or winner-take-most dynamic that makes scale an advantage.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
             "MagicFormula",
             "🔢 Magic Formula",
-            f"""You are a Joel Greenblatt Magic Formula analyst. Today is {datetime.date.today()}.
+            f"""You are a Joel Greenblatt Magic Formula analyst. Today is {datetime.date.today()}.{_perf_header("MagicFormula")}
 YOUR LENS — find stocks that are BOTH high quality AND cheap using Greenblatt's two-factor screen:
 - Return on Invested Capital (ROIC) > 20%: the highest-quality businesses that generate strong returns on every dollar invested
 - Earnings Yield > 10% (the inverse of P/E): cheap relative to earnings — you're paying $10 for $1 of earnings
@@ -3254,7 +3599,10 @@ YOUR LENS — find stocks that are BOTH high quality AND cheap using Greenblatt'
 FOCUS: Greenblatt proved this two-factor screen works over 20+ years. Your job is to apply it rigorously and check whether the high ROIC is truly structural or will revert.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by earnings yield + ROIC — Greenblatt's two factors, your lens):\n{_pool_magic_formula}
 
-HARD RULE — DISQUALIFICATION: Any stock with ROIC < 20% OR earnings yield < 10% (i.e. P/E > 10) is DISQUALIFIED. Do NOT pick it regardless of any other quality. The candidate list has already been pre-filtered, but verify each pick yourself. Return fewer than 7 picks if needed — quality over quantity.
+HARD RULES — DISQUALIFY IMMEDIATELY:
+- ROIC < 20% OR earnings yield < 10% (i.e. P/E > 10) = DISQUALIFIED. The candidate list is pre-filtered but verify each pick yourself.
+- Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. Levered "high-ROIC" names are usually cyclical-peak earnings with debt masking the return.
+Return fewer than 7 picks if needed — quality over quantity.
 
 Apply Greenblatt's Magic Formula: find stocks with BOTH high ROIC (quality) AND high earnings yield (value). The combination of these two metrics, simultaneously present, is the rare opportunity.
 Pick your TOP 7 Magic Formula stocks. For each: explicitly confirm the ROIC (must be ≥20%) and earnings yield (must be ≥10%), assess whether the ROIC is structural or cyclical, and verify earnings quality via FCF conversion.
@@ -3264,7 +3612,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "Pabrai",
             "🎲 Pabrai Asymmetric Bet",
-            f"""You are a Mohnish Pabrai-style asymmetric value analyst. Today is {datetime.date.today()}.
+            f"""You are a Mohnish Pabrai-style asymmetric value analyst. Today is {datetime.date.today()}.{_perf_header("Pabrai")}
 YOUR LENS — find bets where the upside is 3-10x and the downside is limited by real asset value:
 - Asymmetry ratio: upside potential / downside risk must be 3:1 or better (heads I win, tails I don't lose much)
 - Downside protection: what specifically limits the loss if the thesis is wrong (cash on balance sheet, asset value, acquisition floor, essential service)
@@ -3277,6 +3625,8 @@ YOUR LENS — find bets where the upside is 3-10x and the downside is limited by
 FOCUS: Pabrai is famous for "heads I win big, tails I don't lose much." The key is asymmetry — the market must be pricing in worse outcomes than reality will deliver.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by DCF margin of safety + P/B cheapness + clean balance sheet — your lens):\n{_pool_pabrai}
 
+HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. Pabrai is emphatic: levered asymmetric bets aren't asymmetric — the downside is no longer protected when debt holders have senior claims on the floor.
+
 Apply Pabrai's asymmetric bet framework. Find stocks where downside is protected by real assets, cash, or essential business value, while upside is driven by a specific catalyst that the market is underpricing.
 Pick your TOP 7 asymmetric bets. For each: quantify the downside protection (what's the floor and why), identify the specific catalyst driving the upside, and estimate the upside/downside ratio.
 In `rationale`: format as "Floor: $X (reason) | Upside: $Y (catalyst) → N:1 asymmetry". The floor must be a specific number or range justified by assets/cash/liquidation value, not vague.
@@ -3285,7 +3635,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "HowardMarks",
             "🔄 Marks Second-Level",
-            f"""You are a Howard Marks-style contrarian analyst applying second-level thinking. Today is {datetime.date.today()}.
+            f"""You are a Howard Marks-style contrarian analyst applying second-level thinking. Today is {datetime.date.today()}.{_perf_header("HowardMarks")}
 YOUR LENS — find opportunities where market consensus is wrong, creating mispricings:
 - First-level thinking (wrong): "This company is bad, I'll sell" → second-level: "This is bad BUT the stock is priced for catastrophe"
 - Consensus identification: what does the mainstream believe about a stock or sector
@@ -3299,6 +3649,8 @@ YOUR LENS — find opportunities where market consensus is wrong, creating mispr
 FOCUS: Marks' insight is that the market is not about being right — it's about being different from the consensus AND being right. Find where the crowd is clearly wrong.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by contrarian signal: most beaten-down + fundamentally OK + MoS — your lens):\n{_pool_howard_marks}
 
+HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. "Consensus is too bearish" combined with over-leveraged balance sheet = the consensus is often right about the default risk. Marks' second-level thinking doesn't apply to zombie companies.
+
 Apply Howard Marks' second-level thinking. Find stocks where the consensus narrative is clearly wrong — companies being priced for failure that are actually recovering, or neglected names with improving fundamentals that Wall Street has given up on.
 Pick your TOP 7 contrarian opportunities. For each: state what the consensus believes, explain specifically why it's wrong, and identify the data point or trend that will force the market to reprice.
 In `rationale`: format as "Consensus: '[what the crowd thinks]' | Reality: [specific data that proves them wrong] → repricing trigger: [event/metric]".
@@ -3307,7 +3659,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "NickSleep",
             "🌀 Scale Economics Shared",
-            f"""You are a Nick Sleep-style compounder analyst. Today is {datetime.date.today()}.
+            f"""You are a Nick Sleep-style compounder analyst. Today is {datetime.date.today()}.{_perf_header("NickSleep")}
 YOUR LENS — find companies that share their scale economics with customers, creating self-reinforcing flywheels:
 - Scale Economics Shared (SES): as the company grows larger, it becomes CHEAPER or MORE VALUABLE for customers — not more expensive
 - Flywheel mechanics: lower costs → better prices for customers → more customers → more scale → lower costs again
@@ -3321,6 +3673,8 @@ YOUR LENS — find companies that share their scale economics with customers, cr
 FOCUS: Sleep identified Amazon and Costco before most because he looked for THIS specific flywheel pattern — not earnings per share, but the structural mechanism that makes the business permanently stronger.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by gross margin + FCF conversion + sticky revenue growth — your lens):\n{_pool_nick_sleep}
 
+HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. SES compounders (Costco, Amazon, Berkshire) famously run with net cash or low leverage — the flywheel requires the balance sheet freedom to share savings with customers.
+
 Apply Nick Sleep's Scale Economics Shared framework. Find companies that become MORE customer-friendly as they grow — where scale benefits are passed to customers rather than captured as margin, creating a self-reinforcing flywheel.
 Pick your TOP 7 SES compounders. For each: describe the specific flywheel mechanism, provide evidence of customer obsession over margin maximization, and explain why scale makes the competitive advantage stronger not weaker.
 In `rationale`: name the flywheel in one clause (e.g. "more users → lower unit cost → lower prices → more users"), cite gross margin trend (intentionally flat/declining as scale grows = evidence of sharing), and name one specific instance of customer obsession over margin extraction.
@@ -3329,7 +3683,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "Burry",
             "🕳️ Burry Deep Value",
-            f"""You are a Michael Burry-style deep value analyst. Today is {datetime.date.today()}.
+            f"""You are a Michael Burry-style deep value analyst. Today is {datetime.date.today()}.{_perf_header("Burry")}
 YOUR LENS — find hidden value with specific catalysts that will force market repricing:
 - Hidden asset identification: companies trading below replacement value, cash, or investment value on balance sheet
 - Sum-of-parts analysis: businesses where individual divisions are worth more than the combined market cap
@@ -3343,6 +3697,8 @@ YOUR LENS — find hidden value with specific catalysts that will force market r
 FOCUS: Burry's edge was doing deep quantitative work that others avoided — reading 10-Ks in detail, identifying specific structural mispricings, and waiting for a defined catalyst. The market must be forced to reprice, not just discover the value organically.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by cheapest EV/EBITDA + P/B + DCF discount — your lens):\n{_pool_burry}
 
+HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. A deep-value thesis with excessive leverage is not deep value — it's a zero-option trade. Burry's winning plays had the balance sheet to survive until the catalyst hit.
+
 Apply Burry's deep value + catalyst framework. Find stocks with hidden assets, temporary earnings distortions, or specific upcoming catalysts that will force the market to reprice.
 Pick your TOP 7 catalyst-driven deep value plays. For each: identify the hidden asset or earnings normalization opportunity, name the SPECIFIC catalyst and its estimated timeline, and explain why the market has mispriced this.
 In `rationale`: cite EV/EBITDA or P/B multiple, name the specific hidden asset or earnings distortion (e.g. "one-time write-down suppressed EPS", "real estate on balance sheet at cost"), and name the catalyst with timeline (e.g. "asset sale expected H2 2026").
@@ -3351,7 +3707,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "InsiderTrack",
             "👁️ Insider & Smart Money",
-            f"""You are a senior insider buying and institutional accumulation analyst. Today is {datetime.date.today()}.
+            f"""You are a senior insider buying and institutional accumulation analyst. Today is {datetime.date.today()}.{_perf_header("InsiderTrack")}
 YOUR LENS — follow executives and smart money buying their own stock:
 - Cluster buying detection: multiple different insiders (CEO, CFO, board) buying simultaneously within 30-60 days = highest conviction signal
 - Purchase size significance: insider buys > $100K from executives with already significant existing ownership
@@ -3374,7 +3730,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         (
             "WallStBlind",
             "🔍 Wall St Blindspot",
-            f"""You are a senior analyst at a boutique firm specializing in opportunities Wall Street can't or won't cover. Today is {datetime.date.today()}.
+            f"""You are a senior analyst at a boutique firm specializing in opportunities Wall Street can't or won't cover. Today is {datetime.date.today()}.{_perf_header("WallStBlind")}
 HARD SIZE RULE: You ONLY consider companies with market cap under $2B. A $3B or $4B company has full sell-side coverage — it is NOT a blindspot by definition. Any Mcap ≥ $2B must be immediately disqualified.
 YOUR LENS — systematically find what the major banks structurally miss:
 - Coverage gap: companies below $2B market cap where major banks don't assign dedicated analysts
@@ -3389,7 +3745,10 @@ YOUR LENS — systematically find what the major banks structurally miss:
 FOCUS: the most reliable inefficiency in markets is structural: large institutions CAN'T own small companies (position size economics), so genuinely good small companies often trade cheap for years. Find the best ones.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (pre-filtered <$2B — Wall Street's blind spot by definition):\n{sc_candidates_block}
 
-HARD RULE — NON-NEGOTIABLE: Only stocks with Mcap < $2B qualify as genuine Wall Street blindspots. Any Mcap ≥ $2B has analyst coverage and is NOT a blindspot — disqualify it.
+HARD RULES — NON-NEGOTIABLE (DISQUALIFY IMMEDIATELY):
+- Mcap ≥ $2B = DISQUALIFIED. Full analyst coverage, not a blindspot.
+- ADV < $1M/day = DISQUALIFIED. Coverage gap is worthless if the stock cannot be bought.
+- Dilution > +15%/yr = DISQUALIFIED. Chronic issuers aren't hidden gems, they're cash-raisers.
 If fewer than 7 qualify, return fewer picks. Zero is fine if nothing qualifies.
 
 Apply the Wall Street Blindspot framework. Every pick must have Mcap under $2B.
@@ -3459,6 +3818,12 @@ YOUR INVESTMENT PHILOSOPHY:
 - A great business at a fair price beats a fair business at a great price every time (Buffett), but an average business at a "cheap" price destroys capital (value trap)
 - Catalyst discipline: prefer picks where a specific, identifiable event in 1-6 months can unlock value — "cheap" without a catalyst is a portfolio deadweight
 - Size neutrality: a $100B compounder at PEG 0.8 and 35% ROIC beats a $1B name at PEG 0.8 with 15% ROIC; size is irrelevant to quality
+- LYNCH-CATEGORY BALANCE (target distribution across final picks):
+    * ~40% Fast Growers / Stalwarts  (compounders — the portfolio core)
+    * ~30% Asset Plays / Turnarounds (cheap optionality — uncorrelated alpha)
+    * ~30% Cyclicals / 10-Baggers    (asymmetric upside — timing-dependent)
+  Each candidate arrives with a [Lynch=...] tag; use it to prevent drift toward a single category.
+  When two picks are otherwise equal, prefer the one that fills an under-represented category.
 
 CONSENSUS PRIORITY RULES — apply strictly:
 - 3+ specialists independently nominate the same stock → MUST include unless a hard-kill criterion fires; assign CORE tier
@@ -3508,6 +3873,10 @@ YOUR TASK:
    If only 5-6 stocks truly meet the quality bar, output just those — the Master Manager never forces picks.
    Only include a pick if you would genuinely allocate real capital to it today at this price.
    Apply CONSENSUS PRIORITY RULES strictly (see system prompt). Balance across strategies.
+   LYNCH-CATEGORY BALANCE: Each candidate carries a [Lynch=...] tag. Aim for ~40% Fast Grower/Stalwart,
+   ~30% Asset Play/Turnaround, ~30% Cyclical/10-Bagger in your final list; if your picks skew heavily to
+   one category note it in synopsis and explicitly justify. Fill the lynch_category field on every pick
+   using the tag from the candidate data.
    Include contrarian and deep-value picks ONLY if they genuinely meet quality AND valuation gates — forced value picks destroy portfolios.
 3. For each pick: articulate the market-misunderstanding thesis — what specific thing does the consensus miss? What is the verifiable catalyst?
 4. Assess competitive position with specifics: who are the top 2-3 competitors, and what structural advantage makes this company hard to displace?
@@ -3549,8 +3918,12 @@ Respond with ONLY valid JSON (no markdown, no preamble):
     {{
       "ticker": "TICKER",
       "company": "Company Name",
+      "business_synopsis": "2-3 sentences: what does this company do, how does it make money, who pays them? Pure factual description — no investment thesis here.",
+      "industry": "Specific industry or sub-sector (e.g. Cloud Security, Specialty Pharma, Industrial Automation)",
+      "key_competitors": "Top 2-3 competitor names, comma-separated",
       "sector": "Sector",
       "strategy": "Fast Grower | 10-Bagger | Stalwart | Turnaround | Asset Play | Cyclical | Slow Grower | IV Discount | Quality Compounder",
+      "lynch_category": "FastGrower | Stalwart | SlowGrower | Cyclical | Turnaround | AssetPlay (use the [Lynch=...] tag from the candidate data; if multi-label, pick the primary one that drives the thesis)",
       "endorsed_by": "QualityGrowth + SpecialSit | EmergingGrowth only | CapAppreciation + QualityGrowth | etc.",
       "position_tier": "CORE | SATELLITE | WATCH",
       "headline": "One-liner market-misunderstanding thesis — what is the market missing in plain English?",
@@ -3664,23 +4037,21 @@ def log_ai_picks(ai_result: dict, stocks: dict):
             return False
         return True
 
-    # ── Judge picks — top 5 only (judge already ranks by conviction/urgency) ──
-    for p in ai_result.get("picks", [])[:5]:
-        t = p.get("ticker", "").upper()
-        s = stocks.get(t, {})
-        price = s.get("price")
-        if _valid_ticker(t) and price:
-            rows.append({
-                "date": today, "source": "AI-Judge",
-                "ticker": t,
-                "company": p.get("company", s.get("name", ""))[:30],
-                "strategy": p.get("strategy", ""),
-                "conviction": p.get("conviction", ""),
-                "entry_price": round(price, 2),
-                "headline": p.get("headline", "")[:80],
-            })
+    # A8: Tickers already in today's strategy picks log (to flag strategy-echo overlaps)
+    _strategy_today = set()
+    try:
+        if os.path.exists(PICKS_LOG):
+            with open(PICKS_LOG, "r", encoding="utf-8") as _psf:
+                for _pr in csv.DictReader(_psf):
+                    if _pr.get("date") == today:
+                        _strategy_today.add(_pr.get("ticker", "").upper())
+    except Exception:
+        pass
 
-    # ── Specialist picks ───────────────────────────────────────────────────
+    # ── Specialist picks FIRST (so judge can detect echoes) ───────────────
+    # A8: Build specialist-ticker set — judge picks matching become "AI-Judge-Echo"
+    specialist_tickers_today = set()
+    specialist_rows = []
     for spec_name, sr in ai_result.get("_specialist_picks", {}).items():
         source = f"AI-{spec_name}"   # "AI-Bull", "AI-Value", "AI-Contrarian"
         for p in sr.get("picks", []):
@@ -3688,35 +4059,78 @@ def log_ai_picks(ai_result: dict, stocks: dict):
             s = stocks.get(t, {})
             price = s.get("price")
             if _valid_ticker(t) and price:
-                rows.append({
+                _hl = p.get("key_metric", "")[:80]
+                if t in _strategy_today:
+                    # Strategy-echo flag: the same ticker was logged as a strategy pick today
+                    _hl = (f"[strat-echo] {_hl}")[:80]
+                specialist_rows.append({
                     "date": today, "source": source,
                     "ticker": t,
                     "company": s.get("name", t)[:30],
                     "strategy": p.get("brief_case", "")[:50],
                     "conviction": p.get("conviction", ""),
                     "entry_price": round(price, 2),
-                    "headline": p.get("key_metric", "")[:80],
+                    "headline": _hl,
+                    "prompt_version": PROMPT_VERSION,   # B6
+                    "strategy_echo": "1" if t in _strategy_today else "",  # A8-fix
+                    "synopsis": p.get("business_synopsis", "")[:300],
+                    "industry": p.get("industry", "")[:60],
+                    "key_competitors": p.get("key_competitors", "")[:120],
                 })
+                specialist_tickers_today.add(t)
+
+    # ── Judge picks — top 5 only (judge already ranks by conviction/urgency) ──
+    # A8: If a specialist already picked the same ticker today, tag the judge row
+    # as "AI-Judge-Echo" — it's a confirming endorsement, not an independent pick,
+    # and should NOT get its own performance credit in agent attribution.
+    judge_rows = []
+    for p in ai_result.get("picks", [])[:5]:
+        t = p.get("ticker", "").upper()
+        s = stocks.get(t, {})
+        price = s.get("price")
+        if _valid_ticker(t) and price:
+            _source = "AI-Judge-Echo" if t in specialist_tickers_today else "AI-Judge"
+            _hl = p.get("headline", "")[:80]
+            if t in _strategy_today and "strat-echo" not in _hl:
+                _hl = (f"[strat-echo] {_hl}")[:80]
+            judge_rows.append({
+                "date": today, "source": _source,
+                "ticker": t,
+                "company": p.get("company", s.get("name", ""))[:30],
+                "strategy": p.get("strategy", ""),
+                "conviction": p.get("conviction", ""),
+                "entry_price": round(price, 2),
+                "headline": _hl,
+                "prompt_version": PROMPT_VERSION,   # B6
+                "strategy_echo": "1" if t in _strategy_today else "",  # A8-fix
+                "synopsis": p.get("business_synopsis", "")[:300],
+                "industry": p.get("industry", "")[:60],
+                "key_competitors": p.get("key_competitors", "")[:120],
+            })
+
+    # Judge first (preserved ordering), then specialists
+    rows = judge_rows + specialist_rows
 
     if not rows:
         return
 
+    # B6/A8-fix: prompt_version + strategy_echo columns — backfill empty for old rows
     NEW_FIELDS = ["date", "source", "ticker", "company", "strategy",
-                  "conviction", "entry_price", "headline"]
+                  "conviction", "entry_price", "headline", "prompt_version",
+                  "strategy_echo",   # A8-fix: "1" if ticker was also a strategy pick today
+                  "synopsis", "industry", "key_competitors"]
 
-    # Auto-migrate old schema (no 'source' column) → new schema
+    # Auto-migrate: old schemas missing any of the new columns
     file_exists = os.path.exists(AI_PICKS_LOG)
     if file_exists:
         with open(AI_PICKS_LOG, "r", encoding="utf-8") as _f:
             _reader = csv.DictReader(_f)
             _old_headers = _reader.fieldnames or []
-            if "source" not in _old_headers:
+            needs_migration = any(col not in _old_headers for col in NEW_FIELDS)
+            if needs_migration:
                 _old_rows = list(_reader)
                 _migrated = [{**{k: "" for k in NEW_FIELDS},
-                              "date": r.get("date", ""), "source": "AI-Judge",
-                              "ticker": r.get("ticker", ""), "company": r.get("company", ""),
-                              "strategy": r.get("strategy", ""), "conviction": r.get("conviction", ""),
-                              "entry_price": r.get("entry_price", ""), "headline": r.get("headline", "")}
+                              **{k: r.get(k, "") for k in _old_headers if k in NEW_FIELDS}}
                              for r in _old_rows]
                 with open(AI_PICKS_LOG, "w", newline="", encoding="utf-8") as _fw:
                     _w = csv.DictWriter(_fw, fieldnames=NEW_FIELDS)
@@ -3736,15 +4150,16 @@ def log_ai_picks(ai_result: dict, stocks: dict):
         print(f"  ℹ️ AI picks already logged for today")
         return
     with open(AI_PICKS_LOG, "a", newline="", encoding="utf-8") as f:
-        fieldnames = ["date", "source", "ticker", "company", "strategy",
-                      "conviction", "entry_price", "headline"]
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        fieldnames = NEW_FIELDS   # B6: keeps schema in sync with NEW_FIELDS constant above
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         if not file_exists:
             writer.writeheader()
         writer.writerows(new_rows)
     n_judge = sum(1 for r in new_rows if r["source"] == "AI-Judge")
-    n_spec  = len(new_rows) - n_judge
-    print(f"  📝 AI picks logged: {n_judge} judge + {n_spec} specialist → {AI_PICKS_LOG}")
+    n_echo  = sum(1 for r in new_rows if r["source"] == "AI-Judge-Echo")
+    n_spec  = sum(1 for r in new_rows if r["source"] not in ("AI-Judge", "AI-Judge-Echo"))
+    echo_note = f" ({n_echo} echoes)" if n_echo else ""
+    print(f"  📝 AI picks logged: {n_judge} judge{echo_note} + {n_spec} specialist → {AI_PICKS_LOG}")
 
 
 def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
@@ -4948,6 +5363,22 @@ def run_portfolio_manager(portfolio: dict, candidates_block: str,
                    for sec, cnt in sorted(_sector_counts.items(), key=lambda x: -x[1])]
     sector_conc_block = "\n".join(_conc_lines) if _conc_lines else "  (no holdings)"
 
+    # B7: Lynch-category distribution for PM awareness
+    _lynch_pm_counts: dict = {}
+    for h in portfolio.get("holdings", []):
+        _raw_lc = stocks.get(h["ticker"], {}).get("lynchCategory") or h.get("lynch_category") or ""
+        for _cat in str(_raw_lc).split("+"):
+            _cat = _cat.strip()
+            if _cat:
+                _lynch_pm_counts[_cat] = _lynch_pm_counts.get(_cat, 0) + 1
+    _LYNCH_CAPS = {"FastGrower": 4, "Stalwart": 5, "SlowGrower": 6, "Cyclical": 2, "Turnaround": 3, "AssetPlay": 4}
+    _lynch_pm_lines = []
+    for _cat, _cnt in sorted(_lynch_pm_counts.items(), key=lambda x: -x[1]):
+        _cap = _LYNCH_CAPS.get(_cat, 5)
+        _warn = f" ⚠️ AT LYNCH CAP (max {_cap})" if _cnt >= _cap else ""
+        _lynch_pm_lines.append(f"  {_cat}: {_cnt}{_warn}")
+    lynch_dist_block = "\n".join(_lynch_pm_lines) if _lynch_pm_lines else "  (no Lynch categories assigned)"
+
     # Recent transactions (last 10) for context
     recent_txns = portfolio.get("transactions", [])[-10:]
     txn_lines = [f"  {tx['date']} {tx['action']} {tx['ticker']} @ ${tx['price']:.2f} — {tx.get('rationale','')[:60]}"
@@ -4966,6 +5397,7 @@ PORTFOLIO RULES:
 - Every BUY must have: ROIC > 12%, positive FCF, PEG < 2.5, and a clear moat or catalyst
 - Diversify across sectors and strategies — hard cap of 4 positions per sector (Technology included)
 - If existing holdings already have 4 in one sector, DO NOT buy another in that sector regardless of quality
+- Lynch category caps (B7): ≤4 FastGrowers, ≤2 Cyclicals, ≤3 Turnarounds, ≤5 Stalwarts, ≤6 SlowGrowers, ≤4 AssetPlays at any time. At-cap categories are marked ⚠️ — do NOT add another without first selling one of the same category.
 - Cash not deployed is drag — fill open slots if quality candidates exist
 
 CURRENT PORTFOLIO STATE:
@@ -4975,6 +5407,9 @@ Holdings ({n_holdings}/{PORTFOLIO_MAX_POSITIONS}):
 
 SECTOR CONCENTRATION (current holdings):
 {sector_conc_block}
+
+LYNCH CATEGORY DISTRIBUTION (current holdings):
+{lynch_dist_block}
 
 RECENT TRANSACTIONS:
 {txn_block}"""
@@ -5045,10 +5480,143 @@ Respond ONLY with valid JSON (no markdown):
                   f"{len(result.get('buys',[]))} buys proposed")
             return result
         else:
-            print(f"  ⚠️ Portfolio manager HTTP {resp.status_code}")
+            print(f"  ⚠️ Portfolio manager HTTP {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
         print(f"  ⚠️ Portfolio manager error: {str(e)[:80]}")
     return {}
+
+
+def check_exit_rules(holding: dict, stock: dict) -> "str | None":
+    """C2: Three automatic hard-exit rules evaluated BEFORE the PM runs.
+    Returns a rationale string if the position should be force-sold, else None.
+
+    Per-Lynch-category stop thresholds (plan R8):
+      AssetPlay / Turnaround: -40%
+      FastGrower:             -25%
+      Stalwart / default:     -20%
+
+    Rules:
+    1. Relative weakness: down > threshold AND sector performance > -15%
+       (indicates stock-specific failure, not macro)
+    2. Thesis stale: held > 365d AND ROIC < 8% AND FCF yield < 0
+    3. Revenue deceleration: current rev growth < prior-year rev growth - 20pp
+    """
+    t       = holding.get("ticker", "")
+    entry   = float(holding.get("entry_price") or 0)
+    curr    = stock.get("price") or entry
+    ret     = ((curr - entry) / entry) if entry > 0 else 0
+
+    try:
+        days = (datetime.date.today() -
+                datetime.date.fromisoformat(holding.get("entry_date", "2000-01-01"))).days
+    except Exception:
+        days = 0
+
+    lynch_cat = stock.get("lynchCategory") or holding.get("lynch_category") or ""
+
+    # ── Per-category stop threshold ──────────────────────────────────────
+    if "AssetPlay" in lynch_cat or "Turnaround" in lynch_cat:
+        stop_threshold = -0.40
+    elif "FastGrower" in lynch_cat:
+        stop_threshold = -0.25
+    else:
+        stop_threshold = -0.20   # Stalwart, SlowGrower, Cyclical, unknown
+
+    # ── Rule 1: Relative weakness ────────────────────────────────────────
+    # 52-week return used as proxy for absolute stock performance
+    year_high = stock.get("yearHigh") or 0
+    year_low  = stock.get("yearLow")  or 0
+    if ret <= stop_threshold and ret < -0.05:
+        # Sector context: if sector up or flat, the weakness is stock-specific
+        # We use sector P/E trend as a rough proxy — but we don't have easy sector
+        # return data here. Use a simplified rule: if down > threshold AND position
+        # held > 60 days (not just a temporary dip in a new position)
+        if days >= 60:
+            return (f"C2-Rule1: Relative weakness — down {ret:+.1%} "
+                    f"(threshold {stop_threshold:.0%} for {lynch_cat or 'default'} category), "
+                    f"held {days}d")
+
+    # ── Rule 2: Thesis stale ─────────────────────────────────────────────
+    roic    = stock.get("roic")    # decimal, e.g. 0.08 = 8%
+    fcf_y   = stock.get("fcfYield")  # decimal
+    if days > 365:
+        if roic is not None and roic < 0.08:
+            if fcf_y is not None and fcf_y < 0:
+                return (f"C2-Rule2: Thesis stale — held {days}d, "
+                        f"ROIC={roic*100:.1f}% (<8%), FCF yield={fcf_y:.1%} (negative)")
+
+    # ── Rule 3: Revenue deceleration ─────────────────────────────────────
+    rev_g_curr  = stock.get("revGrowth")     # TTM or most-recent annual
+    rev_g_prior = stock.get("revGrowthPrev") # prior-year rev growth (assembled at line ~2082)
+    if (rev_g_curr is not None and rev_g_prior is not None and
+            (rev_g_curr - rev_g_prior) < -0.20):   # deceleration ≥ 20pp
+        return (f"C2-Rule3: Revenue deceleration — "
+                f"current RG={rev_g_curr:+.1%} vs prior={rev_g_prior:+.1%} "
+                f"(Δ {rev_g_curr - rev_g_prior:+.1%})")
+
+    return None
+
+
+def compute_position_size(ticker: str, price: float, portfolio: dict) -> float:
+    """C1: Vol-scaled position sizing.
+    Target: risk 1% of portfolio value per position using 60-day realised vol.
+    Result is clamped between 0.5× and 2× the equal-weight baseline.
+    Falls back to PORTFOLIO_TARGET_POSITION on any data failure.
+    """
+    if price <= 0:
+        return PORTFOLIO_TARGET_POSITION
+
+    # Portfolio current total value
+    portfolio_value = portfolio.get("cash", PORTFOLIO_INITIAL_CASH)
+    for h in portfolio.get("holdings", []):
+        portfolio_value += h.get("shares", 0) * h.get("entry_price", 0)
+
+    equal_weight = PORTFOLIO_TARGET_POSITION
+    risk_budget   = portfolio_value * 0.01  # 1% portfolio risk target per position
+
+    try:
+        # Populate cache via fetch_price_on_date (side-effect: fills _hist_price_cache)
+        if ticker not in _hist_price_cache:
+            recent = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+            fetch_price_on_date(ticker, recent)   # triggers cache fetch
+
+        prices_dict = _hist_price_cache.get(ticker, {})
+        if len(prices_dict) < 10:
+            return equal_weight
+
+        _sorted_prices = [v for _, v in sorted(prices_dict.items())][-63:]  # up to 63 trading days
+        if len(_sorted_prices) < 5:
+            return equal_weight
+
+        # Daily log returns
+        log_rets = []
+        for i in range(1, len(_sorted_prices)):
+            p0, p1 = _sorted_prices[i-1], _sorted_prices[i]
+            if p0 > 0 and p1 > 0:
+                import math
+                log_rets.append(math.log(p1 / p0))
+
+        if len(log_rets) < 5:
+            return equal_weight
+
+        avg_lr = sum(log_rets) / len(log_rets)
+        daily_vol = (sum((r - avg_lr)**2 for r in log_rets) / (len(log_rets) - 1)) ** 0.5
+        if daily_vol <= 0:
+            return equal_weight
+
+        # Annualised vol → daily dollar risk per share
+        # Position size = risk_budget / (price * daily_vol * √1)
+        # (1-day 1σ move in dollar terms per share = price * daily_vol)
+        vol_sized = risk_budget / (price * daily_vol)
+
+        # Clamp to [0.5×, 2×] equal-weight
+        lo = equal_weight * 0.5
+        hi = equal_weight * 2.0
+        return max(lo, min(hi, vol_sized))
+
+    except Exception:
+        return equal_weight
+
 
 
 def apply_portfolio_decisions(portfolio: dict, decisions: dict, stocks: dict) -> dict:
@@ -5057,6 +5625,42 @@ def apply_portfolio_decisions(portfolio: dict, decisions: dict, stocks: dict) ->
         return portfolio
     today = datetime.date.today().isoformat()
     holdings_by_ticker = {h["ticker"]: h for h in portfolio.get("holdings", [])}
+
+    # ── Backfill lynch_category / sector for legacy holdings (Fix-9b) ──
+    for h in portfolio.get("holdings", []):
+        t = h["ticker"]
+        s = stocks.get(t, {})
+        if not h.get("lynch_category") and s.get("lynchCategory"):
+            h["lynch_category"] = s["lynchCategory"]
+        if not h.get("sector") and s.get("sector"):
+            h["sector"] = s["sector"]
+
+    # ── C2: Hard exit rules (fire BEFORE PM review) ───────────────────
+    forced_sells = {}
+    for h in list(portfolio.get("holdings", [])):
+        t = h["ticker"]
+        s = stocks.get(t, {})
+        reason = check_exit_rules(h, s)
+        if reason:
+            forced_sells[t] = reason
+            print(f"    🚨 FORCE-SELL {t}: {reason[:80]}")
+
+    # Merge forced sells into decisions["review"] (add or upgrade to SELL)
+    existing_review_tickers = {r.get("ticker","").upper() for r in decisions.get("review", [])}
+    for t_fs, reason_fs in forced_sells.items():
+        if t_fs not in existing_review_tickers:
+            decisions.setdefault("review", []).append({
+                "ticker":   t_fs,
+                "decision": "SELL",
+                "rationale": reason_fs,
+            })
+        else:
+            # Override existing HOLD/SELL with force-sell reasoning
+            for r in decisions["review"]:
+                if r.get("ticker","").upper() == t_fs:
+                    r["decision"]  = "SELL"
+                    r["rationale"] = reason_fs
+                    break
 
     # ── Process SELLs ────────────────────────────────────────────────
     for rev in decisions.get("review", []):
@@ -5068,7 +5672,10 @@ def apply_portfolio_decisions(portfolio: dict, decisions: dict, stocks: dict) ->
         h = holdings_by_ticker[t]
         s = stocks.get(t, {})
         sell_price = s.get("price") or h["entry_price"]
-        proceeds = h["shares"] * sell_price
+        gross_proceeds = h["shares"] * sell_price
+        # C3: apply slippage (you get slightly less on a sell) and commission
+        tc_sell = round(gross_proceeds * PORTFOLIO_SLIPPAGE_RATE + PORTFOLIO_COMMISSION, 4)
+        proceeds = gross_proceeds - tc_sell
         ret = (sell_price - h["entry_price"]) / h["entry_price"] if h["entry_price"] > 0 else 0
         portfolio["cash"] = portfolio.get("cash", 0) + proceeds
         portfolio["transactions"].append({
@@ -5080,12 +5687,22 @@ def apply_portfolio_decisions(portfolio: dict, decisions: dict, stocks: dict) ->
             "price": round(sell_price, 2),
             "value": round(proceeds, 2),
             "return_pct": round(ret * 100, 2),
+            "transaction_cost": round(tc_sell, 2),  # C3
             "rationale": rev.get("rationale", ""),
         })
         del holdings_by_ticker[t]
-        print(f"    💰 SELL {t} @ ${sell_price:.2f} ({ret:+.1%}) — {rev.get('rationale','')[:60]}")
+        print(f"    💰 SELL {t} @ ${sell_price:.2f} ({ret:+.1%}) [tc=${tc_sell:.2f}] — {rev.get('rationale','')[:60]}")
 
     # ── Process BUYs ─────────────────────────────────────────────────
+    # C1-Fix: pre-populate _hist_price_cache for all buy candidates in one pass
+    # so compute_position_size doesn't fire individual API calls inside the loop
+    _buy_tickers = [b.get("ticker","").upper() for b in decisions.get("buys", [])
+                    if b.get("ticker","") and b.get("ticker","").upper() not in _hist_price_cache]
+    if _buy_tickers:
+        _recent = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+        for _bt in _buy_tickers:
+            fetch_price_on_date(_bt, _recent)   # fills _hist_price_cache[_bt] once
+
     for buy in decisions.get("buys", []):
         t = buy.get("ticker", "").upper()
         if not t or t in holdings_by_ticker:
@@ -5096,13 +5713,18 @@ def apply_portfolio_decisions(portfolio: dict, decisions: dict, stocks: dict) ->
         price = s.get("price")
         if not price or price <= 0:
             continue
-        # Use target position size; if not enough cash, skip
-        invest = min(PORTFOLIO_TARGET_POSITION, portfolio.get("cash", 0))
+        # C1: vol-scaled position size, clamped to [0.5×, 2×] equal-weight
+        invest = min(compute_position_size(t, price, portfolio), portfolio.get("cash", 0))
         if invest < price:
             continue  # can't afford even 1 share
         shares = max(1, int(invest / price))
         cost = shares * price
-        portfolio["cash"] = portfolio.get("cash", 0) - cost
+        # C3: apply slippage (you pay slightly more on a buy) and commission
+        tc_buy = round(cost * PORTFOLIO_SLIPPAGE_RATE + PORTFOLIO_COMMISSION, 4)
+        total_cost = cost + tc_buy
+        if total_cost > portfolio.get("cash", 0):
+            continue  # insufficient cash including transaction cost
+        portfolio["cash"] = portfolio.get("cash", 0) - total_cost
         holdings_by_ticker[t] = {
             "ticker": t,
             "company": buy.get("company", s.get("name", t))[:30],
@@ -5112,6 +5734,8 @@ def apply_portfolio_decisions(portfolio: dict, decisions: dict, stocks: dict) ->
             "rationale": buy.get("rationale", "")[:200],
             "conviction": buy.get("conviction", "MEDIUM"),
             "sell_trigger": buy.get("sell_trigger", "")[:150],
+            "lynch_category": s.get("lynchCategory", ""),   # Fix-9: persist for C2 round-trip
+            "sector": s.get("sector", ""),                   # Fix-9: persist sector for B7 round-trip
         }
         portfolio["transactions"].append({
             "date": today,
@@ -5122,9 +5746,10 @@ def apply_portfolio_decisions(portfolio: dict, decisions: dict, stocks: dict) ->
             "price": round(price, 2),
             "value": round(cost, 2),
             "return_pct": 0.0,
+            "transaction_cost": round(tc_buy, 2),  # C3
             "rationale": buy.get("rationale", "")[:200],
         })
-        print(f"    🛒 BUY  {t} {shares}sh @ ${price:.2f} (${cost:,.0f}) — {buy.get('rationale','')[:60]}")
+        print(f"    🛒 BUY  {t} {shares}sh @ ${price:.2f} (${cost:,.0f}) [tc=${tc_buy:.2f}] — {buy.get('rationale','')[:60]}")
 
     portfolio["holdings"] = list(holdings_by_ticker.values())
     portfolio["last_updated"] = today
@@ -5321,6 +5946,196 @@ def build_portfolio_tab(wb, portfolio: dict, stocks: dict, spy_prices: dict = No
     return nav, total_ret, spy_ret_overall
 
 
+def compute_agent_performance(spy_prices: dict = None, spy_today: float = None) -> dict:
+    """B1: Read fmp_ai_picks_log.csv and compute per-agent attribution metrics.
+
+    Returns a dict keyed by source string (e.g. 'AI-QualityGrowth', 'AI-Judge'):
+        n_picks        : int   — total logged picks
+        avg_ret        : float — mean current return (entry→today)
+        avg_spy        : float — mean SPY return over same holding periods
+        alpha          : float — avg_ret - avg_spy
+        sharpe         : float — annualised Sharpe on alpha series (None if <3 picks)
+        win_rate       : float — fraction with ret > 0
+        hit_30d        : float — fraction where Ret30d > 0  (picks ≥30 days old only)
+        hit_90d        : float — fraction where Ret90d > 0  (picks ≥90 days old only)
+        hit_180d       : float — fraction where Ret180d > 0 (picks ≥180 days old only)
+        best_ticker    : str
+        best_ret       : float
+        worst_ticker   : str
+        worst_ret      : float
+        med_hold_days  : float — median holding period in days
+        prompt_versions: set   — all prompt_version values seen (for filtering)
+    """
+    if not os.path.exists(AI_PICKS_LOG):
+        return {}
+
+    import statistics as _stats
+
+    # --- helpers -----------------------------------------------------------
+    def _spy_ret_for_date(entry_date_str: str) -> float | None:
+        """SPY return from entry_date to today."""
+        if not spy_prices or not spy_today:
+            return None
+        try:
+            target = datetime.date.fromisoformat(entry_date_str)
+        except ValueError:
+            return None
+        for delta in range(8):
+            d = (target - datetime.timedelta(days=delta)).isoformat()
+            if d in spy_prices and spy_prices[d] > 0:
+                return (spy_today - spy_prices[d]) / spy_prices[d]
+        return None
+
+    # --- read log ----------------------------------------------------------
+    rows = []
+    try:
+        with open(AI_PICKS_LOG, "r", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                rows.append(r)
+    except Exception:
+        return {}
+
+    # --- gather current prices for unique tickers -------------------------
+    unique_t = list({r["ticker"] for r in rows if r.get("ticker")})
+    live_px: dict = {}
+    for t in unique_t:
+        p = fetch_live_price(t)
+        if p:
+            live_px[t] = p
+        time.sleep(0.05)
+
+    # --- aggregate by agent -----------------------------------------------
+    _per: dict = {}   # source → lists of per-pick stats
+
+    for r in rows:
+        src = r.get("source", "unknown")
+        if not src:
+            continue
+        t = r.get("ticker", "")
+        try:
+            entry = float(r.get("entry_price") or 0)
+        except (ValueError, TypeError):
+            entry = 0
+        curr = live_px.get(t, 0)
+        ret = ((curr - entry) / entry) if entry > 0 and curr > 0 else None
+
+        date_str = r.get("date", "")
+        try:
+            days = (datetime.date.today() - datetime.date.fromisoformat(date_str)).days
+        except Exception:
+            days = None
+
+        spy_r = _spy_ret_for_date(date_str)
+        alpha_r = (ret - spy_r) if ret is not None and spy_r is not None else ret
+
+        # B2 checkpoint rets (lazy fetch via fetch_price_on_date cache)
+        ret_30d  = _checkpoint_ret_b1(t, entry, date_str, 30,  days)
+        ret_90d  = _checkpoint_ret_b1(t, entry, date_str, 90,  days)
+        ret_180d = _checkpoint_ret_b1(t, entry, date_str, 180, days)
+
+        if src not in _per:
+            _per[src] = {"rets": [], "alphas": [], "spy_rets": [], "days_list": [],
+                         "wins": 0, "n": 0,
+                         "hits_30": [], "hits_90": [], "hits_180": [],
+                         "best_ret": None, "best_t": "—",
+                         "worst_ret": None, "worst_t": "—",
+                         "pv_set": set()}
+        ag = _per[src]
+        ag["n"] += 1
+        ag["pv_set"].add(r.get("prompt_version", ""))
+
+        if ret is not None:
+            ag["rets"].append(ret)
+            if ret > 0:
+                ag["wins"] += 1
+            if ag["best_ret"] is None or ret > ag["best_ret"]:
+                ag["best_ret"] = ret; ag["best_t"] = t
+            if ag["worst_ret"] is None or ret < ag["worst_ret"]:
+                ag["worst_ret"] = ret; ag["worst_t"] = t
+        if alpha_r is not None:
+            ag["alphas"].append(alpha_r)
+        if spy_r is not None:
+            ag["spy_rets"].append(spy_r)
+        if days is not None:
+            ag["days_list"].append(days)
+        if ret_30d is not None:
+            ag["hits_30"].append(1 if ret_30d > 0 else 0)
+        if ret_90d is not None:
+            ag["hits_90"].append(1 if ret_90d > 0 else 0)
+        if ret_180d is not None:
+            ag["hits_180"].append(1 if ret_180d > 0 else 0)
+
+    # --- compute summary stats per agent ----------------------------------
+    out = {}
+    for src, ag in _per.items():
+        rets    = ag["rets"]
+        alphas  = ag["alphas"]
+        dl      = ag["days_list"]
+        n       = ag["n"]
+
+        avg_ret  = sum(rets)   / len(rets)   if rets   else None
+        avg_spy  = sum(ag["spy_rets"]) / len(ag["spy_rets"]) if ag["spy_rets"] else None
+        alpha    = sum(alphas) / len(alphas) if alphas else None
+        win_rate = ag["wins"] / len(rets)    if rets   else None
+
+        # Annualised Sharpe on alpha series
+        sharpe = None
+        if len(alphas) >= 3:
+            try:
+                _std = _stats.stdev(alphas)
+                if _std > 0:
+                    avg_days = sum(dl) / len(dl) if dl else 30
+                    sharpe = (alpha / _std) * ((252 / max(avg_days, 1)) ** 0.5)
+            except Exception:
+                pass
+
+        out[src] = {
+            "n_picks":       n,
+            "avg_ret":       avg_ret,
+            "avg_spy":       avg_spy,
+            "alpha":         alpha,
+            "sharpe":        sharpe,
+            "win_rate":      win_rate,
+            "hit_30d":       (sum(ag["hits_30"])  / len(ag["hits_30"]))  if ag["hits_30"]  else None,
+            "hit_90d":       (sum(ag["hits_90"])  / len(ag["hits_90"]))  if ag["hits_90"]  else None,
+            "hit_180d":      (sum(ag["hits_180"]) / len(ag["hits_180"])) if ag["hits_180"] else None,
+            "best_ticker":   ag["best_t"],
+            "best_ret":      ag["best_ret"],
+            "worst_ticker":  ag["worst_t"],
+            "worst_ret":     ag["worst_ret"],
+            "med_hold_days": (_stats.median(dl) if dl else None),
+            "prompt_versions": ag["pv_set"],
+        }
+    return out
+
+
+def _checkpoint_ret_b1(ticker: str, entry: float, entry_date_str: str,
+                        horizon_days: int, hold_days) -> float | None:
+    """Thin wrapper used by both build_picks_tracking._build_row and compute_agent_performance.
+
+    C5: If the ticker has been fetched but the cache is empty (no price history),
+    the stock is presumed delisted. Returns _DELISTED_RETURN (-100%) and adds
+    ticker to _delisted_tickers for visual flagging downstream.
+    Returns None when the horizon hasn't elapsed yet.
+    """
+    global _delisted_tickers
+    if entry <= 0 or hold_days is None or hold_days < horizon_days:
+        return None
+    try:
+        entry_dt = datetime.date.fromisoformat(entry_date_str)
+    except ValueError:
+        return None
+    target_date = (entry_dt + datetime.timedelta(days=horizon_days)).isoformat()
+    price_at_horizon = fetch_price_on_date(ticker, target_date)
+    if price_at_horizon and price_at_horizon > 0:
+        return (price_at_horizon - entry) / entry
+    # C5: If cache was populated but empty → presumed delisted
+    if ticker in _hist_price_cache and not _hist_price_cache[ticker]:
+        _delisted_tickers.add(ticker)
+        return _DELISTED_RETURN   # conservative -100%
+    return None
+
+
 def build_picks_tracking(wb, stocks):
     """Tab 11: Picks Tracking — measure performance of logged picks.
     Reads fmp_picks_log.csv, fetches current prices, shows P&L.
@@ -5433,6 +6248,8 @@ def build_picks_tracking(wb, stocks):
                 return spy_prices[d]
         return None
 
+    # B2: delegate to module-level helper (shared with compute_agent_performance)
+
     # ── Build display rows ──────────────────────────────────────────────────
     def _build_row(r):
         t = r.get("ticker", "")
@@ -5451,8 +6268,15 @@ def build_picks_tracking(wb, stocks):
         spy_ret = ((spy_today - spy_entry) / spy_entry
                    if spy_entry and spy_today and spy_entry > 0 else None)
         rel_ret = ((ret - spy_ret) if ret is not None and spy_ret is not None else None)
+
+        # B2: Fixed-horizon checkpoint returns (only populated when old enough)
+        entry_date_str = r.get("date", "")
+        ret_30d  = _checkpoint_ret_b1(t, entry, entry_date_str, 30,  days)
+        ret_90d  = _checkpoint_ret_b1(t, entry, entry_date_str, 90,  days)
+        ret_180d = _checkpoint_ret_b1(t, entry, entry_date_str, 180, days)
+
         return {
-            "Date Logged": r.get("date", ""),
+            "Date Logged": entry_date_str,
             "Agent / Strategy": r.get("_display_strategy", "")[:22],
             "Ticker": t,
             "Company": r.get("company", "")[:25],
@@ -5462,7 +6286,12 @@ def build_picks_tracking(wb, stocks):
             "SPY Ret": spy_ret,
             "Rel Ret": rel_ret,
             "Days": days,
+            "Ret 30d": ret_30d,    # B2: price 30 days after entry / entry - 1
+            "Ret 90d": ret_90d,    # B2: price 90 days after entry / entry - 1
+            "Ret 180d": ret_180d,  # B2: price 180 days after entry / entry - 1
+            "Delisted": "⚠ DELISTED" if t in _delisted_tickers else "",  # C5
             "_kind": r.get("_kind", "strategy"),
+            "_pv":    r.get("prompt_version", ""),  # B6: for backtest filtering
         }
 
     strat_rows = [_build_row(r) for r in logged]
@@ -5470,9 +6299,11 @@ def build_picks_tracking(wb, stocks):
     strat_rows.sort(key=lambda x: (x.get("Agent / Strategy", ""), x.get("Date Logged", "")))
     ai_rows.sort(key=lambda x: (x.get("Agent / Strategy", ""), x.get("Date Logged", "")))
 
+    # B2: Added Ret 30d / Ret 90d / Ret 180d columns; C5: Delisted flag
     headers = ["Date Logged", "Agent / Strategy", "Ticker", "Company",
-               "Entry $", "Current $", "Return", "SPY Ret", "Rel Ret", "Days"]
-    widths  = [12, 22, 8, 25, 9, 9, 9, 9, 9, 6]
+               "Entry $", "Current $", "Return", "SPY Ret", "Rel Ret", "Days",
+               "Ret 30d", "Ret 90d", "Ret 180d", "Delisted"]
+    widths  = [12, 22, 8, 25, 9, 9, 9, 9, 9, 6, 9, 9, 9, 10]
 
     def _write_section(title_val, title_color, row_list, start_row):
         r = start_row
@@ -5539,8 +6370,9 @@ def build_picks_tracking(wb, stocks):
         tc.fill = PatternFill("solid", fgColor=title_color)
         ws.row_dimensions[r].height = 18
         r += 1
-        # Column headers for summary
-        for ci, lbl in enumerate(["Agent / Strategy", "Picks", "Avg Return", "SPY Avg", "Avg Alpha", "Win Rate"], 1):
+        # Column headers for summary — A7 adds Sharpe + Best + Worst
+        for ci, lbl in enumerate(["Agent / Strategy", "Picks", "Avg Return", "SPY Avg",
+                                  "Avg Alpha", "Win Rate", "Sharpe", "Best", "Worst"], 1):
             hc = ws.cell(row=r, column=ci, value=lbl)
             hc.font = Font(bold=True, name="Arial", size=9, color="FFFFFF")
             hc.fill = PatternFill("solid", fgColor="455A64")
@@ -5550,25 +6382,51 @@ def build_picks_tracking(wb, stocks):
         for row in row_list:
             ag = row.get("Agent / Strategy", "Unknown")
             if ag not in by_agent:
-                by_agent[ag] = {"returns": [], "spy_rets": [], "rel_rets": []}
+                by_agent[ag] = {"returns": [], "spy_rets": [], "rel_rets": [],
+                                "days": [], "best_t": None, "best_v": None,
+                                "worst_t": None, "worst_v": None}
             ret = row.get("Return")
             spy_r = row.get("SPY Ret")
             rel_r = row.get("Rel Ret")
+            dys  = row.get("Days")
+            tkr  = row.get("Ticker")
             if ret is not None:
                 by_agent[ag]["returns"].append(ret)
+                # Track best and worst raw return for per-agent spotlight
+                if (by_agent[ag]["best_v"] is None) or (ret > by_agent[ag]["best_v"]):
+                    by_agent[ag]["best_v"] = ret
+                    by_agent[ag]["best_t"] = tkr
+                if (by_agent[ag]["worst_v"] is None) or (ret < by_agent[ag]["worst_v"]):
+                    by_agent[ag]["worst_v"] = ret
+                    by_agent[ag]["worst_t"] = tkr
             if spy_r is not None:
                 by_agent[ag]["spy_rets"].append(spy_r)
             if rel_r is not None:
                 by_agent[ag]["rel_rets"].append(rel_r)
+            if dys is not None and dys > 0:
+                by_agent[ag]["days"].append(dys)
         for ag, data in sorted(by_agent.items()):
             returns  = data["returns"]
             spy_rets = data["spy_rets"]
             rel_rets = data["rel_rets"]
+            days     = data["days"]
             avg     = sum(returns)  / len(returns)  if returns  else None
             avg_spy = sum(spy_rets) / len(spy_rets) if spy_rets else None
             avg_rel = sum(rel_rets) / len(rel_rets) if rel_rets else None
             win_rate = (sum(1 for v in rel_rets if v > 0) / len(rel_rets)
                         if rel_rets else None)
+            # Annualised Sharpe on alpha (rel_rets): need ≥3 picks and non-zero std
+            sharpe = None
+            if len(rel_rets) >= 3 and avg_rel is not None:
+                _n = len(rel_rets)
+                _var = sum((v - avg_rel) ** 2 for v in rel_rets) / (_n - 1)
+                _std = _var ** 0.5
+                if _std > 0:
+                    # Convert per-pick alpha into annualised Sharpe using median hold-days
+                    _avg_days = (sum(days) / len(days)) if days else 30
+                    # periods per year; clamp to at least 1 to avoid div-by-zero spike
+                    _periods = max(1.0, 252.0 / max(_avg_days, 1.0))
+                    sharpe = (avg_rel / _std) * (_periods ** 0.5)
             ws.cell(row=r, column=1, value=ag).font = Font(bold=True, name="Arial", size=9)
             ws.cell(row=r, column=2, value=len(returns))
             avg_cell = ws.cell(row=r, column=3, value=avg if avg is not None else "no data")
@@ -5590,6 +6448,26 @@ def build_picks_tracking(wb, stocks):
                 wr_cell.number_format = "0%"
                 wr_cell.font = Font(bold=True, name="Arial", size=9,
                                     color="1B5E20" if win_rate >= 0.50 else "B71C1C")
+            # Sharpe
+            sh_cell = ws.cell(row=r, column=7, value=sharpe)
+            if isinstance(sharpe, float):
+                sh_cell.number_format = "0.00"
+                sh_cell.font = Font(bold=True, name="Arial", size=9,
+                                    color="1B5E20" if sharpe > 0 else "B71C1C")
+            else:
+                sh_cell.value = "—"
+                sh_cell.font = Font(name="Arial", size=9, color="888888")
+            # Best / worst picks
+            _bt = data["best_t"]; _bv = data["best_v"]
+            _wt = data["worst_t"]; _wv = data["worst_v"]
+            if _bt and _bv is not None:
+                _b_cell = ws.cell(row=r, column=8,
+                                  value=f"{_bt} {_bv*100:+.0f}%")
+                _b_cell.font = Font(name="Arial", size=9, color="1B5E20")
+            if _wt and _wv is not None:
+                _w_cell = ws.cell(row=r, column=9,
+                                  value=f"{_wt} {_wv*100:+.0f}%")
+                _w_cell.font = Font(name="Arial", size=9, color="B71C1C")
             r += 1
         return r
 
@@ -6786,7 +7664,8 @@ def build_insider_tab(wb, stocks, insider_data):
 def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       slow_growers, cyclicals, asset_plays, quality_compounders,
                       sector_rows=None, etf_rows=None, ai=None, macro=None,
-                      portfolio=None, fmp_call_count=0, ten_baggers=None) -> str:
+                      portfolio=None, fmp_call_count=0, ten_baggers=None,
+                      agent_perf=None) -> str:   # B1: per-agent attribution dict
     """Generate a self-contained mobile-responsive HTML dashboard.
     Reads the same data structures that feed the Excel — no extra computation.
     Returns the full HTML string.
@@ -6850,6 +7729,14 @@ tr.alt td { background: #161622; }
 .badge-hold   { background: #006064; color: #b2ebf2; }
 .badge-avoid  { background: #b71c1c; color: #ef9a9a; }
 .badge-elev   { background: #e65100; color: #ffe0b2; }
+/* A9: Lynch category badges — colour-coded per Peter Lynch category */
+.badge-lynch          { background: #283593; color: #c5cae9; font-weight: 600; }
+.badge-lynch-fast     { background: #1b5e20; color: #a5d6a7; font-weight: 600; } /* Fast Grower — green */
+.badge-lynch-stalwart { background: #0d47a1; color: #90caf9; font-weight: 600; } /* Stalwart — blue   */
+.badge-lynch-slow     { background: #37474f; color: #cfd8dc; font-weight: 600; } /* Slow Grower — grey */
+.badge-lynch-cyclical { background: #e65100; color: #ffe0b2; font-weight: 600; } /* Cyclical — orange */
+.badge-lynch-turn     { background: #6a1b9a; color: #e1bee7; font-weight: 600; } /* Turnaround — purple */
+.badge-lynch-asset    { background: #4e342e; color: #d7ccc8; font-weight: 600; } /* Asset Play — brown  */
 .macro-grid { display: grid;
               grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
               gap: 8px; margin: 10px 0; }
@@ -7082,6 +7969,37 @@ function showMacroDetail(el, id) {
         else: return ""
         return f'<span class="badge {cls}">{lbl} Cap</span>'
 
+    # A9: Lynch-category badge. Takes either the raw lynchCategory string (may
+    # contain multiple labels joined with "+") or None. Returns empty string when
+    # unknown so call sites degrade gracefully.
+    _LYNCH_CLS = {
+        "FastGrower":  "badge-lynch-fast",
+        "Stalwart":    "badge-lynch-stalwart",
+        "SlowGrower":  "badge-lynch-slow",
+        "Cyclical":    "badge-lynch-cyclical",
+        "Turnaround":  "badge-lynch-turn",
+        "AssetPlay":   "badge-lynch-asset",
+    }
+    _LYNCH_LABEL = {
+        "FastGrower":  "Fast Grower",
+        "Stalwart":    "Stalwart",
+        "SlowGrower":  "Slow Grower",
+        "Cyclical":    "Cyclical",
+        "Turnaround":  "Turnaround",
+        "AssetPlay":   "Asset Play",
+    }
+    def _lynch_badge(raw):
+        """Render one or more Lynch-category badges (multi-label split on '+')."""
+        if not raw:
+            return ""
+        cats = [c.strip() for c in str(raw).split("+") if c.strip()]
+        out = []
+        for c in cats:
+            cls = _LYNCH_CLS.get(c, "badge-lynch")
+            lbl = _LYNCH_LABEL.get(c, c)
+            out.append(f'<span class="badge {cls}" style="font-size:.63rem">{lbl}</span>')
+        return " ".join(out)
+
     def _strategy_table(rows, cols, title_id, title_label, description=""):
         """Render a strategy tab as a sortable table."""
         if not rows:
@@ -7213,6 +8131,8 @@ function showMacroDetail(el, id) {
                 conv2 = (pp.get("conviction") or "MEDIUM").upper()
                 conv_color = "#1b5e20" if conv2 == "HIGH" else "#0d47a1"
                 rationale2 = pp.get("rationale", "") or pp.get("brief_case", "")
+                # A9: Lynch category badge from assembled stock dict
+                _lb = _lynch_badge(s2.get("lynchCategory"))
                 pick_cards_html.append(f"""
 <div class="agent-pick-card" style="border-left-color:#{color_hex}">
   <div style="display:flex;justify-content:space-between;align-items:center">
@@ -7220,6 +8140,7 @@ function showMacroDetail(el, id) {
     <span style="font-size:.65rem;background:{conv_color};color:#fff;border-radius:3px;padding:1px 5px">{conv2}</span>
   </div>
   <div class="ap-co">{pp.get("company",s2.get("name",tk))[:32]}</div>
+  {f'<div style="margin-top:4px">{_lb}</div>' if _lb else ''}
   <div class="ap-rationale">{rationale2[:200]}</div>
   <div class="ap-metric">{pp.get("key_metric","")[:60]}{"  ·  $"+f"{prc:.0f}" if prc else ""}{"  ·  $"+f"{mc_b:.1f}B" if mc_b else ""}</div>
 </div>""")
@@ -7677,6 +8598,32 @@ function showMacroDetail(el, id) {
             else:
                 _attr_html = ""
 
+            # A9/A10: Pull lynchCategory straight off the stock dict (set in assemble_stock_data)
+            _lynch_raw = s.get("lynchCategory") or p.get("lynch_category", "")
+            lynch_badge = _lynch_badge(_lynch_raw)
+
+            _biz_syn    = p.get("business_synopsis", "")
+            _biz_ind    = p.get("industry", "") or s.get("industry", "")
+            _biz_comp   = p.get("key_competitors", "")
+            _biz_block  = ""
+            if _biz_syn or _biz_ind or _biz_comp:
+                _ind_line  = (f'<span style="font-size:.68rem;color:#78909c"><b>Industry:</b> {_biz_ind}</span>'
+                              if _biz_ind else "")
+                _comp_line = (f'<span style="font-size:.68rem;color:#78909c"><b>vs:</b> {_biz_comp}</span>'
+                              if _biz_comp else "")
+                _meta_bits = " &nbsp;·&nbsp; ".join(x for x in [_ind_line, _comp_line] if x)
+                _syn_p     = (f'<p style="font-size:.73rem;color:#b0bec5;line-height:1.55;margin:0 0 5px">'
+                              f'{_biz_syn}</p>') if _biz_syn else ""
+                _meta_div  = f'<div style="margin-top:3px">{_meta_bits}</div>' if _meta_bits else ""
+                _biz_block = (
+                    f'<div style="background:#12122088;border-left:3px solid #42a5f555;'
+                    f'border-radius:4px;padding:7px 10px;margin-bottom:8px">'
+                    f'<div style="font-size:.63rem;font-weight:700;color:#42a5f5;text-transform:uppercase;'
+                    f'letter-spacing:.06em;margin-bottom:4px">🏢 About the Business</div>'
+                    f'{_syn_p}{_meta_div}'
+                    f'</div>'
+                )
+
             mm_cards.append(f"""
 <div class="mm-card xcard" onclick="toggleExpand(this)">
   <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
@@ -7686,9 +8633,11 @@ function showMacroDetail(el, id) {
     <span class="mm-co">{co} · {sec}</span>
     {_conv_badge(conv)} {_urgency_badge(urg)}
     <span class="badge badge-hold" style="font-size:.63rem">{strat}</span>
+    {lynch_badge}
     <span class="xarrow">▼</span>
   </div>
   <div class="xbody" style="display:none">
+    {_biz_block}
     <p class="mm-hl">"{hl}"</p>
     <p class="mm-story">{story}</p>
     <div class="mm-meta">
@@ -7712,17 +8661,49 @@ function showMacroDetail(el, id) {
                           f'<ul style="padding-left:1.2em;color:#ef9a9a;font-size:.78rem;line-height:1.8">'
                           f'{risk_items}</ul></div>')
 
+        # A9/A10: Lynch category distribution bar for today's MM picks
+        _lynch_dist = {}
+        for p_l in picks:
+            t_l = p_l.get("ticker","")
+            s_l = stocks.get(t_l, {})
+            raw_l = s_l.get("lynchCategory") or p_l.get("lynch_category","")
+            if raw_l:
+                for cat_l in str(raw_l).split("+"):
+                    cat_l = cat_l.strip()
+                    if cat_l:
+                        _lynch_dist[cat_l] = _lynch_dist.get(cat_l, 0) + 1
+
+        _LYNCH_DIST_CSS = {
+            "FastGrower": "#1b5e20", "Stalwart": "#0d47a1", "SlowGrower": "#37474f",
+            "Cyclical": "#e65100", "Turnaround": "#6a1b9a", "AssetPlay": "#4e342e",
+        }
+        _LYNCH_DIST_LABEL = {
+            "FastGrower": "Fast Grower", "Stalwart": "Stalwart",
+            "SlowGrower": "Slow Grower", "Cyclical": "Cyclical",
+            "Turnaround": "Turnaround", "AssetPlay": "Asset Play",
+        }
+        _dist_chips = "".join(
+            f'<span style="display:inline-flex;align-items:center;gap:4px;background:{_LYNCH_DIST_CSS.get(c,"#283593")};'
+            f'color:#fff;border-radius:4px;padding:2px 7px;font-size:.68rem;font-weight:600">'
+            f'{_LYNCH_DIST_LABEL.get(c,c)}&nbsp;<b style="font-size:.8em;opacity:.8">{n}</b></span>'
+            for c, n in sorted(_lynch_dist.items(), key=lambda x: -x[1])
+        ) if _lynch_dist else '<span style="font-size:.72rem;color:#546e7a">No Lynch category data yet</span>'
+
         mm_section = f"""
 <div style="background:#0d1117;border:1px solid #ffd54f33;border-radius:8px;padding:12px 14px;margin-bottom:18px">
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
     <span style="font-size:1rem;font-weight:700;color:#ffd54f">🧠 AI Master Manager</span>
     <span style="font-size:.72rem;color:#78909c">— synthesises {len(picks)} top picks from 17 specialist agents</span>
   </div>
-  <p style="font-size:.73rem;color:#546e7a;margin-bottom:10px;line-height:1.5">
+  <p style="font-size:.73rem;color:#546e7a;margin-bottom:8px;line-height:1.5">
     The Master Manager conducts no independent research. It selects and ranks only from agent-nominated
     stocks, prioritising cross-specialist consensus, quality filters, and catalyst timing.
     <b style="color:#78909c">Click any card to expand.</b>
   </p>
+  <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;align-items:center">
+    <span style="font-size:.66rem;color:#78909c;text-transform:uppercase;letter-spacing:.04em">Lynch Mix:</span>
+    {_dist_chips}
+  </div>
   <div class="mm-grid">{"".join(mm_cards)}</div>
   {risks_html}
 </div>"""
@@ -7809,6 +8790,30 @@ function showMacroDetail(el, id) {
                 meta_str = "  ·  ".join(meta_parts)
 
                 rationale3 = pp.get("rationale", "") or brief
+                # A9: Lynch category badge in the expandable agent pick card
+                _lb3 = _lynch_badge(s2.get("lynchCategory"))
+                # Business synopsis + competitors block for specialist cards
+                _sp_syn   = pp.get("business_synopsis", "")
+                _sp_ind   = pp.get("industry", "") or s2.get("industry", "")
+                _sp_comp  = pp.get("key_competitors", "")
+                _sp_biz   = ""
+                if _sp_syn or _sp_ind or _sp_comp:
+                    _sp_meta = "  ·  ".join(x for x in [
+                        (f"<b>Industry:</b> {_sp_ind}" if _sp_ind else ""),
+                        (f"<b>vs:</b> {_sp_comp}"      if _sp_comp else ""),
+                    ] if x)
+                    _sp_syn_div  = (f'<div style="font-size:.68rem;color:#b0bec5;line-height:1.5">'
+                                    f'{_sp_syn}</div>') if _sp_syn else ""
+                    _sp_meta_div = (f'<div style="font-size:.65rem;color:#78909c;margin-top:3px">'
+                                    f'{_sp_meta}</div>') if _sp_meta else ""
+                    _sp_biz = (
+                        f'<div style="background:#12122088;border-left:2px solid #42a5f555;'
+                        f'border-radius:3px;padding:5px 8px;margin-top:6px">'
+                        f'<div style="font-size:.60rem;font-weight:700;color:#42a5f5;text-transform:uppercase;'
+                        f'letter-spacing:.05em;margin-bottom:3px">🏢 About</div>'
+                        f'{_sp_syn_div}{_sp_meta_div}'
+                        f'</div>'
+                    )
                 pick_cards_html.append(f"""
 <div class="agent-pick-card xcard" style="border-left-color:#{color_hex}" onclick="toggleExpand(this)">
   <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -7819,8 +8824,10 @@ function showMacroDetail(el, id) {
     <span style="font-size:.63rem;background:{conv_color};color:#fff;border-radius:3px;padding:1px 5px;white-space:nowrap">{conv2}</span>
   </div>
   <div class="ap-co">{pp.get("company", s2.get("name", tk))[:34]}</div>
+  {f'<div style="margin-top:4px">{_lb3}</div>' if _lb3 else ''}
   <div class="ap-rationale">{rationale3[:220]}</div>
   <div class="xbody" style="display:none">
+    {_sp_biz}
     <div class="ap-thesis" style="margin-top:6px">{brief}</div>
     <div class="ap-metric" style="margin-top:6px">{meta_str}</div>
   </div>
@@ -8077,22 +9084,30 @@ function showMacroDetail(el, id) {
                 pass
 
         # ── Build per-agent scorecard ─────────────────────────────────────
-        _agent_stats = {}  # src → {picks, rets, wins, best_t, best_r}
+        _agent_stats = {}  # src → {picks, rets, days_list, wins, best_t, best_r, worst_t, worst_r}
         for r in ai_perf_rows:
             src = r["_src"]
             if src not in _agent_stats:
-                _agent_stats[src] = {"picks": 0, "rets": [], "wins": 0,
-                                     "best_t": "—", "best_r": None}
+                _agent_stats[src] = {"picks": 0, "rets": [], "days_list": [],
+                                     "wins": 0, "best_t": "—", "best_r": None,
+                                     "worst_t": "—", "worst_r": None}
             st = _agent_stats[src]
             st["picks"] += 1
             ret = r.get("Return")
+            days_val = r.get("Days")
             if ret is not None:
                 st["rets"].append(ret)
+                if days_val:
+                    try: st["days_list"].append(float(days_val))
+                    except Exception: pass
                 if ret > 0:
                     st["wins"] += 1
                 if st["best_r"] is None or ret > st["best_r"]:
                     st["best_r"] = ret
                     st["best_t"] = r["Ticker"]
+                if st["worst_r"] is None or ret < st["worst_r"]:
+                    st["worst_r"] = ret
+                    st["worst_t"] = r["Ticker"]
 
         scorecard_tiles = []
         # Sort: judge first, then specialists in fixed order, then any unknown
@@ -8102,25 +9117,46 @@ function showMacroDetail(el, id) {
         )
         for src in _sorted_srcs:
             st = _agent_stats[src]
-            n     = st["picks"]
-            wins  = st["wins"]
-            rets  = st["rets"]
-            avg_r = sum(rets)/len(rets) if rets else None
-            win_r = wins/n if n else None
-            best_r = st["best_r"]
-            best_t = st["best_t"]
-            name  = _AGENT_ICONS.get(src, src)
-            # Card colour: green if winning >50%, red if not
-            card_cls = "win" if win_r and win_r > 0.5 else ("loss" if win_r is not None else "")
-            avg_color = "#a5d6a7" if avg_r and avg_r > 0 else "#ef9a9a"
+            n          = st["picks"]
+            wins       = st["wins"]
+            rets       = st["rets"]
+            days_list  = st["days_list"]
+            avg_r      = sum(rets)/len(rets) if rets else None
+            win_r      = wins/n if n else None
+            best_r     = st["best_r"]
+            best_t     = st["best_t"]
+            worst_r    = st["worst_r"]
+            worst_t    = st["worst_t"]
+            name       = _AGENT_ICONS.get(src, src)
+            # Sharpe: annualised on raw returns (no SPY subtraction here — relative perf within scorecard)
+            sharpe_val = None
+            if len(rets) >= 3 and avg_r is not None:
+                _var = sum((x - avg_r)**2 for x in rets) / (len(rets) - 1)
+                _std = _var ** 0.5
+                if _std > 0:
+                    _avg_days = sum(days_list) / len(days_list) if days_list else 30
+                    _periods  = max(1.0, 252.0 / max(_avg_days, 1.0))
+                    sharpe_val = (avg_r / _std) * (_periods ** 0.5)
+            # Card colour: green if Sharpe > 0, red if < 0, neutral otherwise
+            card_cls = ("win" if sharpe_val and sharpe_val > 0 else
+                        "loss" if sharpe_val is not None and sharpe_val <= 0 else
+                        ("win" if win_r and win_r > 0.5 else ""))
+            avg_color   = "#a5d6a7" if avg_r and avg_r > 0 else "#ef9a9a"
+            sharpe_str  = f"{sharpe_val:.2f}" if sharpe_val is not None else "—"
+            sharpe_color = "#a5d6a7" if sharpe_val and sharpe_val > 0 else "#ef9a9a"
+            worst_html = (f'<br>Worst: <b>{worst_t}</b> '
+                          f'<span style="color:#ef9a9a">{_pct(worst_r)}</span>'
+                          if worst_r is not None and worst_r < 0 else "")
             scorecard_tiles.append(f"""
 <div class="agent-card {card_cls}">
   <div class="ag-name">{name}</div>
   <div class="ag-stat">
     <b>{n}</b> picks &nbsp;·&nbsp;
     <b style="color:{'#a5d6a7' if win_r and win_r>0.5 else '#ef9a9a'}">{f"{win_r*100:.0f}%" if win_r is not None else "—"}</b> win rate<br>
-    Avg: <b style="color:{avg_color}">{_pct(avg_r) if avg_r is not None else "—"}</b><br>
+    Avg: <b style="color:{avg_color}">{_pct(avg_r) if avg_r is not None else "—"}</b>
+    &nbsp;·&nbsp; Sharpe: <b style="color:{sharpe_color}">{sharpe_str}</b><br>
     Best: <b>{best_t}</b> {f'<span style="color:#a5d6a7">{_pct(best_r)}</span>' if best_r else ''}
+    {worst_html}
   </div>
 </div>""")
 
@@ -8129,6 +9165,73 @@ function showMacroDetail(el, id) {
             scorecard_html = f"""
 <h2 style="margin:0 0 8px;font-size:.75rem">AGENT SCORECARD</h2>
 <div class="agent-grid">{"".join(scorecard_tiles)}</div>"""
+
+        # ── B8: Agent Leaderboard (SPY-adjusted attribution, uses compute_agent_performance) ──
+        leaderboard_html = ""
+        if agent_perf:
+            _lb_hdrs = ["Agent", "Picks", "Avg Ret", "SPY Ret", "Alpha", "Sharpe",
+                        "Win %", "90d Hit %", "Med Hold", "Best Pick", "Worst Pick"]
+            _lb_rows = []
+            _lb_src_order = (
+                [s for s in _AGENT_ORDER if s in agent_perf] +
+                [s for s in agent_perf if s not in _AGENT_ORDER]
+            )
+            for _src in _lb_src_order:
+                _st = agent_perf[_src]
+                _n      = _st.get("n_picks", 0)
+                _alpha  = _st.get("alpha")
+                _sharpe = _st.get("sharpe")
+                _avg_r  = _st.get("avg_ret")
+                _avg_spy = _st.get("avg_spy")
+                _win    = _st.get("win_rate")
+                _h90    = _st.get("hit_90d")
+                _med    = _st.get("med_hold_days")
+                _b_t    = _st.get("best_ticker", "—")
+                _b_r    = _st.get("best_ret")
+                _w_t    = _st.get("worst_ticker", "—")
+                _w_r    = _st.get("worst_ret")
+                _name   = _AGENT_ICONS.get(_src, _src)
+                # Row colour: alpha-driven
+                if _alpha is not None and _alpha > 0.005:
+                    _row_cls = ' class="g"'
+                elif _alpha is not None and _alpha < -0.005:
+                    _row_cls = ' class="r"'
+                else:
+                    _row_cls = ""
+                def _lb_pct(v):
+                    return f"{v*100:+.1f}%" if v is not None else "—"
+                def _lb_f(v, fmt="{:.2f}"):
+                    return fmt.format(v) if v is not None else "—"
+                _best_str  = (f"{_b_t} {_lb_pct(_b_r)}" if _b_r is not None else "—")
+                _worst_str = (f"{_w_t} {_lb_pct(_w_r)}" if _w_r is not None else "—")
+                _alpha_color  = "#a5d6a7" if (_alpha or 0) > 0 else "#ef9a9a"
+                _sharpe_color = "#a5d6a7" if (_sharpe or 0) > 0 else "#ef9a9a"
+                _cells = [
+                    f'<td><b>{_name}</b></td>',
+                    f'<td style="text-align:center">{_n}</td>',
+                    f'<td>{_lb_pct(_avg_r)}</td>',
+                    f'<td>{_lb_pct(_avg_spy)}</td>',
+                    f'<td style="color:{_alpha_color};font-weight:700">{_lb_pct(_alpha)}</td>',
+                    f'<td style="color:{_sharpe_color};font-weight:700">{_lb_f(_sharpe)}</td>',
+                    f'<td>{_lb_pct(_win)}</td>',
+                    f'<td>{_lb_pct(_h90) if _h90 is not None else "—"}</td>',
+                    f'<td>{f"{int(_med)}d" if _med else "—"}</td>',
+                    f'<td style="color:#a5d6a7;font-size:.72rem">{_best_str}</td>',
+                    f'<td style="color:#ef9a9a;font-size:.72rem">{_worst_str}</td>',
+                ]
+                _lb_rows.append(f"<tr{_row_cls}>{''.join(_cells)}</tr>")
+            if _lb_rows:
+                _th = "".join(f'<th onclick="sortTable(this)">{h}</th>' for h in _lb_hdrs)
+                leaderboard_html = f"""
+<h2 style="margin:14px 0 6px;font-size:.75rem">🏆 AGENT LEADERBOARD (SPY-adjusted, all-time)</h2>
+<p style="font-size:.7rem;color:#666;margin-bottom:8px">Alpha = agent avg return minus SPY avg return over same hold periods.
+Sharpe on alpha series. Click any column header to sort.</p>
+<div class="tbl-wrap">
+  <table id="lb-table">
+    <thead><tr>{_th}</tr></thead>
+    <tbody>{"".join(_lb_rows)}</tbody>
+  </table>
+</div>"""
 
         # ── Picks table (sorted: judge first, then by agent, then date) ───
         def _sort_key(r):
@@ -8244,8 +9347,120 @@ function showMacroDetail(el, id) {
                     cells.append(f"<td>{v if v is not None else '—'}</td>")
             port_body.append(f"<tr{alt}>{''.join(cells)}</tr>")
 
+        # ── C6: Portfolio risk dashboard ───────────────────────────────────
+        risk_dash_html = ""
+        if portfolio and isinstance(portfolio.get("holdings"), list) and portfolio["holdings"]:
+            import math as _math
+            _risk_metrics = []  # per-holding (ticker, weight, vol_60d, beta, curr_dd)
+
+            # Ensure SPY in _hist_price_cache (for beta computation)
+            if "SPY" not in _hist_price_cache:
+                fetch_price_on_date("SPY",
+                                    (datetime.date.today() - datetime.timedelta(days=1)).isoformat())
+            # Ensure all holding tickers are cached (for vol/beta)
+            for _ch in portfolio["holdings"]:
+                _ct = _ch.get("ticker","")
+                if _ct and _ct not in _hist_price_cache:
+                    fetch_price_on_date(_ct,
+                                        (datetime.date.today() - datetime.timedelta(days=1)).isoformat())
+
+            # Build SPY daily return series from _hist_price_cache (if available)
+            _spy_prices_60 = _hist_price_cache.get("SPY", {})
+            _spy_sorted = sorted(_spy_prices_60.items())[-65:] if _spy_prices_60 else []
+            _spy_rets = []
+            for _i in range(1, len(_spy_sorted)):
+                _p0, _p1 = _spy_sorted[_i-1][1], _spy_sorted[_i][1]
+                if _p0 > 0 and _p1 > 0:
+                    _spy_rets.append((_p1 - _p0) / _p0)
+            _spy_var  = (sum((_r - (sum(_spy_rets)/len(_spy_rets)))**2 for _r in _spy_rets)
+                         / (len(_spy_rets) - 1)) if len(_spy_rets) > 2 else None
+
+            total_w = max(total_mkt, 1)
+            for h in portfolio["holdings"]:
+                _ht   = h.get("ticker","")
+                _hcurr = stocks.get(_ht, {}).get("price") or h.get("entry_price") or 0
+                _hentry = float(h.get("entry_price") or 0)
+                _wt   = (_hcurr * int(h.get("shares", 0))) / total_w
+
+                # 60d price history for this holding
+                _phist = _hist_price_cache.get(_ht, {})
+                _psorted = sorted(_phist.items())[-65:] if _phist else []
+                _prets = []
+                for _i in range(1, len(_psorted)):
+                    _p0, _p1 = _psorted[_i-1][1], _psorted[_i][1]
+                    if _p0 > 0 and _p1 > 0:
+                        _prets.append((_p1 - _p0) / _p0)
+
+                _vol_60 = None
+                _beta   = None
+                if len(_prets) > 5:
+                    _pm = sum(_prets) / len(_prets)
+                    _vol_60 = (_math.sqrt(sum((_r - _pm)**2 for _r in _prets) /
+                                          (len(_prets) - 1)) * _math.sqrt(252))
+                    # Beta = cov(stock, spy) / var(spy)
+                    if _spy_var and len(_spy_rets) >= len(_prets):
+                        _n = min(len(_prets), len(_spy_rets))
+                        _sp = _spy_rets[-_n:]
+                        _st = _prets[-_n:]
+                        _spm = sum(_sp) / _n
+                        _stm = sum(_st) / _n
+                        _cov = sum((_sp[_i2] - _spm) * (_st[_i2] - _stm) for _i2 in range(_n)) / (_n - 1)
+                        _beta = _cov / _spy_var if _spy_var else None
+
+                _curr_dd = ((_hcurr - _hentry) / _hentry) if _hentry > 0 and _hcurr > 0 else None
+                _risk_metrics.append({"t": _ht, "w": _wt, "vol": _vol_60, "beta": _beta, "dd": _curr_dd})
+
+            # Portfolio-level aggregations (weight-averaged)
+            _port_vol_items  = [(_m["vol"],  _m["w"]) for _m in _risk_metrics if _m["vol"]  is not None]
+            _port_beta_items = [(_m["beta"], _m["w"]) for _m in _risk_metrics if _m["beta"] is not None]
+            _wt_sum_v = sum(_w for _, _w in _port_vol_items)
+            _wt_sum_b = sum(_w for _, _w in _port_beta_items)
+            _port_vol  = (sum(_v * _w for _v, _w in _port_vol_items)  / _wt_sum_v) if _wt_sum_v > 0 else None
+            _port_beta = (sum(_b * _w for _b, _w in _port_beta_items) / _wt_sum_b) if _wt_sum_b > 0 else None
+
+            # Max drawdown: worst current holding return (proxy — true NAV DD needs full history)
+            _all_dds = [_m["dd"] for _m in _risk_metrics if _m["dd"] is not None]
+            _max_dd_proxy = min(_all_dds) if _all_dds else None  # most negative = worst DD
+
+            def _risk_color(v, good_thresh, bad_thresh, invert=False):
+                if v is None: return "#888"
+                ok = v <= good_thresh if not invert else v >= good_thresh
+                bad = v >= bad_thresh if not invert else v <= bad_thresh
+                return "#a5d6a7" if ok else ("#ef9a9a" if bad else "#ffe082")
+
+            _vol_str  = f"{_port_vol*100:.1f}%" if _port_vol is not None else "—"
+            _beta_str = f"{_port_beta:.2f}" if _port_beta is not None else "—"
+            _dd_str   = f"{_max_dd_proxy:+.1%}" if _max_dd_proxy is not None else "—"
+            _vol_col  = _risk_color(_port_vol, 0.15, 0.25)  # green <15%, red >25%
+            _beta_col = _risk_color(_port_beta, 1.0, 1.4)   # green <1.0, red >1.4
+            _dd_col   = _risk_color(_max_dd_proxy, -0.15, -0.30)  # green >-15%, red <-30%
+
+            risk_dash_html = f"""
+<div style="background:#1a1a2e;border:1px solid #2a2a3e;border-radius:6px;
+            padding:12px 16px;margin-bottom:12px">
+  <div style="font-size:.72rem;font-weight:700;color:#90caf9;
+              text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">
+    ⚠️ C6 Portfolio Risk Dashboard (60-day, proxy)
+  </div>
+  <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:.8rem">
+    <span>📉 <b>Worst Holding DD:</b>
+      <b style="color:{_dd_col}">{_dd_str}</b>
+      <small style="color:#666">(proxy for max-DD)</small>
+    </span>
+    <span>〰️ <b>Port. Vol (ann.):</b>
+      <b style="color:{_vol_col}">{_vol_str}</b>
+      <small style="color:#666">wt-avg 60d</small>
+    </span>
+    <span>📊 <b>Beta vs SPY:</b>
+      <b style="color:{_beta_col}">{_beta_str}</b>
+      <small style="color:#666">wt-avg 60d</small>
+    </span>
+  </div>
+</div>"""
+
         port_table = f"""
 <h2 style="margin:14px 0 8px;font-size:.75rem">AI PORTFOLIO — PAPER TRADING</h2>
+{risk_dash_html}
 {summary_bar}
 <div class="tbl-wrap">
   <table>
@@ -8258,6 +9473,7 @@ function showMacroDetail(el, id) {
 <section id="perf">
   <div class="section-title">📈 Performance Tracking</div>
   {scorecard_html}
+  {leaderboard_html}
   {ai_table}
   {port_table}
 </section>"""
@@ -8328,6 +9544,578 @@ function showMacroDetail(el, id) {
 
 
 # ─────────────────────────────────────────────
+# B5: BACKTEST CLI
+# ─────────────────────────────────────────────
+
+def backtest_picks(cutoff_date_str: str) -> None:
+    """B5: Walk-forward backtest.
+    For every AI pick logged BEFORE cutoff_date_str, fetch 30/90/180d returns
+    using FMP historical prices. Emit per-pick and per-agent CSV report.
+
+    Usage: python FMP_stock_screener.py --backtest 2026-01-01
+    """
+    import csv as _csv
+    try:
+        cutoff_dt = datetime.date.fromisoformat(cutoff_date_str)
+    except ValueError:
+        print(f"  ❌ Invalid date: {cutoff_date_str} (use YYYY-MM-DD)")
+        return
+
+    if not os.path.exists(AI_PICKS_LOG):
+        print(f"  ❌ AI picks log not found: {AI_PICKS_LOG}")
+        return
+
+    print(f"\n{'='*65}")
+    print(f"  📊 BACKTEST — picks before {cutoff_date_str}")
+    print(f"{'='*65}")
+
+    # ── Read picks ──────────────────────────────────────────────────────
+    picks = []
+    with open(AI_PICKS_LOG, "r", encoding="utf-8") as _f:
+        for row in _csv.DictReader(_f):
+            try:
+                d = datetime.date.fromisoformat(row["date"])
+            except Exception:
+                continue
+            if d >= cutoff_dt:
+                continue
+            try:
+                entry = float(row.get("entry_price") or 0)
+            except (ValueError, TypeError):
+                entry = 0
+            if entry <= 0:
+                continue
+            picks.append({
+                "date":     row["date"],
+                "source":   row.get("source", ""),
+                "ticker":   row.get("ticker", ""),
+                "company":  row.get("company", ""),
+                "entry":    entry,
+                "prompt_v": row.get("prompt_version", ""),
+            })
+
+    if not picks:
+        print(f"  ⚠️  No picks with entry price before {cutoff_date_str}")
+        return
+
+    print(f"  📦 {len(picks)} picks to evaluate (with valid entry price)")
+
+    # ── Fetch SPY history for benchmark ─────────────────────────────────
+    earliest = min(p["date"] for p in picks)
+    spy_hist = fetch_spy_history(earliest)
+    spy_vals = sorted(spy_hist.items())  # [(date_str, price), ...]
+
+    def _spy_ret_at(entry_date_str: str, target_date_str: str) -> "float | None":
+        entry_p = spy_hist.get(entry_date_str)
+        if not entry_p:
+            # forward-search entry
+            try:
+                ed = datetime.date.fromisoformat(entry_date_str)
+            except ValueError:
+                return None
+            for delta in range(6):
+                c = (ed + datetime.timedelta(days=delta)).isoformat()
+                entry_p = spy_hist.get(c)
+                if entry_p:
+                    break
+        if not entry_p:
+            return None
+        target_p = None
+        try:
+            td = datetime.date.fromisoformat(target_date_str)
+        except ValueError:
+            return None
+        for delta in range(6):
+            c = (td + datetime.timedelta(days=delta)).isoformat()
+            target_p = spy_hist.get(c)
+            if target_p:
+                break
+        if not target_p:
+            return None
+        return (target_p - entry_p) / entry_p
+
+    # ── Evaluate each pick ───────────────────────────────────────────────
+    print(f"  ⏱  Fetching historical prices (may take a while for large logs)...")
+    result_rows = []
+    for i, p in enumerate(picks):
+        t        = p["ticker"]
+        entry    = p["entry"]
+        edate    = p["date"]
+
+        if i > 0 and i % 50 == 0:
+            print(f"    ... {i}/{len(picks)} evaluated")
+
+        rets = {}
+        for horizon in (30, 90, 180):
+            ret = _checkpoint_ret_b1(t, entry, edate, horizon, horizon + 1)
+            spy_ret = None
+            if ret is not None:
+                try:
+                    tgt = (datetime.date.fromisoformat(edate) +
+                           datetime.timedelta(days=horizon)).isoformat()
+                    spy_ret = _spy_ret_at(edate, tgt)
+                except Exception:
+                    pass
+            rets[f"ret_{horizon}d"]    = ret
+            rets[f"spy_{horizon}d"]    = spy_ret
+            rets[f"alpha_{horizon}d"]  = (ret - spy_ret) if ret is not None and spy_ret is not None else None
+
+        result_rows.append({
+            **p,
+            **rets,
+        })
+
+    # ── Per-agent summary ────────────────────────────────────────────────
+    _agent_bt: dict = {}
+    for r in result_rows:
+        src = r["source"]
+        if src not in _agent_bt:
+            _agent_bt[src] = {"n": 0, "alpha_30": [], "alpha_90": [], "alpha_180": []}
+        _agent_bt[src]["n"] += 1
+        for h in (30, 90, 180):
+            a = r.get(f"alpha_{h}d")
+            if a is not None:
+                _agent_bt[src][f"alpha_{h}"].append(a)
+
+    # ── Write per-pick CSV ───────────────────────────────────────────────
+    pick_csv = f"fmp_backtest_{cutoff_date_str}.csv"
+    pick_fields = ["date", "source", "ticker", "company", "entry", "prompt_v",
+                   "ret_30d", "spy_30d", "alpha_30d",
+                   "ret_90d", "spy_90d", "alpha_90d",
+                   "ret_180d", "spy_180d", "alpha_180d"]
+    with open(pick_csv, "w", newline="", encoding="utf-8") as _f:
+        w = _csv.DictWriter(_f, fieldnames=pick_fields, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(result_rows)
+    print(f"\n  📄 Per-pick results → {pick_csv}")
+
+    # ── Write per-agent summary CSV ──────────────────────────────────────
+    agent_csv = f"fmp_backtest_{cutoff_date_str}_by_agent.csv"
+    agent_fields = ["source", "n_picks",
+                    "avg_alpha_30d", "avg_alpha_90d", "avg_alpha_180d",
+                    "n_with_30d", "n_with_90d", "n_with_180d"]
+    agent_rows = []
+    for src, st in sorted(_agent_bt.items()):
+        def _mavg(lst):
+            return round(sum(lst) / len(lst) * 100, 2) if lst else None
+        agent_rows.append({
+            "source":       src,
+            "n_picks":      st["n"],
+            "avg_alpha_30d":  _mavg(st["alpha_30"]),
+            "avg_alpha_90d":  _mavg(st["alpha_90"]),
+            "avg_alpha_180d": _mavg(st["alpha_180"]),
+            "n_with_30d":    len(st["alpha_30"]),
+            "n_with_90d":    len(st["alpha_90"]),
+            "n_with_180d":   len(st["alpha_180"]),
+        })
+    with open(agent_csv, "w", newline="", encoding="utf-8") as _f:
+        w = _csv.DictWriter(_f, fieldnames=agent_fields)
+        w.writeheader()
+        w.writerows(agent_rows)
+    print(f"  📄 Per-agent summary → {agent_csv}")
+
+    # ── Print quick console summary ──────────────────────────────────────
+    print(f"\n  📊 PER-AGENT ALPHA (vs SPY, % basis):")
+    print(f"  {'Agent':<30} {'N':>4}  {'30d α':>7}  {'90d α':>7}  {'180d α':>7}")
+    print(f"  {'-'*60}")
+    for r2 in sorted(agent_rows, key=lambda x: (x["avg_alpha_90d"] or -999), reverse=True):
+        def _fs(v):
+            return f"{v:+.2f}%" if v is not None else "  —"
+        print(f"  {r2['source']:<30} {r2['n_picks']:>4}  "
+              f"{_fs(r2['avg_alpha_30d']):>7}  {_fs(r2['avg_alpha_90d']):>7}  "
+              f"{_fs(r2['avg_alpha_180d']):>7}")
+    print(f"\n  ✅ Backtest complete — {len(result_rows)} picks evaluated")
+    print(f"{'='*65}\n")
+
+
+# ─────────────────────────────────────────────
+# C4: BACKTEST REPLAY ENGINE
+# ─────────────────────────────────────────────
+
+def backtest_replay(from_date_str: str = None) -> None:
+    """C4: Full walk-forward portfolio replay.
+
+    For each day in the AI picks log, simulates the portfolio as if the PM
+    ran on that date using the picks available at that time and historical prices.
+    Emits a cumulative NAV curve, Sharpe vs SPY, and an HTML report.
+
+    Usage: python FMP_stock_screener.py --replay [YYYY-MM-DD]
+    (from_date_str defaults to the earliest date in the AI picks log)
+    """
+    import csv as _csv, math as _math
+
+    print(f"\n{'='*65}")
+    print(f"  🔄 C4 BACKTEST REPLAY ENGINE")
+    print(f"{'='*65}")
+
+    if not os.path.exists(AI_PICKS_LOG):
+        print(f"  ❌ AI picks log not found: {AI_PICKS_LOG}")
+        return
+
+    # ── 1. Read picks grouped by date ──────────────────────────────────
+    picks_by_date: dict = {}   # date_str → list of {ticker, source, entry_price}
+    all_tickers = set()
+    with open(AI_PICKS_LOG, "r", encoding="utf-8") as _f:
+        for row in _csv.DictReader(_f):
+            d   = row.get("date", "")
+            t   = row.get("ticker", "")
+            src = row.get("source", "")
+            try:
+                ep = float(row.get("entry_price") or 0)
+            except (ValueError, TypeError):
+                ep = 0
+            if not d or not t or ep <= 0:
+                continue
+            picks_by_date.setdefault(d, []).append({
+                "ticker": t, "source": src, "entry_price": ep,
+                "company": row.get("company", ""),
+            })
+            all_tickers.add(t)
+
+    if not picks_by_date:
+        print("  ⚠️  No picks with valid entry prices found — nothing to replay.")
+        return
+
+    all_dates = sorted(picks_by_date.keys())
+    start_date_str = from_date_str or all_dates[0]
+    try:
+        start_dt = datetime.date.fromisoformat(start_date_str)
+    except ValueError:
+        print(f"  ❌ Invalid from-date: {start_date_str}")
+        return
+
+    replay_dates = [d for d in all_dates if d >= start_date_str]
+    if not replay_dates:
+        print(f"  ⚠️  No picks on or after {start_date_str}")
+        return
+
+    print(f"  📦 {len(replay_dates)} pick dates from {replay_dates[0]} to {replay_dates[-1]}")
+    print(f"  🌐 Pre-fetching price history for {len(all_tickers)} tickers + SPY...")
+
+    # ── 2. Pre-fetch price histories ────────────────────────────────────
+    # SPY first
+    if "SPY" not in _hist_price_cache:
+        fetch_price_on_date("SPY", (datetime.date.today() - datetime.timedelta(days=1)).isoformat())
+    # All tickers (batch with small throttle to avoid rate limits)
+    for i, t in enumerate(sorted(all_tickers)):
+        if t not in _hist_price_cache:
+            fetch_price_on_date(t, (datetime.date.today() - datetime.timedelta(days=1)).isoformat())
+        if i > 0 and i % 50 == 0:
+            print(f"    ... {i}/{len(all_tickers)} tickers cached")
+
+    spy_hist = _hist_price_cache.get("SPY", {})
+
+    # ── 3. Simulate portfolio ────────────────────────────────────────────
+    # Simple equal-weight, rebalance on each pick date by adding up to 10 positions
+    # (new picks replace old ones if max positions reached)
+    REPLAY_INITIAL_CASH = 100_000.0
+    REPLAY_MAX_POS      = 10
+    REPLAY_POS_SIZE     = REPLAY_INITIAL_CASH / REPLAY_MAX_POS   # $10K per slot
+
+    # holdings: ticker → {shares, entry_price, entry_date}
+    holdings: dict = {}
+    cash = REPLAY_INITIAL_CASH
+
+    # NAV timeline: list of (date_str, nav, spy_indexed)
+    nav_timeline = []
+    spy_start_price = None
+
+    def _price_on(ticker: str, date_str: str) -> "float | None":
+        prices = _hist_price_cache.get(ticker, {})
+        try:
+            td = datetime.date.fromisoformat(date_str)
+        except ValueError:
+            return None
+        for delta in range(6):
+            c = (td + datetime.timedelta(days=delta)).isoformat()
+            p = prices.get(c)
+            if p and p > 0:
+                return p
+        return None
+
+    def _nav_on(date_str: str) -> float:
+        total = cash
+        for t_h, h in holdings.items():
+            p = _price_on(t_h, date_str) or h["entry_price"]
+            total += h["shares"] * p
+        return total
+
+    def _spy_idx(date_str: str) -> "float | None":
+        nonlocal spy_start_price
+        p = _price_on("SPY", date_str)
+        if p is None:
+            return None
+        if spy_start_price is None:
+            spy_start_price = p
+        return (p / spy_start_price) * REPLAY_INITIAL_CASH
+
+    today_str = datetime.date.today().isoformat()
+
+    for rdate in replay_dates:
+        # ─ Add new picks from this date as new positions ─────────────────
+        new_picks = picks_by_date.get(rdate, [])
+        # Deduplicate: only add tickers not already held
+        for pick in new_picks:
+            t = pick["ticker"]
+            if t in holdings:
+                continue
+            if len(holdings) >= REPLAY_MAX_POS:
+                break
+            entry_price = _price_on(t, rdate) or pick["entry_price"]
+            if entry_price <= 0:
+                continue
+            invest = min(REPLAY_POS_SIZE, cash)
+            if invest < entry_price:
+                continue
+            shares = max(1, int(invest / entry_price))
+            cost   = shares * entry_price
+            cash  -= cost
+            holdings[t] = {
+                "shares":       shares,
+                "entry_price":  entry_price,
+                "entry_date":   rdate,
+                "source":       pick["source"],
+            }
+
+        # ─ Record NAV and SPY on this date ───────────────────────────────
+        nav = _nav_on(rdate)
+        spy = _spy_idx(rdate)
+        nav_timeline.append({"date": rdate, "nav": round(nav, 2),
+                              "spy_indexed": round(spy, 2) if spy else None})
+
+    # Final snapshot (today)
+    nav_final = _nav_on(today_str)
+    spy_final = _spy_idx(today_str)
+    nav_timeline.append({"date": today_str, "nav": round(nav_final, 2),
+                          "spy_indexed": round(spy_final, 2) if spy_final else None})
+
+    # ── 4. Compute metrics ───────────────────────────────────────────────
+    navs = [r["nav"] for r in nav_timeline]
+
+    # Daily returns
+    port_rets = [(navs[i] - navs[i-1]) / navs[i-1] for i in range(1, len(navs))]
+    spy_navs  = [r["spy_indexed"] or REPLAY_INITIAL_CASH for r in nav_timeline]
+    spy_rets  = [(spy_navs[i] - spy_navs[i-1]) / spy_navs[i-1] for i in range(1, len(spy_navs))]
+
+    def _annualised_sharpe(rets: list) -> "float | None":
+        if len(rets) < 5:
+            return None
+        avg = sum(rets) / len(rets)
+        std = (_math.sqrt(sum((r - avg)**2 for r in rets) / (len(rets) - 1))
+               if len(rets) > 1 else 0)
+        return (avg / std * _math.sqrt(252)) if std > 0 else None
+
+    def _max_drawdown(navs: list) -> float:
+        peak = navs[0]
+        max_dd = 0.0
+        for n in navs:
+            if n > peak:
+                peak = n
+            dd = (n - peak) / peak
+            if dd < max_dd:
+                max_dd = dd
+        return max_dd
+
+    total_ret    = (navs[-1] - navs[0]) / navs[0] if navs[0] > 0 else 0
+    spy_total    = (spy_navs[-1] - spy_navs[0]) / spy_navs[0] if spy_navs[0] > 0 else 0
+    alpha_total  = total_ret - spy_total
+    port_sharpe  = _annualised_sharpe(port_rets)
+    spy_sharpe   = _annualised_sharpe(spy_rets)
+    max_dd       = _max_drawdown(navs)
+    n_days       = len(nav_timeline)
+    ann_factor   = 252 / max(n_days, 1)
+    port_ann     = ((navs[-1] / navs[0]) ** ann_factor - 1) if navs[0] > 0 else 0
+    spy_ann      = ((spy_navs[-1] / spy_navs[0]) ** ann_factor - 1) if spy_navs[0] > 0 else 0
+
+    # ── 5. Write NAV CSV ─────────────────────────────────────────────────
+    nav_csv = f"fmp_replay_{start_date_str}_nav.csv"
+    with open(nav_csv, "w", newline="", encoding="utf-8") as _f:
+        w = _csv.DictWriter(_f, fieldnames=["date", "nav", "spy_indexed"])
+        w.writeheader()
+        w.writerows(nav_timeline)
+    print(f"\n  📄 NAV curve → {nav_csv}")
+
+    # ── 6. Write HTML report ─────────────────────────────────────────────
+    def _pct_s(v):
+        return f"{v*100:+.1f}%" if v is not None else "—"
+
+    chart_labels  = [r["date"]        for r in nav_timeline]
+    chart_port    = [r["nav"]          for r in nav_timeline]
+    chart_spy     = [r["spy_indexed"]  for r in nav_timeline]
+
+    import json as _json
+    labels_json = _json.dumps(chart_labels)
+    port_json   = _json.dumps(chart_port)
+    spy_json    = _json.dumps([x if x else "null" for x in chart_spy])
+
+    # Current holdings table
+    hold_rows = ""
+    for t_h, h in sorted(holdings.items()):
+        curr_p = _price_on(t_h, today_str) or h["entry_price"]
+        ret_h  = (curr_p - h["entry_price"]) / h["entry_price"] if h["entry_price"] > 0 else 0
+        clr    = "#a5d6a7" if ret_h > 0 else "#ef9a9a"
+        hold_rows += (f'<tr><td>{t_h}</td><td>{h["source"]}</td>'
+                      f'<td>{h["entry_date"]}</td>'
+                      f'<td>${h["entry_price"]:.2f}</td><td>${curr_p:.2f}</td>'
+                      f'<td style="color:{clr};font-weight:700">{ret_h:+.1%}</td>'
+                      f'<td>{h["shares"]}</td></tr>\n')
+
+    html_report = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FMP Replay — {start_date_str}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       background: #0f1117; color: #e0e0e0; font-size: 14px; padding: 16px; }}
+h1 {{ color: #90caf9; margin-bottom: 4px; font-size: 1.1rem; }}
+h2 {{ color: #90caf9; font-size: .85rem; text-transform: uppercase;
+     letter-spacing: .05em; margin: 18px 0 8px; }}
+.stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+              gap: 10px; margin-bottom: 20px; }}
+.stat-card {{ background: #1a1a2e; border-radius: 6px; padding: 12px 14px; }}
+.stat-label {{ font-size: .7rem; color: #666; text-transform: uppercase; letter-spacing: .04em; }}
+.stat-value {{ font-size: 1.1rem; font-weight: 700; margin-top: 3px; }}
+.g {{ color: #a5d6a7; }} .r {{ color: #ef9a9a; }} .n {{ color: #e0e0e0; }}
+canvas {{ max-height: 380px; }}
+table {{ border-collapse: collapse; width: 100%; font-size: .78rem; white-space: nowrap; }}
+th {{ background: #1a237e; color: #fff; padding: 6px 8px; text-align: left; }}
+td {{ padding: 5px 8px; border-bottom: 1px solid #2a2a2a; }}
+.tbl-wrap {{ overflow-x: auto; }}
+</style>
+</head>
+<body>
+<h1>🔄 FMP Backtest Replay — Portfolio NAV Curve</h1>
+<p style="color:#666;font-size:.78rem;margin-bottom:16px">
+  Walk-forward simulation · From {start_date_str} to {today_str}
+  · {len(replay_dates)} pick dates · {len(holdings)} current positions
+</p>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Portfolio Total Return</div>
+    <div class="stat-value {'g' if total_ret > 0 else 'r'}">{_pct_s(total_ret)}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">SPY Total Return</div>
+    <div class="stat-value {'g' if spy_total > 0 else 'r'}">{_pct_s(spy_total)}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Alpha vs SPY</div>
+    <div class="stat-value {'g' if alpha_total > 0 else 'r'}">{_pct_s(alpha_total)}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Port. Ann. Return</div>
+    <div class="stat-value {'g' if port_ann > 0 else 'r'}">{_pct_s(port_ann)}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">SPY Ann. Return</div>
+    <div class="stat-value {'g' if spy_ann > 0 else 'r'}">{_pct_s(spy_ann)}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Port. Sharpe</div>
+    <div class="stat-value {'g' if (port_sharpe or 0) > 0 else 'r'}">{f"{port_sharpe:.2f}" if port_sharpe else "—"}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">SPY Sharpe</div>
+    <div class="stat-value n">{f"{spy_sharpe:.2f}" if spy_sharpe else "—"}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Max Drawdown</div>
+    <div class="stat-value {'g' if max_dd > -0.10 else 'r'}">{_pct_s(max_dd)}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Final NAV</div>
+    <div class="stat-value n">${navs[-1]:,.0f}</div>
+  </div>
+</div>
+
+<h2>📈 NAV Curve</h2>
+<canvas id="navChart"></canvas>
+
+<h2>📋 Current Holdings</h2>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Ticker</th><th>Source Agent</th><th>Entry Date</th>
+<th>Entry $</th><th>Current $</th><th>Return</th><th>Shares</th></tr></thead>
+<tbody>{hold_rows or '<tr><td colspan="7" style="color:#666">No open positions</td></tr>'}</tbody>
+</table>
+</div>
+
+<p style="color:#444;font-size:.7rem;margin-top:20px">
+  ⚠️ This is a simplified replay: equal-weight, no transaction costs, no rebalancing on exits.
+  Full walk-forward with PM decisions is not simulated. Use as directional signal only.
+</p>
+
+<script>
+const ctx = document.getElementById('navChart').getContext('2d');
+new Chart(ctx, {{
+  type: 'line',
+  data: {{
+    labels: {labels_json},
+    datasets: [
+      {{
+        label: 'Portfolio NAV ($)',
+        data: {port_json},
+        borderColor: '#42a5f5',
+        backgroundColor: 'rgba(66,165,245,0.08)',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.2,
+      }},
+      {{
+        label: 'SPY (indexed to $100K)',
+        data: {spy_json},
+        borderColor: '#66bb6a',
+        backgroundColor: 'rgba(102,187,106,0.06)',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.2,
+      }},
+    ]
+  }},
+  options: {{
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {{
+      legend: {{ labels: {{ color: '#ccc' }} }},
+      tooltip: {{ mode: 'index', intersect: false }},
+    }},
+    scales: {{
+      x: {{ ticks: {{ color: '#666', maxTicksLimit: 12 }}, grid: {{ color: '#1a1a2e' }} }},
+      y: {{ ticks: {{ color: '#ccc', callback: v => '$'+v.toLocaleString() }},
+            grid: {{ color: '#1a1a2e' }} }},
+    }},
+  }}
+}});
+</script>
+</body>
+</html>"""
+
+    replay_html = f"fmp_replay_{start_date_str}.html"
+    with open(replay_html, "w", encoding="utf-8") as _f:
+        _f.write(html_report)
+    print(f"  📄 HTML report  → {replay_html}")
+
+    # Console summary
+    print(f"\n  📊 REPLAY SUMMARY:")
+    print(f"  {'Period:':<22} {start_date_str} → {today_str} ({n_days} days)")
+    print(f"  {'Portfolio total ret:':<22} {_pct_s(total_ret)}")
+    print(f"  {'SPY total ret:':<22} {_pct_s(spy_total)}")
+    print(f"  {'Alpha:':<22} {_pct_s(alpha_total)}")
+    print(f"  {'Port. ann. return:':<22} {_pct_s(port_ann)}")
+    print(f"  {'SPY ann. return:':<22} {_pct_s(spy_ann)}")
+    print(f"  {'Portfolio Sharpe:':<22} {f'{port_sharpe:.2f}' if port_sharpe else '—'}")
+    print(f"  {'SPY Sharpe:':<22} {f'{spy_sharpe:.2f}' if spy_sharpe else '—'}")
+    print(f"  {'Max drawdown:':<22} {_pct_s(max_dd)}")
+    print(f"\n  ✅ Replay complete")
+    print(f"{'='*65}\n")
+
+
+# ─────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────
 
@@ -8338,7 +10126,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", action="store_true", help="Debug mode: 20 stocks only, fast iteration")
     parser.add_argument("--log-picks", action="store_true", help="Log today's top picks to CSV for performance tracking")
+    parser.add_argument("--backtest", metavar="YYYY-MM-DD",
+                        help="B5: Run backtest on picks before this date and exit (e.g. 2026-01-01)")
+    parser.add_argument("--replay", metavar="YYYY-MM-DD", nargs="?", const="all",
+                        help="C4: Walk-forward portfolio replay from date (or all-time if omitted)")
     args = parser.parse_args()
+
+    # B5: Backtest mode — run and exit without building the full report
+    if args.backtest:
+        backtest_picks(args.backtest)
+        return
+
+    # C4: Replay mode — walk-forward portfolio simulation
+    if args.replay:
+        from_d = None if args.replay == "all" else args.replay
+        backtest_replay(from_d)
+        return
 
     DEBUG = args.debug
     _run_start = time.time()
@@ -9709,6 +11512,22 @@ def main():
 
     build_picks_tracking(wb, stocks)
 
+    # B1: Compute per-agent attribution (SPY prices fetched inside build_picks_tracking
+    # already; re-fetch here using the same helper — cached so no extra API calls).
+    _b1_spy_prices = {}; _b1_spy_today = None
+    if os.path.exists(AI_PICKS_LOG):
+        try:
+            import csv as _csv_tmp
+            with open(AI_PICKS_LOG, "r", encoding="utf-8") as _f:
+                _dates = [r["date"] for r in _csv_tmp.DictReader(_f) if r.get("date")]
+            if _dates:
+                _earliest_ai = min(_dates)
+                _b1_spy_prices = fetch_spy_history(_earliest_ai)
+                _b1_spy_today  = fetch_live_price("SPY")
+        except Exception:
+            pass
+    agent_perf = compute_agent_performance(_b1_spy_prices, _b1_spy_today)
+
     # Auto-log strategy picks every run (deduped by date+ticker+strategy)
     current_prices = {t: s["price"] for t, s in stocks.items() if s.get("price")}
     log_picks({
@@ -9733,7 +11552,8 @@ def main():
     }
     phase_start("ai_analysis", "Running multi-agent AI analysis (17 specialists + judge)")
     ai_result = call_claude_analysis(picks_data, stocks, macro=macro_data,
-                                     market_intel=market_intel)
+                                     market_intel=market_intel,
+                                     agent_perf=agent_perf)   # B4: performance feedback
 
     # Auto-log AI picks every run (no flag needed)
     if ai_result:
@@ -9875,6 +11695,7 @@ def main():
         ai=ai_result, macro=macro_data,
         portfolio=portfolio, fmp_call_count=_fmp_call_count,
         ten_baggers=ten_baggers,
+        agent_perf=agent_perf,   # B1: per-agent attribution for leaderboard (B8)
     )
     html_file = output_file.replace(".xlsx", ".html")
     with open(html_file, "w", encoding="utf-8") as _hf:
