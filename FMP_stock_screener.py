@@ -3388,6 +3388,74 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
             return ""
         return f"\nYOUR RECENT TRACK RECORD (display only — context for self-calibration):\n{line}\n"
 
+    # ── B4 (judge): build track record + specialist leaderboard block ────────
+    _judge_track_block = ""
+    if agent_perf:
+        # 1. Judge's own historical performance
+        jst = agent_perf.get("AI-Judge", {})
+        j_n = jst.get("n_picks", 0)
+        if j_n >= 3:
+            j_alpha = jst.get("alpha")
+            j_wr    = jst.get("win_rate")
+            j_sharpe= jst.get("sharpe")
+            j_best  = jst.get("best_ticker", "—")
+            j_bret  = jst.get("best_ret")
+            j_worst = jst.get("worst_ticker", "—")
+            j_wret  = jst.get("worst_ret")
+            j_parts = [f"{j_n} picks logged"]
+            if j_alpha  is not None: j_parts.append(f"alpha vs SPY {j_alpha:+.1%}")
+            if j_wr     is not None: j_parts.append(f"win-rate {j_wr:.0%}")
+            if j_sharpe is not None: j_parts.append(f"Sharpe {j_sharpe:.2f}")
+            j_best_str  = f"{j_best} ({j_bret:+.1%})"  if j_bret  is not None else j_best
+            j_worst_str = f"{j_worst} ({j_wret:+.1%})" if j_wret is not None else j_worst
+            j_note = ""
+            if j_alpha is not None and j_alpha < -0.02:
+                j_note = "\n  WARNING: Your alpha is negative — raise the bar. Fewer, harder-gated picks. Reject any name where the catalyst is vague or the moat is unclear."
+            elif j_alpha is not None and j_alpha < 0:
+                j_note = "\n  NOTE: Slightly below SPY — tighten valuation gates; prioritise CORE-tier consensus over SATELLITE picks."
+            _judge_track_block += (
+                f"\n\nYOUR HISTORICAL PERFORMANCE AS MASTER MANAGER (use for self-calibration — display only):\n"
+                f"  {', '.join(j_parts)}\n"
+                f"  Best pick: {j_best_str}  |  Worst pick: {j_worst_str}{j_note}"
+            )
+
+        # 2. Specialist reliability leaderboard — rank by alpha to weight consensus
+        _JUDGE_AGENT_LABELS = {
+            "AI-QualityGrowth":   "QualityGrowth",   "AI-SpecialSit":      "SpecialSit",
+            "AI-CapAppreciation": "CapAppreciation",  "AI-EmergingGrowth":  "EmergingGrowth",
+            "AI-TenBagger":       "TenBagger",        "AI-GoldmanSC":       "GoldmanSC",
+            "AI-LynchBWYK":       "LynchBWYK",        "AI-SocialArb":       "SocialArb",
+            "AI-Mayer100x":       "Mayer100x",        "AI-CathieWood":      "CathieWood",
+            "AI-MagicFormula":    "MagicFormula",     "AI-Pabrai":          "Pabrai",
+            "AI-HowardMarks":     "HowardMarks",      "AI-NickSleep":       "NickSleep",
+            "AI-Burry":           "Burry",            "AI-InsiderTrack":    "InsiderTrack",
+            "AI-WallStBlind":     "WallStBlind",
+        }
+        _leaderboard_rows = []
+        for src, label in _JUDGE_AGENT_LABELS.items():
+            st = agent_perf.get(src, {})
+            n  = st.get("n_picks", 0)
+            if n < 5:
+                continue
+            a   = st.get("alpha")
+            wr  = st.get("win_rate")
+            row_parts = [f"{label}: {n} picks"]
+            if a  is not None: row_parts.append(f"alpha {a:+.1%}")
+            if wr is not None: row_parts.append(f"win-rate {wr:.0%}")
+            flag = ""
+            if a is not None and a < -0.02:
+                flag = "  [underperforming — discount solo nominations]"
+            elif a is not None and a > 0.03:
+                flag = "  [outperforming — weight solo nominations more heavily]"
+            _leaderboard_rows.append((a if a is not None else 0, "  " + " | ".join(row_parts) + flag))
+        if _leaderboard_rows:
+            _leaderboard_rows.sort(key=lambda x: x[0], reverse=True)
+            _judge_track_block += (
+                "\n\nSPECIALIST RELIABILITY LEADERBOARD (sorted by historical alpha — use to weight consensus):\n"
+                + "\n".join(r[1] for r in _leaderboard_rows)
+                + "\nA solo nomination from an outperforming agent deserves more weight than one from an underperforming agent."
+            )
+
     specialists_cfg = [
         (
             "QualityGrowth",
@@ -3953,7 +4021,7 @@ QUALITY STANDARD — hard filter before including any pick:
 - Survivability: would this business remain competitively relevant through a recession AND an aggressive well-funded new entrant simultaneously?
 - For 10-Bagger candidates: gross margin > 30% + positive operating income replaces FCF as the quality gate — but dilution < 5%/yr is non-negotiable
 
-YOUR ROLE: Synthesise the seventeen specialist reports into a final 5-20 pick list diversified across lenses (quality + special situations + appreciation + emerging growth + small-cap + deep value + contrarian + insider signals). Prioritise consensus names rigorously. Include at least one pick from each specialist lens where quality meets the bar. Never pad the list — 8 genuine picks beat 20 forced ones."""
+YOUR ROLE: Synthesise the seventeen specialist reports into a final 5-20 pick list diversified across lenses (quality + special situations + appreciation + emerging growth + small-cap + deep value + contrarian + insider signals). Prioritise consensus names rigorously. Include at least one pick from each specialist lens where quality meets the bar. Never pad the list — 8 genuine picks beat 20 forced ones.{_judge_track_block}"""
 
     # ── Build macro context block for judge (from live FRED data) ──────────
     macro_block = ""
