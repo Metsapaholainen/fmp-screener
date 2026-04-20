@@ -550,6 +550,87 @@ def fetch_52w_ranges(tickers: list) -> dict:
     return results
 
 
+def fetch_sparkline_data(tickers: list) -> dict:
+    """Fetch 5-year monthly price history for AI pick sparkline mini-charts.
+
+    Returns {ticker: [float, ...]} — 60 evenly-sampled close prices, oldest→newest.
+    Cached for 7 days (sparklines only need weekly refresh for a 5Y view).
+    Uses FMP /historical-price-full/{ticker}?serietype=line&from=5Y_AGO.
+    """
+    global _fmp_call_count
+    SKEY = "_sparklines"
+    DAYS = 7
+    today_str = datetime.date.today().isoformat()
+    five_yr_ago = (datetime.date.today() - datetime.timedelta(days=365 * 5)).strftime("%Y-%m-%d")
+
+    cached = _cache.get(SKEY, {})
+
+    def _fresh(entry):
+        if not isinstance(entry, dict):
+            return False
+        try:
+            age = (datetime.date.today() -
+                   datetime.date.fromisoformat(entry.get("d", "2000-01-01"))).days
+            return age < DAYS
+        except Exception:
+            return False
+
+    missing = [t for t in tickers if t not in cached or not _fresh(cached[t])]
+    if not missing:
+        return {t: cached[t]["p"] for t in tickers if t in cached and _fresh(cached[t])}
+
+    print(f"  📈 Fetching 5Y sparklines for {len(missing)} tickers"
+          f"{' (+ ' + str(len(tickers) - len(missing)) + ' cached)' if len(tickers) > len(missing) else ''}...")
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+
+    results = {t: cached[t]["p"] for t in tickers if t in cached and _fresh(cached[t])}
+    _lock = threading.Lock()
+    _throttle = threading.Semaphore(8)
+
+    def _sample(prices, n=60):
+        """Sample a list of floats down to n evenly-spaced points."""
+        if len(prices) <= n:
+            return prices
+        step = (len(prices) - 1) / (n - 1)
+        return [prices[round(i * step)] for i in range(n)]
+
+    def _fetch_one(t):
+        with _throttle:
+            try:
+                r = requests.get(
+                    f"{FMP_BASE}/historical-price-full/{t}",
+                    params={"serietype": "line", "from": five_yr_ago, "apikey": FMP_KEY},
+                    timeout=15,
+                )
+                time.sleep(0.08)
+                if r.status_code == 200:
+                    data = r.json()
+                    hist = data.get("historical", []) if isinstance(data, dict) else []
+                    if hist:
+                        prices = [float(h["close"]) for h in reversed(hist)
+                                  if "close" in h and h["close"]]
+                        if prices:
+                            return t, _sample(prices)
+            except Exception:
+                pass
+            return t, None
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = {pool.submit(_fetch_one, t): t for t in missing}
+        for future in as_completed(futures):
+            t, prices = future.result()
+            if prices:
+                with _lock:
+                    results[t] = prices
+                    cached[t] = {"p": prices, "d": today_str}
+
+    _cache[SKEY] = cached
+    _fmp_call_count += len(missing)
+    return results
+
+
 def fetch_macro_indicators() -> dict:
     """Fetch live macro indicators from FRED via the ivo-welch.info CSV gateway.
 
@@ -7699,7 +7780,8 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       slow_growers, cyclicals, asset_plays, quality_compounders,
                       sector_rows=None, etf_rows=None, ai=None, macro=None,
                       portfolio=None, fmp_call_count=0, ten_baggers=None,
-                      agent_perf=None) -> str:   # B1: per-agent attribution dict
+                      agent_perf=None,     # B1: per-agent attribution dict
+                      sparklines=None) -> str:  # {ticker: [float]} 5Y sampled prices
     """Generate a self-contained mobile-responsive HTML dashboard.
     Reads the same data structures that feed the Excel — no extra computation.
     Returns the full HTML string.
@@ -7827,8 +7909,9 @@ tr.alt td { background: #161622; }
 .agent-hdr { border-radius: 5px 5px 0 0; padding: 9px 14px; }
 .agent-hdr .ag-title { font-size: .9rem; font-weight: 700; color: #fff; }
 .agent-hdr .ag-desc { font-size: .75rem; color: rgba(255,255,255,.75); margin-top: 3px; line-height: 1.5; }
-.agent-picks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr));
-                    gap: 6px; padding: 8px; background: #16161f; border-radius: 0 0 5px 5px; }
+.agent-picks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr));
+                    gap: 8px; padding: 10px; background: #16161f; border-radius: 0 0 5px 5px; }
+/* Specialist cards now share the mm-card base style; only left border differs per agent */
 .agent-pick-card { background: #1e1e2e; border-radius: 4px; padding: 8px 10px;
                    border-left: 2px solid #1a237e; }
 .agent-pick-card .ap-ticker { font-weight: 700; color: #fff; font-size: .85rem; }
@@ -7838,6 +7921,9 @@ tr.alt td { background: #161622; }
                                   line-height: 1.45; font-style: italic; }
 .agent-pick-card .ap-thesis { color: #9e9e9e; font-size: .70rem; margin-top: 4px; line-height: 1.4; }
 .agent-pick-card .ap-metric { font-size: .68rem; color: #78909c; margin-top: 4px; }
+.sparkline-wrap { background:#12121e; border-radius:4px; padding:6px 8px; margin-bottom:8px;
+                  display:flex; flex-direction:column; gap:4px; }
+.sparkline-label { font-size:.60rem; color:#546e7a; display:flex; justify-content:space-between; }
 .xcard { cursor: pointer; transition: border-color .15s; }
 .xcard:hover { filter: brightness(1.07); }
 .xbody { margin-top: 8px; border-top: 1px solid #2a2a3e; padding-top: 8px; }
@@ -8033,6 +8119,65 @@ function showMacroDetail(el, id) {
             lbl = _LYNCH_LABEL.get(c, c)
             out.append(f'<span class="badge {cls}" style="font-size:.63rem">{lbl}</span>')
         return " ".join(out)
+
+    _sparklines_data = sparklines or {}
+
+    def _sparkline_svg(ticker, w=200, h=44):
+        """Inline SVG sparkline from 5Y sampled prices. Returns '' if no data."""
+        prices = _sparklines_data.get(ticker)
+        if not prices or len(prices) < 4:
+            return ""
+        mn, mx = min(prices), max(prices)
+        rng = mx - mn
+        if rng == 0:
+            return ""
+        is_up  = prices[-1] >= prices[0]
+        stroke = "#66bb6a" if is_up else "#ef5350"
+        # safe ID — no dots/dashes that break SVG id references
+        gid    = "sg" + ticker.replace(".", "X").replace("-", "X").replace("/", "X")
+        pad    = 3
+        n      = len(prices)
+        def _xy(i, p):
+            x = pad + i / (n - 1) * (w - 2 * pad)
+            y = pad + (1 - (p - mn) / rng) * (h - 2 * pad)
+            return x, y
+        pts  = [_xy(i, p) for i, p in enumerate(prices)]
+        poly = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+        fill = poly + f" {pts[-1][0]:.1f},{h} {pts[0][0]:.1f},{h}"
+        lx, ly = pts[-1]
+        return (
+            f'<svg viewBox="0 0 {w} {h}" width="{w}" height="{h}" '
+            f'style="display:block;overflow:visible;border-radius:3px">'
+            f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="0" y2="1">'
+            f'<stop offset="0%" stop-color="{stroke}" stop-opacity="0.22"/>'
+            f'<stop offset="100%" stop-color="{stroke}" stop-opacity="0"/>'
+            f'</linearGradient></defs>'
+            f'<polygon points="{fill}" fill="url(#{gid})"/>'
+            f'<polyline points="{poly}" fill="none" stroke="{stroke}" '
+            f'stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>'
+            f'<circle cx="{lx:.1f}" cy="{ly:.1f}" r="2.8" fill="{stroke}"/>'
+            f'</svg>'
+        )
+
+    def _trend_badge(ticker):
+        """Small badge showing 3-month vs prior-3-month price trend."""
+        prices = _sparklines_data.get(ticker)
+        if not prices or len(prices) < 12:
+            return ""
+        recent = sum(prices[-4:]) / 4
+        prior  = sum(prices[-12:-8]) / 4
+        if prior <= 0:
+            return ""
+        chg = (recent - prior) / prior
+        if chg > 0.05:
+            return ('<span style="font-size:.60rem;background:#1b5e20;color:#a5d6a7;'
+                    'border-radius:3px;padding:1px 5px;white-space:nowrap">▲ Up</span>')
+        if chg < -0.05:
+            return ('<span style="font-size:.60rem;background:#3e1111;color:#ef9a9a;'
+                    'border-radius:3px;padding:1px 5px;white-space:nowrap">▼ Down</span>')
+        return ('<span style="font-size:.60rem;background:#1a1a2e;color:#78909c;'
+                'border:1px solid #2a2a3e;border-radius:3px;padding:1px 5px;'
+                'white-space:nowrap">→ Flat</span>')
 
     def _strategy_table(rows, cols, title_id, title_label, description=""):
         """Render a strategy tab as a sortable table."""
@@ -8658,6 +8803,25 @@ function showMacroDetail(el, id) {
                     f'</div>'
                 )
 
+            # Sparkline + trend badge for MM judge picks
+            _mm_trend  = _trend_badge(t)
+            _mm_spark  = _sparkline_svg(t)
+            if _mm_spark:
+                _mm_prices = _sparklines_data.get(t, [])
+                _mm_lo = f"${min(_mm_prices):.0f}" if _mm_prices else ""
+                _mm_hi = f"${max(_mm_prices):.0f}" if _mm_prices else ""
+                _mm_spark_block = (
+                    f'<div class="sparkline-wrap">'
+                    f'<div class="sparkline-label">'
+                    f'<span>5Y price history</span>'
+                    f'<span>{_mm_lo} → {_mm_hi}</span>'
+                    f'</div>'
+                    f'<div style="width:100%">{_mm_spark}</div>'
+                    f'</div>'
+                )
+            else:
+                _mm_spark_block = ""
+
             mm_cards.append(f"""
 <div class="mm-card xcard" onclick="toggleExpand(this)">
   <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
@@ -8666,11 +8830,13 @@ function showMacroDetail(el, id) {
     {cap_badge}
     <span class="mm-co">{co} · {sec}</span>
     {_conv_badge(conv)} {_urgency_badge(urg)}
+    {_mm_trend}
     <span class="badge badge-hold" style="font-size:.63rem">{strat}</span>
     {lynch_badge}
     <span class="xarrow">▼</span>
   </div>
   <div class="xbody" style="display:none">
+    {_mm_spark_block}
     {_biz_block}
     <p class="mm-hl">"{hl}"</p>
     <p class="mm-story">{story}</p>
@@ -8848,22 +9014,58 @@ function showMacroDetail(el, id) {
                         f'{_sp_syn_div}{_sp_meta_div}'
                         f'</div>'
                     )
-                pick_cards_html.append(f"""
-<div class="agent-pick-card xcard" style="border-left-color:#{color_hex}" onclick="toggleExpand(this)">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start">
-    <div>
-      <span class="ap-ticker">{tk}</span>
-      <span class="xarrow">▼</span>
-    </div>
-    <span style="font-size:.63rem;background:{conv_color};color:#fff;border-radius:3px;padding:1px 5px;white-space:nowrap">{conv2}</span>
+                # ── Unified specialist card — same structure as MM card ───────
+            _sp_co     = (pp.get("company") or s2.get("name") or tk)[:38]
+            _sp_sector = (s2.get("sector") or "")
+            _sp_cap    = _cap_badge(s2.get("mktCap", 0))
+            _sp_trend  = _trend_badge(tk)
+            _sp_spark  = _sparkline_svg(tk)
+            # Price/valuation metrics for expanded footer
+            _sp_price  = f"${s2['price']:.0f}"  if s2.get("price") else ""
+            _sp_pe     = _num(s2.get("pe"))   if s2.get("pe")   else ""
+            _sp_peg    = _num(s2.get("peg"))  if s2.get("peg")  else ""
+            _sp_roic   = _pct(s2.get("roic")) if s2.get("roic") else ""
+            _sp_mc     = f"${mc_b:.1f}B"      if mc_b           else ""
+            _sp_meta_items = " ".join(
+                f'<span><b>{k}</b> {v}</span>'
+                for k, v in [("Price", _sp_price), ("P/E", _sp_pe),
+                              ("PEG", _sp_peg), ("ROIC", _sp_roic), ("MktCap", _sp_mc)]
+                if v
+            )
+            # Sparkline wrapper with low/high labels
+            if _sp_spark:
+                _sp_prices = _sparklines_data.get(tk, [])
+                _sp_lo = f"${min(_sp_prices):.0f}" if _sp_prices else ""
+                _sp_hi = f"${max(_sp_prices):.0f}" if _sp_prices else ""
+                _sp_spark_block = (
+                    f'<div class="sparkline-wrap">'
+                    f'<div class="sparkline-label">'
+                    f'<span>5Y price</span>'
+                    f'<span>{_sp_lo} → {_sp_hi}</span>'
+                    f'</div>'
+                    f'<div style="width:100%">{_sp_spark}</div>'
+                    f'</div>'
+                )
+            else:
+                _sp_spark_block = ""
+            pick_cards_html.append(f"""
+<div class="mm-card xcard" style="border-left-color:#{color_hex}" onclick="toggleExpand(this)">
+  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px">
+    <span class="mm-ticker">{tk}</span>
+    {_sp_cap}
+    <span class="mm-co">{_sp_co}{(' · ' + _sp_sector) if _sp_sector else ''}</span>
+    {_conv_badge(conv2)}
+    {_sp_trend}
+    {_lb3}
+    <span class="xarrow">▼</span>
   </div>
-  <div class="ap-co">{pp.get("company", s2.get("name", tk))[:34]}</div>
-  {f'<div style="margin-top:4px">{_lb3}</div>' if _lb3 else ''}
-  <div class="ap-rationale">{rationale3[:220]}</div>
+  {f'<div style="font-size:.72rem;color:#78909c;margin-top:4px;font-style:italic">{key_m[:90]}</div>' if key_m else ''}
   <div class="xbody" style="display:none">
+    {_sp_spark_block}
     {_sp_biz}
-    <div class="ap-thesis" style="margin-top:6px">{brief}</div>
-    <div class="ap-metric" style="margin-top:6px">{meta_str}</div>
+    <p class="mm-hl">"{rationale3}"</p>
+    {f'<p class="mm-story">{brief}</p>' if brief else ''}
+    <div class="mm-meta">{_sp_meta_items}</div>
   </div>
 </div>""")
 
@@ -11685,6 +11887,17 @@ def main():
     # Tab 1d: Agent Reports (individual specialist picks)
     build_agent_reports_tab(wb, ai_result, stocks)
 
+    # Fetch 5Y sparklines for all AI picks (judge + all specialists, deduplicated)
+    _sparkline_tickers = set()
+    if ai_result:
+        for _sp in ai_result.get("picks", []):
+            _sparkline_tickers.add(_sp.get("ticker", ""))
+        for _av in ai_result.get("_specialist_picks", {}).values():
+            for _sp in _av.get("picks", []):
+                _sparkline_tickers.add(_sp.get("ticker", ""))
+    _sparkline_tickers.discard("")
+    _sparklines = fetch_sparkline_data(list(_sparkline_tickers)) if _sparkline_tickers else {}
+
     # ── AI Portfolio Manager ─────────────────────────────────────────
     phase_start("portfolio", "Running AI Portfolio Manager")
     print("\n  💼 Running AI Portfolio Manager...")
@@ -11816,6 +12029,7 @@ def main():
         portfolio=portfolio, fmp_call_count=_fmp_call_count,
         ten_baggers=ten_baggers,
         agent_perf=agent_perf,   # B1: per-agent attribution for leaderboard (B8)
+        sparklines=_sparklines,  # 5Y price history for AI pick mini-charts
     )
     html_file = output_file.replace(".xlsx", ".html")
     with open(html_file, "w", encoding="utf-8") as _hf:
