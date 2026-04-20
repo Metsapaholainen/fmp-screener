@@ -3122,13 +3122,17 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         except json.JSONDecodeError:
             return _repair_truncated_json(text)
 
-    def _post(sys_p, usr_p, max_tok, timeout_s):
+    # Model constants — specialists use Haiku (cheap, fast); judge uses Sonnet (quality)
+    _SPECIALIST_MODEL = "claude-haiku-4-5"
+    _JUDGE_MODEL      = "claude-sonnet-4-6"
+
+    def _post(sys_p, usr_p, max_tok, timeout_s, model=None):
         return requests.post(
             "https://api.anthropic.com/v1/messages",
             headers={"x-api-key": ANTHROPIC_KEY,
                      "anthropic-version": "2023-06-01",
                      "content-type": "application/json"},
-            json={"model": "claude-sonnet-4-6",
+            json={"model": model or _JUDGE_MODEL,
                   "max_tokens": max_tok,
                   "system": sys_p,
                   "messages": [{"role": "user", "content": usr_p}]},
@@ -3947,7 +3951,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
     def _call_specialist(cfg):
         name, label, sys_p, usr_p = cfg
         try:
-            resp = _post(sys_p, usr_p, 2000, 90)
+            resp = _post(sys_p, usr_p, 600, 60, model=_SPECIALIST_MODEL)
             if resp.status_code == 200:
                 data = _parse_response(resp.json()["content"][0]["text"])
                 if data and data.get("picks"):
@@ -5643,8 +5647,8 @@ Respond ONLY with valid JSON (no markdown):
             "content-type": "application/json",
         }
         body = {
-            "model": "claude-sonnet-4-6",
-            "max_tokens": 3000,
+            "model": "claude-haiku-4-5",
+            "max_tokens": 1500,
             "system": sys_prompt,
             "messages": [{"role": "user", "content": usr_prompt}],
         }
