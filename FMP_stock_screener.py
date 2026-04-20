@@ -11941,10 +11941,31 @@ def main():
         "Asset Plays (Lynch)": asset_plays,
         "Lynch 10-Baggers": ten_baggers,
     }
-    phase_start("ai_analysis", "Running multi-agent AI analysis (17 specialists + judge)")
-    ai_result = call_claude_analysis(picks_data, stocks, macro=macro_data,
-                                     market_intel=market_intel,
-                                     agent_perf=agent_perf)   # B4: performance feedback
+    # ── Daily AI result cache — skip 18 Claude calls if already run today ──
+    _AI_CACHE_KEY = "_ai_result"
+    _today_str    = datetime.date.today().isoformat()
+    _cached_ai    = _cache.get(_AI_CACHE_KEY, {})
+    _ai_from_cache = (
+        isinstance(_cached_ai, dict)
+        and _cached_ai.get("date") == _today_str
+        and isinstance(_cached_ai.get("result"), dict)
+        and _cached_ai["result"].get("picks")
+    )
+
+    if _ai_from_cache:
+        ai_result = _cached_ai["result"]
+        n_picks = len(ai_result.get("picks", []))
+        n_specs = len(ai_result.get("_specialist_picks", {}))
+        print(f"\n  📦 Using cached AI analysis ({n_picks} judge picks, {n_specs} specialists — already run today)")
+    else:
+        phase_start("ai_analysis", "Running multi-agent AI analysis (17 specialists + judge)")
+        ai_result = call_claude_analysis(picks_data, stocks, macro=macro_data,
+                                         market_intel=market_intel,
+                                         agent_perf=agent_perf)   # B4: performance feedback
+        # Cache result for remainder of today
+        if ai_result and ai_result.get("picks"):
+            _cache[_AI_CACHE_KEY] = {"date": _today_str, "result": ai_result}
+            save_cache()
 
     # Auto-log AI picks every run (no flag needed)
     if ai_result:
