@@ -5656,12 +5656,18 @@ Respond ONLY with valid JSON (no markdown):
                          headers=headers, json=body, timeout=120)
         if resp.status_code == 200:
             raw = resp.json()["content"][0]["text"]
-            # strip markdown fences if present
+            # Strip markdown fences if present
             raw = raw.strip()
             if raw.startswith("```"):
                 raw = "\n".join(raw.split("\n")[1:])
             if raw.endswith("```"):
                 raw = "\n".join(raw.split("\n")[:-1])
+            # Extract just the JSON object — discard any trailing text Haiku
+            # appends after the closing brace ("Extra data" parse error)
+            start = raw.find("{")
+            end   = raw.rfind("}") + 1
+            if start != -1 and end > start:
+                raw = raw[start:end]
             result = json.loads(raw)
             print(f"  ✅ Portfolio manager done — "
                   f"{len(result.get('review',[]))} holdings reviewed, "
