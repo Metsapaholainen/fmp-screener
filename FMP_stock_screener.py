@@ -3951,7 +3951,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
     def _call_specialist(cfg):
         name, label, sys_p, usr_p = cfg
         try:
-            resp = _post(sys_p, usr_p, 600, 60, model=_SPECIALIST_MODEL)
+            resp = _post(sys_p, usr_p, 1500, 90, model=_SPECIALIST_MODEL)
             if resp.status_code == 200:
                 data = _parse_response(resp.json()["content"][0]["text"])
                 if data and data.get("picks"):
@@ -5648,7 +5648,7 @@ Respond ONLY with valid JSON (no markdown):
         }
         body = {
             "model": "claude-haiku-4-5",
-            "max_tokens": 1500,
+            "max_tokens": 2500,
             "system": sys_prompt,
             "messages": [{"role": "user", "content": usr_prompt}],
         }
