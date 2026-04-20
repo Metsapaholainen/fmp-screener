@@ -600,16 +600,17 @@ def fetch_sparkline_data(tickers: list) -> dict:
         with _throttle:
             try:
                 r = requests.get(
-                    f"{FMP_BASE}/historical-price-full/{t}",
-                    params={"serietype": "line", "from": five_yr_ago, "apikey": FMP_KEY},
+                    f"{FMP_BASE}/historical-price-eod/light",
+                    params={"symbol": t, "from": five_yr_ago,
+                            "to": datetime.date.today().isoformat(), "apikey": FMP_KEY},
                     timeout=15,
                 )
                 time.sleep(0.08)
                 if r.status_code == 200:
                     data = r.json()
-                    hist = data.get("historical", []) if isinstance(data, dict) else []
-                    if hist:
-                        prices = [float(h["close"]) for h in reversed(hist)
+                    # Response is a list [{"date":"...","close":X}, ...] newest-first
+                    if isinstance(data, list) and data:
+                        prices = [float(h["close"]) for h in reversed(data)
                                   if "close" in h and h["close"]]
                         if prices:
                             return t, _sample(prices)
@@ -9015,40 +9016,40 @@ function showMacroDetail(el, id) {
                         f'</div>'
                     )
                 # ── Unified specialist card — same structure as MM card ───────
-            _sp_co     = (pp.get("company") or s2.get("name") or tk)[:38]
-            _sp_sector = (s2.get("sector") or "")
-            _sp_cap    = _cap_badge(s2.get("mktCap", 0))
-            _sp_trend  = _trend_badge(tk)
-            _sp_spark  = _sparkline_svg(tk)
-            # Price/valuation metrics for expanded footer
-            _sp_price  = f"${s2['price']:.0f}"  if s2.get("price") else ""
-            _sp_pe     = _num(s2.get("pe"))   if s2.get("pe")   else ""
-            _sp_peg    = _num(s2.get("peg"))  if s2.get("peg")  else ""
-            _sp_roic   = _pct(s2.get("roic")) if s2.get("roic") else ""
-            _sp_mc     = f"${mc_b:.1f}B"      if mc_b           else ""
-            _sp_meta_items = " ".join(
-                f'<span><b>{k}</b> {v}</span>'
-                for k, v in [("Price", _sp_price), ("P/E", _sp_pe),
-                              ("PEG", _sp_peg), ("ROIC", _sp_roic), ("MktCap", _sp_mc)]
-                if v
-            )
-            # Sparkline wrapper with low/high labels
-            if _sp_spark:
-                _sp_prices = _sparklines_data.get(tk, [])
-                _sp_lo = f"${min(_sp_prices):.0f}" if _sp_prices else ""
-                _sp_hi = f"${max(_sp_prices):.0f}" if _sp_prices else ""
-                _sp_spark_block = (
-                    f'<div class="sparkline-wrap">'
-                    f'<div class="sparkline-label">'
-                    f'<span>5Y price</span>'
-                    f'<span>{_sp_lo} → {_sp_hi}</span>'
-                    f'</div>'
-                    f'<div style="width:100%">{_sp_spark}</div>'
-                    f'</div>'
+                _sp_co     = (pp.get("company") or s2.get("name") or tk)[:38]
+                _sp_sector = (s2.get("sector") or "")
+                _sp_cap    = _cap_badge(s2.get("mktCap", 0))
+                _sp_trend  = _trend_badge(tk)
+                _sp_spark  = _sparkline_svg(tk)
+                # Price/valuation metrics for expanded footer
+                _sp_price  = f"${s2['price']:.0f}"  if s2.get("price") else ""
+                _sp_pe     = _num(s2.get("pe"))   if s2.get("pe")   else ""
+                _sp_peg    = _num(s2.get("peg"))  if s2.get("peg")  else ""
+                _sp_roic   = _pct(s2.get("roic")) if s2.get("roic") else ""
+                _sp_mc     = f"${mc_b:.1f}B"      if mc_b           else ""
+                _sp_meta_items = " ".join(
+                    f'<span><b>{k}</b> {v}</span>'
+                    for k, v in [("Price", _sp_price), ("P/E", _sp_pe),
+                                  ("PEG", _sp_peg), ("ROIC", _sp_roic), ("MktCap", _sp_mc)]
+                    if v
                 )
-            else:
-                _sp_spark_block = ""
-            pick_cards_html.append(f"""
+                # Sparkline wrapper with low/high labels
+                if _sp_spark:
+                    _sp_prices = _sparklines_data.get(tk, [])
+                    _sp_lo = f"${min(_sp_prices):.0f}" if _sp_prices else ""
+                    _sp_hi = f"${max(_sp_prices):.0f}" if _sp_prices else ""
+                    _sp_spark_block = (
+                        f'<div class="sparkline-wrap">'
+                        f'<div class="sparkline-label">'
+                        f'<span>5Y price</span>'
+                        f'<span>{_sp_lo} → {_sp_hi}</span>'
+                        f'</div>'
+                        f'<div style="width:100%">{_sp_spark}</div>'
+                        f'</div>'
+                    )
+                else:
+                    _sp_spark_block = ""
+                pick_cards_html.append(f"""
 <div class="mm-card xcard" style="border-left-color:#{color_hex}" onclick="toggleExpand(this)">
   <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px">
     <span class="mm-ticker">{tk}</span>
@@ -11897,6 +11898,8 @@ def main():
                 _sparkline_tickers.add(_sp.get("ticker", ""))
     _sparkline_tickers.discard("")
     _sparklines = fetch_sparkline_data(list(_sparkline_tickers)) if _sparkline_tickers else {}
+    if _sparklines:
+        save_cache()   # persist sparkline cache (7-day TTL) for next run
 
     # ── AI Portfolio Manager ─────────────────────────────────────────
     phase_start("portfolio", "Running AI Portfolio Manager")
