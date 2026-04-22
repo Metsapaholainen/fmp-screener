@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 178.20999999999913,
+  "cash": 10528.8709,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -64,18 +64,6 @@
       "sector": "Consumer Cyclical"
     },
     {
-      "ticker": "PEGA",
-      "company": "Pegasystems Inc.",
-      "shares": 239,
-      "entry_price": 41.7,
-      "entry_date": "2026-04-08",
-      "rationale": "Enterprise AI/automation software with exceptional 29% ROIC and PEG of 0.51. Transition to cloud ACV model is accelerating revenue quality. 17% revenue growth with high-value Fortune 500 clients in fi",
-      "conviction": "HIGH",
-      "sell_trigger": "ACV growth decelerates below 10% for two consecutive quarters, cloud transition stalls, or major client churn in core financial services vertical",
-      "lynch_category": "Stalwart+FastGrower",
-      "sector": "Technology"
-    },
-    {
       "ticker": "CQP",
       "company": "Cheniere Energy Partners",
       "shares": 157,
@@ -86,18 +74,6 @@
       "sell_trigger": "Henry Hub price collapses below $1.50 for sustained period impacting economics, key long-term contracts cancelled or renegotiated, or ROIC falls below",
       "lynch_category": "Stalwart+FastGrower+Turnaround",
       "sector": "Energy"
-    },
-    {
-      "ticker": "DOCS",
-      "company": "Doximity, Inc.",
-      "shares": 451,
-      "entry_price": 22.12,
-      "entry_date": "2026-04-08",
-      "rationale": "20% ROIC, 7.3% FCF yield, PEG of 0.78, and 20% revenue growth. Doximity is the LinkedIn for physicians with ~80% of US doctors on platform \u2014 an extraordinarily durable network effect moat. Pharma digi",
-      "conviction": "MEDIUM",
-      "sell_trigger": "Physician network engagement declines materially, pharma digital ad budgets cut by >15%, or revenue growth falls below 12%",
-      "lynch_category": "Stalwart+FastGrower",
-      "sector": "Healthcare"
     },
     {
       "ticker": "DLO",
@@ -122,6 +98,30 @@
       "sell_trigger": "ROIC falls below 30% for two consecutive quarters, revenue growth decelerates below 10% on a trailing basis, or FCF turns consistently negative \u2014 indi",
       "lynch_category": "FastGrower",
       "sector": "Technology"
+    },
+    {
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton Holding",
+      "shares": 61,
+      "entry_price": 81.0,
+      "entry_date": "2026-04-22",
+      "rationale": "IV Discount + Turnaround: 18% ROIC (above 12% threshold), 9% FCF yield, strong margin of safety. Booz Allen Hamilton government consulting franchise with defense spending tailwinds and stable federal co",
+      "conviction": "HIGH",
+      "sell_trigger": "ROIC falls below 12%, government budget sequestration materially cuts defense consulting revenue, or FCF yield drops below 5%",
+      "lynch_category": "",
+      "sector": ""
+    },
+    {
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 108,
+      "entry_price": 45.89,
+      "entry_date": "2026-04-22",
+      "rationale": "IV Discount + Quality: 30% ROIC, 7.2% FCF yield, PEG 0.63. Exelixis oncology platform with cabozantinib driving multi-indication revenue growth, strong FCF generation, and share buyback capacity.",
+      "conviction": "HIGH",
+      "sell_trigger": "ROIC falls below 20%, cabozantinib loses key indication, PEG rises above 1.5, or revenue growth decelerates below 10% for two consecutive quarters",
+      "lynch_category": "",
+      "sector": ""
     }
   ],
   "transactions": [
@@ -256,7 +256,55 @@
       "value": 9983.34,
       "return_pct": 0.0,
       "rationale": "ESTC offers the highest ROIC in the candidate universe at 61% \u2014 exceptional capital efficiency \u2014 with 5.0% FCF yield, PEG of 0.46, and 17% revenue growth. Elastic's search and observability platform ("
+    },
+    {
+      "date": "2026-04-22",
+      "action": "SELL",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 239,
+      "price": 39.29,
+      "value": 9379.92,
+      "return_pct": -5.78,
+      "transaction_cost": 10.39,
+      "rationale": "Thesis deteriorating: FCF yield 6.8% is below-average for quality software peers; revenue growth decelerating below hold threshold. ACV growth slowing in cloud transition."
+    },
+    {
+      "date": "2026-04-22",
+      "action": "SELL",
+      "ticker": "DOCS",
+      "company": "Doximity, Inc.",
+      "shares": 451,
+      "price": 24.15,
+      "value": 10879.76,
+      "return_pct": 9.18,
+      "transaction_cost": 11.89,
+      "rationale": "Thesis deteriorating: ROIC 20% is acceptable but revenue growth has decelerated below 12% sell trigger threshold — physician engagement growth slowing materially."
+    },
+    {
+      "date": "2026-04-22",
+      "action": "BUY",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton Holding",
+      "shares": 61,
+      "price": 81.0,
+      "value": 4941.0,
+      "return_pct": 0.0,
+      "transaction_cost": 5.94,
+      "rationale": "IV Discount + Turnaround: 18% ROIC (above 12% threshold), 9% FCF yield, strong margin of safety. Booz Allen Hamilton government consulting franchise with defense spending tailwinds and stable federal co"
+    },
+    {
+      "date": "2026-04-22",
+      "action": "BUY",
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 108,
+      "price": 45.89,
+      "value": 4956.12,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "IV Discount + Quality: 30% ROIC, 7.2% FCF yield, PEG 0.63. Exelixis oncology platform with cabozantinib driving multi-indication revenue growth, strong FCF generation, and share buyback capacity."
     }
   ],
-  "last_updated": "2026-04-20"
+  "last_updated": "2026-04-22"
 }
