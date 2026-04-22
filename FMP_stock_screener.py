@@ -9578,13 +9578,19 @@ Sharpe on alpha series. Click any column header to sort.</p>
                     cells.append(f"<td>{v if v is not None else '—'}</td>")
             ai_body.append(f"<tr{alt}>{''.join(cells)}</tr>")
 
+        _n_hist = len(ai_perf_rows)
         ai_table = f"""
-<h2 style="margin:14px 0 8px;font-size:.75rem">ALL PICKS — DETAIL</h2>
+<h2 style="margin:14px 0 8px;font-size:.75rem;cursor:pointer;user-select:none"
+    onclick="var d=this.nextElementSibling;var a=this.querySelector('.xarrow');var open=d.style.display!=='none';d.style.display=open?'none':'block';a.textContent=open?'▶':'▼';">
+  <span class="xarrow">▶</span> Purchase History ({_n_hist} entries)
+</h2>
+<div style="display:none">
 <div class="tbl-wrap">
   <table>
     <thead><tr>{"".join(f"<th>{c}</th>" for c in ai_hdr)}</tr></thead>
     <tbody>{"".join(ai_body)}</tbody>
   </table>
+</div>
 </div>""" if ai_perf_rows else ""
 
         # ── Portfolio holdings ────────────────────────────────────────────
@@ -9789,8 +9795,8 @@ Sharpe on alpha series. Click any column header to sort.</p>
   <div class="section-title">📈 Performance Tracking</div>
   {scorecard_html}
   {leaderboard_html}
-  {ai_table}
   {port_table}
+  {ai_table}
 </section>"""
 
     # ── STRATEGY TABLE COLS ───────────────────────────────────────────────
