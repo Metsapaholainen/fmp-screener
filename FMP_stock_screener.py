@@ -32,7 +32,7 @@ Usage:
   python stockscreener_fmp.py
 """
 
-import os, sys, json, time, datetime, csv, math, pickle
+import os, sys, json, time, datetime, csv, math, pickle, subprocess
 from collections import defaultdict
 
 # ── Windows UTF-8 fix: force stdout/stderr to UTF-8 so emojis don't crash on redirect ──
@@ -230,6 +230,34 @@ def push_html_to_github(html_content: str) -> str | None:
     except Exception as e:
         print(f"  ⚠️ GitHub push error: {e}")
     return None
+
+
+def commit_data_files():
+    """Commit portfolio + picks logs to git after a local run.
+    Skipped in GitHub Actions (which has its own 'Save data files' step).
+    """
+    if os.environ.get("GITHUB_ACTIONS"):
+        return
+    try:
+        _cwd = os.path.dirname(os.path.abspath(__file__))
+        _today = datetime.date.today().isoformat()
+        # Sync any remote commits pushed by push_html_to_github() via API
+        subprocess.run(["git", "pull", "--rebase", "--autostash"],
+                       cwd=_cwd, capture_output=True, timeout=30)
+        subprocess.run(["git", "add", "fmp_portfolio.json",
+                        "fmp_picks_log.csv", "fmp_ai_picks_log.csv"],
+                       cwd=_cwd, capture_output=True)
+        staged = subprocess.run(["git", "diff", "--staged", "--quiet"],
+                                cwd=_cwd, capture_output=True)
+        if staged.returncode != 0:
+            subprocess.run(["git", "commit", "-m", f"data: {_today}"],
+                           cwd=_cwd, capture_output=True)
+            subprocess.run(["git", "push"],
+                           cwd=_cwd, capture_output=True, timeout=30)
+            print("  💾 Data files committed to git")
+    except Exception as _e:
+        print(f"  ⚠️ Git data-file commit failed: {_e}")
+
 
 # Excel styling
 THIN_BORDER = Border(
@@ -12148,6 +12176,9 @@ def main():
     pages_url = push_html_to_github(html_content)
     if pages_url:
         print(f"  🌐 Live at: {pages_url}")
+
+    # Commit data files (portfolio + picks logs) for local runs
+    commit_data_files()
 
     total_elapsed = time.time() - _run_start
     n_picks = len(ai_result.get("picks", [])) if ai_result else 0
