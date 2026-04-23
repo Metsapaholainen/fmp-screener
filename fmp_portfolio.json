@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 10370.947900000003,
+  "cash": 21873.169800000007,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -76,52 +76,52 @@
       "sector": "Energy"
     },
     {
-      "ticker": "DLO",
-      "company": "DLocal Limited",
-      "shares": 773,
-      "entry_price": 12.92,
-      "entry_date": "2026-04-08",
-      "rationale": "29% ROIC, 10.9% FCF yield, PEG of 0.77, and 47% revenue growth with 85% MoS. Dominant cross-border payments infrastructure for emerging markets (LatAm, Africa, Asia). Network effects in local payment ",
-      "conviction": "MEDIUM",
-      "sell_trigger": "Total Payment Volume growth falls below 20%, regulatory action in key EM markets (Brazil, Mexico), or gross profit per dollar of TPV compresses materi",
-      "lynch_category": "FastGrower+Turnaround",
-      "sector": "Technology"
+      "ticker": "TRV",
+      "company": "The Travelers Companies",
+      "shares": 16,
+      "entry_price": 301.68,
+      "entry_date": "2026-04-23",
+      "rationale": "Best-in-class property & casualty insurer with fortress metrics: 47% ROIC (tied for second-highest in universe), 17.8% FCF yield (highest in portfolio universe), PEG 0.96, +5% RG with 70% MoS. Fills F",
+      "conviction": "VERY HIGH",
+      "sell_trigger": "Combined ratio rises above 101% for 2 consecutive quarters OR catastrophic loss reserves materialize below expectations",
+      "lynch_category": "Stalwart+Turnaround",
+      "sector": "Financial Services"
     },
     {
-      "ticker": "ESTC",
-      "company": "Elastic N.V.",
-      "shares": 222,
-      "entry_price": 44.97,
-      "entry_date": "2026-04-09",
-      "rationale": "ESTC offers the highest ROIC in the candidate universe at 61% \u2014 exceptional capital efficiency \u2014 with 5.0% FCF yield, PEG of 0.46, and 17% revenue growth. Elastic's search and observability platform (",
+      "ticker": "PTCT",
+      "company": "PTC Therapeutics, Inc.",
+      "shares": 70,
+      "entry_price": 70.85,
+      "entry_date": "2026-04-23",
+      "rationale": "FastGrower replacement for DLO/ESTC/GDDY shed positions. 37% ROIC, 11.9% FCF yield (top quartile), +115% RG (exceptional pipeline growth). Fills Healthcare underweight (currently 1/10). Genetic disord",
       "conviction": "HIGH",
-      "sell_trigger": "ROIC falls below 30% for two consecutive quarters, revenue growth decelerates below 10% on a trailing basis, or FCF turns consistently negative \u2014 indi",
+      "sell_trigger": "Pipeline setbacks (late-stage failure) OR loss of US regulatory pathway OR FCF yield collapses below 8%",
       "lynch_category": "FastGrower",
-      "sector": "Technology"
+      "sector": "Healthcare"
     },
     {
-      "ticker": "NICE",
-      "company": "NICE Ltd.",
-      "shares": 47,
-      "entry_price": 105.6,
+      "ticker": "ALL",
+      "company": "The Allstate Corporation",
+      "shares": 23,
+      "entry_price": 214.16,
       "entry_date": "2026-04-23",
-      "rationale": "IV Discount + Turnaround candidate with exceptional metrics: 10.5% FCF yield (top decile), PEG 0.20 (best in candidate pool), 83% MoS. ROIC 13% is marginal but FCF quality compensates. Software moat i",
+      "rationale": "Financial Services filler: 21% ROIC, exceptional 17.8% FCF yield (matches TRV), PEG 0.80, +5% RG with 43% MoS. IV Discount + quality compounder. Digital transformation thesis (Allstate + Arity data ec",
       "conviction": "HIGH",
-      "sell_trigger": "FCF yield drops below 8% or PEG rises above 0.35 (signals valuation normalization or thesis deterioration)",
-      "lynch_category": "Stalwart+FastGrower+Turnaround",
-      "sector": "Technology"
+      "sell_trigger": "Combined ratio exceeds 100% OR underwriting margins compress OR capital deployment becomes destructive",
+      "lynch_category": "Turnaround",
+      "sector": "Financial Services"
     },
     {
-      "ticker": "GDDY",
-      "company": "GoDaddy Inc.",
-      "shares": 56,
-      "entry_price": 88.4,
+      "ticker": "CB",
+      "company": "Chubb Limited",
+      "shares": 15,
+      "entry_price": 325.43,
       "entry_date": "2026-04-23",
-      "rationale": "FastGrower with fortress metrics: 21% ROIC, 14.2% FCF yield (highest in candidate pool), PEG 0.23 (elite), 57% MoS, 8% revenue growth. Domain + hosting moat is structural; SMB SaaS penetration is mult",
-      "conviction": "HIGH",
-      "sell_trigger": "Revenue growth drops below 5% or FCF yield falls below 10% (signals market saturation or margin compression)",
-      "lynch_category": "Stalwart+FastGrower",
-      "sector": "Technology"
+      "rationale": "Diversified financial services: 35% ROIC, 10.6% FCF yield, PEG 1.04, +6% RG with 52% MoS. Quality Compounder + Stalwart. Chubb's specialty insurance mix (professional liability, cyber, casualty) offer",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "Underwriting profitability deteriorates OR investment portfolio realizes material losses OR M&A becomes destructive",
+      "lynch_category": "Stalwart+Cyclical",
+      "sector": "Financial Services"
     }
   ],
   "transactions": [
@@ -352,6 +352,102 @@
       "return_pct": 0.0,
       "transaction_cost": 5.95,
       "rationale": "FastGrower with fortress metrics: 21% ROIC, 14.2% FCF yield (highest in candidate pool), PEG 0.23 (elite), 57% MoS, 8% revenue growth. Domain + hosting moat is structural; SMB SaaS penetration is mult"
+    },
+    {
+      "date": "2026-04-23",
+      "action": "SELL",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 773,
+      "price": 13.34,
+      "value": 10300.51,
+      "return_pct": 3.25,
+      "transaction_cost": 11.31,
+      "rationale": "Thesis deteriorating: While metrics remain strong (29% ROIC, 10.4% FCF, +47% RG), DLO is a FastGrower in a severely overcrowded Lynch category (8 current vs. 4 max cap). Portfolio must shed FastGrowers to restore balance. DLO's weaker moat vs. GDDY (duplicative LatAm fintech play) makes it the logical FastGrower to trim. Sell to create slot for underweighted sectors (Financial Services, Healthcare, Energy, Consumer Cyclical). Held 15d; early exit justified by structural category overweight."
+    },
+    {
+      "date": "2026-04-23",
+      "action": "SELL",
+      "ticker": "ESTC",
+      "company": "Elastic N.V.",
+      "shares": 222,
+      "price": 49.23,
+      "value": 10917.13,
+      "return_pct": 9.47,
+      "transaction_cost": 11.93,
+      "rationale": "Thesis deteriorating: Despite exceptional 61% ROIC, ESTC is a FastGrower contributing to overcrowded Lynch category (8 current vs. 4 max). PEG 0.50 and +17% RG are excellent, but portfolio must shed FastGrowers. ESTC's 5.0% FCF yield is weakest in portfolio and insufficient to justify premium ROIC valuation at -4% MoS. Sell to rebalance Lynch categories and create dry powder. Held 14d; category constraint overrides individual quality."
+    },
+    {
+      "date": "2026-04-23",
+      "action": "SELL",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 47,
+      "price": 105.6,
+      "value": 4957.24,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "Thesis deteriorating: NICE is a Turnaround (7 current vs. 3 max cap) acquired TODAY at $105.60. While IV Discount profile and 10.2% FCF yield are solid, ROIC 13% is marginal (only 8% above 12% threshold) and +9% RG is below 10%+ portfolio standard. Most critically, portfolio is violating Lynch Turnaround cap by 4 positions. NICE must be shed immediately to correct structural overweight. Held 0d; category overflow constraint is binding."
+    },
+    {
+      "date": "2026-04-23",
+      "action": "SELL",
+      "ticker": "GDDY",
+      "company": "GoDaddy Inc.",
+      "shares": 56,
+      "price": 88.4,
+      "value": 4944.45,
+      "return_pct": 0.0,
+      "transaction_cost": 5.95,
+      "rationale": "Thesis deteriorating: GDDY is a FastGrower (8 current vs. 4 max cap) acquired TODAY. While metrics are fortress-quality (21% ROIC, 13.2% FCF yield, PEG 0.23, +8% RG, 56% MoS), portfolio cannot sustain 8 FastGrowers. GDDY competes with DLO in fintech/LatAm space but has weaker growth (+8% vs. +47%). Sell to immediately relieve Lynch category overweight. Held 0d; category overflow is structural emergency requiring immediate action."
+    },
+    {
+      "date": "2026-04-23",
+      "action": "BUY",
+      "ticker": "TRV",
+      "company": "The Travelers Companies",
+      "shares": 16,
+      "price": 301.68,
+      "value": 4826.88,
+      "return_pct": 0.0,
+      "transaction_cost": 5.83,
+      "rationale": "Best-in-class property & casualty insurer with fortress metrics: 47% ROIC (tied for second-highest in universe), 17.8% FCF yield (highest in portfolio universe), PEG 0.96, +5% RG with 70% MoS. Fills F"
+    },
+    {
+      "date": "2026-04-23",
+      "action": "BUY",
+      "ticker": "PTCT",
+      "company": "PTC Therapeutics, Inc.",
+      "shares": 70,
+      "price": 70.85,
+      "value": 4959.5,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "FastGrower replacement for DLO/ESTC/GDDY shed positions. 37% ROIC, 11.9% FCF yield (top quartile), +115% RG (exceptional pipeline growth). Fills Healthcare underweight (currently 1/10). Genetic disord"
+    },
+    {
+      "date": "2026-04-23",
+      "action": "BUY",
+      "ticker": "ALL",
+      "company": "The Allstate Corporation",
+      "shares": 23,
+      "price": 214.16,
+      "value": 4925.68,
+      "return_pct": 0.0,
+      "transaction_cost": 5.93,
+      "rationale": "Financial Services filler: 21% ROIC, exceptional 17.8% FCF yield (matches TRV), PEG 0.80, +5% RG with 43% MoS. IV Discount + quality compounder. Digital transformation thesis (Allstate + Arity data ec"
+    },
+    {
+      "date": "2026-04-23",
+      "action": "BUY",
+      "ticker": "CB",
+      "company": "Chubb Limited",
+      "shares": 15,
+      "price": 325.43,
+      "value": 4881.45,
+      "return_pct": 0.0,
+      "transaction_cost": 5.88,
+      "rationale": "Diversified financial services: 35% ROIC, 10.6% FCF yield, PEG 1.04, +6% RG with 52% MoS. Quality Compounder + Stalwart. Chubb's specialty insurance mix (professional liability, cyber, casualty) offer"
     }
   ],
   "last_updated": "2026-04-23"
