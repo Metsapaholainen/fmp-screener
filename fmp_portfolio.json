@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 10528.8709,
+  "cash": 10370.947900000003,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,28 +100,28 @@
       "sector": "Technology"
     },
     {
-      "ticker": "BAH",
-      "company": "Booz Allen Hamilton Holding",
-      "shares": 61,
-      "entry_price": 81.0,
-      "entry_date": "2026-04-22",
-      "rationale": "IV Discount + Turnaround: 18% ROIC (above 12% threshold), 9% FCF yield, strong margin of safety. Booz Allen Hamilton government consulting franchise with defense spending tailwinds and stable federal co",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 47,
+      "entry_price": 105.6,
+      "entry_date": "2026-04-23",
+      "rationale": "IV Discount + Turnaround candidate with exceptional metrics: 10.5% FCF yield (top decile), PEG 0.20 (best in candidate pool), 83% MoS. ROIC 13% is marginal but FCF quality compensates. Software moat i",
       "conviction": "HIGH",
-      "sell_trigger": "ROIC falls below 12%, government budget sequestration materially cuts defense consulting revenue, or FCF yield drops below 5%",
-      "lynch_category": "",
-      "sector": ""
+      "sell_trigger": "FCF yield drops below 8% or PEG rises above 0.35 (signals valuation normalization or thesis deterioration)",
+      "lynch_category": "Stalwart+FastGrower+Turnaround",
+      "sector": "Technology"
     },
     {
-      "ticker": "EXEL",
-      "company": "Exelixis, Inc.",
-      "shares": 108,
-      "entry_price": 45.89,
-      "entry_date": "2026-04-22",
-      "rationale": "IV Discount + Quality: 30% ROIC, 7.2% FCF yield, PEG 0.63. Exelixis oncology platform with cabozantinib driving multi-indication revenue growth, strong FCF generation, and share buyback capacity.",
+      "ticker": "GDDY",
+      "company": "GoDaddy Inc.",
+      "shares": 56,
+      "entry_price": 88.4,
+      "entry_date": "2026-04-23",
+      "rationale": "FastGrower with fortress metrics: 21% ROIC, 14.2% FCF yield (highest in candidate pool), PEG 0.23 (elite), 57% MoS, 8% revenue growth. Domain + hosting moat is structural; SMB SaaS penetration is mult",
       "conviction": "HIGH",
-      "sell_trigger": "ROIC falls below 20%, cabozantinib loses key indication, PEG rises above 1.5, or revenue growth decelerates below 10% for two consecutive quarters",
-      "lynch_category": "",
-      "sector": ""
+      "sell_trigger": "Revenue growth drops below 5% or FCF yield falls below 10% (signals market saturation or margin compression)",
+      "lynch_category": "Stalwart+FastGrower",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -279,7 +279,7 @@
       "value": 10879.76,
       "return_pct": 9.18,
       "transaction_cost": 11.89,
-      "rationale": "Thesis deteriorating: ROIC 20% is acceptable but revenue growth has decelerated below 12% sell trigger threshold — physician engagement growth slowing materially."
+      "rationale": "Thesis deteriorating: ROIC 20% is acceptable but revenue growth has decelerated below 12% sell trigger threshold \u2014 physician engagement growth slowing materially."
     },
     {
       "date": "2026-04-22",
@@ -304,7 +304,55 @@
       "return_pct": 0.0,
       "transaction_cost": 5.96,
       "rationale": "IV Discount + Quality: 30% ROIC, 7.2% FCF yield, PEG 0.63. Exelixis oncology platform with cabozantinib driving multi-indication revenue growth, strong FCF generation, and share buyback capacity."
+    },
+    {
+      "date": "2026-04-23",
+      "action": "SELL",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton Holding",
+      "shares": 61,
+      "price": 77.37,
+      "value": 4713.85,
+      "return_pct": -4.48,
+      "transaction_cost": 5.72,
+      "rationale": "Thesis deteriorating: ROIC 18% is only 50% above the 12% threshold and is the portfolio's lowest quality metric. Held only 1d with -4.5% drawdown signals poor conviction. Turnaround thesis requires stronger ROIC evidence (>22%) to justify capital. Exit to redeploy into higher-conviction opportunity with better ROIC buffer."
+    },
+    {
+      "date": "2026-04-23",
+      "action": "SELL",
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 108,
+      "price": 46.85,
+      "value": 5053.74,
+      "return_pct": 2.09,
+      "transaction_cost": 6.06,
+      "rationale": "Thesis deteriorating: 7% revenue growth is below our 10%+ minimum for growth thesis; 7.2% FCF yield is bottom-quartile for quality portfolio. Held only 1d with +2.1% gain. Oncology program is competent but not differentiated enough to justify a slot given portfolio crowding. Exit to redeploy."
+    },
+    {
+      "date": "2026-04-23",
+      "action": "BUY",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 47,
+      "price": 105.6,
+      "value": 4963.2,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "IV Discount + Turnaround candidate with exceptional metrics: 10.5% FCF yield (top decile), PEG 0.20 (best in candidate pool), 83% MoS. ROIC 13% is marginal but FCF quality compensates. Software moat i"
+    },
+    {
+      "date": "2026-04-23",
+      "action": "BUY",
+      "ticker": "GDDY",
+      "company": "GoDaddy Inc.",
+      "shares": 56,
+      "price": 88.4,
+      "value": 4950.4,
+      "return_pct": 0.0,
+      "transaction_cost": 5.95,
+      "rationale": "FastGrower with fortress metrics: 21% ROIC, 14.2% FCF yield (highest in candidate pool), PEG 0.23 (elite), 57% MoS, 8% revenue growth. Domain + hosting moat is structural; SMB SaaS penetration is mult"
     }
   ],
-  "last_updated": "2026-04-22"
+  "last_updated": "2026-04-23"
 }
