@@ -3978,16 +3978,34 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
 
     def _call_specialist(cfg):
         name, label, sys_p, usr_p = cfg
-        try:
-            resp = _post(sys_p, usr_p, 2000, 90, model=_SPECIALIST_MODEL)
-            if resp.status_code == 200:
-                data = _parse_response(resp.json()["content"][0]["text"])
-                if data and data.get("picks"):
-                    print(f"    ✅ {label} specialist done — {len(data['picks'])} picks")
-                    return name, label, data["picks"]
-            print(f"    ⚠️ {label} specialist failed (HTTP {resp.status_code})")
-        except Exception as exc:
-            print(f"    ⚠️ {label} specialist error: {str(exc)[:80]}")
+        for attempt in range(2):
+            try:
+                resp = _post(sys_p, usr_p, 2500, 90, model=_SPECIALIST_MODEL)
+                if resp.status_code == 200:
+                    raw = resp.json()["content"][0]["text"]
+                    data = _parse_response(raw)
+                    if data and data.get("picks"):
+                        if attempt > 0:
+                            print(f"    ✅ {label} specialist done (retry) — {len(data['picks'])} picks")
+                        else:
+                            print(f"    ✅ {label} specialist done — {len(data['picks'])} picks")
+                        return name, label, data["picks"]
+                    reason = f"empty picks" if resp.status_code == 200 else f"HTTP {resp.status_code}"
+                    if attempt == 0:
+                        print(f"    ↩️  {label} specialist retrying ({reason})...")
+                        continue
+                    print(f"    ⚠️ {label} specialist failed ({reason})")
+                else:
+                    if attempt == 0:
+                        print(f"    ↩️  {label} specialist retrying (HTTP {resp.status_code})...")
+                        continue
+                    print(f"    ⚠️ {label} specialist failed (HTTP {resp.status_code})")
+            except Exception as exc:
+                if attempt == 0:
+                    print(f"    ↩️  {label} specialist retrying ({str(exc)[:60]})...")
+                    continue
+                print(f"    ⚠️ {label} specialist error: {str(exc)[:80]}")
+            break
         return name, label, []
 
     print(f"    Launching {len(specialists_cfg)} specialist agents in parallel...")
