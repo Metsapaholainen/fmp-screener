@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 21873.169800000007,
+  "cash": 31533.837500000005,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -85,30 +85,6 @@
       "conviction": "VERY HIGH",
       "sell_trigger": "Combined ratio rises above 101% for 2 consecutive quarters OR catastrophic loss reserves materialize below expectations",
       "lynch_category": "Stalwart+Turnaround",
-      "sector": "Financial Services"
-    },
-    {
-      "ticker": "PTCT",
-      "company": "PTC Therapeutics, Inc.",
-      "shares": 70,
-      "entry_price": 70.85,
-      "entry_date": "2026-04-23",
-      "rationale": "FastGrower replacement for DLO/ESTC/GDDY shed positions. 37% ROIC, 11.9% FCF yield (top quartile), +115% RG (exceptional pipeline growth). Fills Healthcare underweight (currently 1/10). Genetic disord",
-      "conviction": "HIGH",
-      "sell_trigger": "Pipeline setbacks (late-stage failure) OR loss of US regulatory pathway OR FCF yield collapses below 8%",
-      "lynch_category": "FastGrower",
-      "sector": "Healthcare"
-    },
-    {
-      "ticker": "ALL",
-      "company": "The Allstate Corporation",
-      "shares": 23,
-      "entry_price": 214.16,
-      "entry_date": "2026-04-23",
-      "rationale": "Financial Services filler: 21% ROIC, exceptional 17.8% FCF yield (matches TRV), PEG 0.80, +5% RG with 43% MoS. IV Discount + quality compounder. Digital transformation thesis (Allstate + Arity data ec",
-      "conviction": "HIGH",
-      "sell_trigger": "Combined ratio exceeds 100% OR underwriting margins compress OR capital deployment becomes destructive",
-      "lynch_category": "Turnaround",
       "sector": "Financial Services"
     },
     {
@@ -448,6 +424,30 @@
       "return_pct": 0.0,
       "transaction_cost": 5.88,
       "rationale": "Diversified financial services: 35% ROIC, 10.6% FCF yield, PEG 1.04, +6% RG with 52% MoS. Quality Compounder + Stalwart. Chubb's specialty insurance mix (professional liability, cyber, casualty) offer"
+    },
+    {
+      "date": "2026-04-25",
+      "action": "SELL",
+      "ticker": "PTCT",
+      "company": "PTC Therapeutics, Inc.",
+      "shares": 70,
+      "price": 68.23,
+      "value": 4770.32,
+      "return_pct": -3.7,
+      "transaction_cost": 5.78,
+      "rationale": "Thesis deteriorating: Sold DLO/ESTC/GDDY on 2026-04-23 due to Lynch overconcentration (FastGrowers were 8, cap is 4). PTCT was added as 'replacement' but portfolio still violates constraints: FastGrowers now 5 (should be \u22644), Turnarounds 7 (should be \u22643), Stalwarts 6 (should be \u22645). PTCT is FastGrower\u2014keeping it perpetuates the violation. While metrics (37% ROIC, 115% RG) are strong, the REASON to own it (as a replacement) never solved the structural problem. Sell to free slot and reduce FastGrower count to 4. Only 2 days held, but the overweight is the thesis failure."
+    },
+    {
+      "date": "2026-04-25",
+      "action": "SELL",
+      "ticker": "ALL",
+      "company": "The Allstate Corporation",
+      "shares": 23,
+      "price": 212.88,
+      "value": 4890.34,
+      "return_pct": -0.6,
+      "transaction_cost": 5.9,
+      "rationale": "Thesis broken by portfolio structure, not fundamentals: Financial Services sector is at hard cap (4 positions: HIG, TRV, CB, ALL). Portfolio rule explicitly forbids a 5th sector position. ALL is the weakest of the four on ROIC (21% vs. HIG 29%, TRV 47%, CB 35%) and has lowest FCF yield (17.9% vs. TRV 17.8%, but lowest quality overall). Only 2 days held, but adding it violated sector cap rule. Sell to return to 4-position Financial Services max and free capital for diversification into under-represented sectors (Industrials, Consumer Cyclical, Healthcare)."
     }
   ],
   "last_updated": "2026-04-25"
