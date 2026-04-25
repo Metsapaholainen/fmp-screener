@@ -8500,7 +8500,7 @@ function showMacroDetail(el, id) {
   <div class="section-title">🔬 Agent Analysis — {n_agents} Specialist Reports</div>
   <p style="background:#1a1a2e;padding:8px 12px;border-radius:4px;font-size:.75rem;
      color:#9e9e9e;margin-bottom:14px;line-height:1.6">
-    <b style="color:#90caf9">17 specialist agents</b> each apply a distinct investment philosophy
+    <b style="color:#90caf9">{n_agents} specialist agents</b> each apply a distinct investment philosophy
     to the same universe of {len(stocks):,} stocks. Their unfiltered picks are synthesised by the
     <b style="color:#90caf9">Master Manager</b> into the final <b style="color:#90caf9">AI Top Picks</b>.
   </p>
@@ -9053,48 +9053,36 @@ function showMacroDetail(el, id) {
             for c, n in sorted(_lynch_dist.items(), key=lambda x: -x[1])
         ) if _lynch_dist else '<span style="font-size:.72rem;color:#546e7a">No Lynch category data yet</span>'
 
-        # ── Sprint 2 A3: 🎯 HIGH-CONSENSUS PICKS panel (14-day rolling) ──────
-        # Surfaces tickers picked by 5+ distinct specialists in the last 14 days.
-        # When many independent lenses converge, that's the strongest signal.
+        # ── Sprint 2 A3: 🎯 HIGH-CONSENSUS PICKS panel (today's specialists) ──
+        # Counts how many of today's active specialists picked each ticker.
+        # Max = number of active specialists. No retired-agent noise.
         consensus_html = ""
         try:
-            import csv as _csv2
             from collections import defaultdict
-            _consensus_map = defaultdict(set)   # ticker → set(source) over last 14 days
-            _ticker_meta   = {}                 # ticker → {company, latest_date}
-            _today2 = datetime.date.today()
-            _cutoff2 = _today2 - datetime.timedelta(days=14)
-            if os.path.exists(AI_PICKS_LOG):
-                with open(AI_PICKS_LOG, "r", encoding="utf-8") as _cf:
-                    for _row2 in _csv2.DictReader(_cf):
-                        _src2 = (_row2.get("source") or "").strip()
-                        if not _src2 or _src2 == "AI-Judge":
-                            continue   # ignore judge — count specialists only
-                        try:
-                            _d2 = datetime.date.fromisoformat(_row2.get("date",""))
-                        except Exception:
-                            continue
-                        if _d2 < _cutoff2:
-                            continue
-                        _tk2 = (_row2.get("ticker") or "").strip().upper()
-                        if not _tk2:
-                            continue
-                        _consensus_map[_tk2].add(_src2)
-                        # Keep most-recent metadata for the ticker
-                        if _tk2 not in _ticker_meta or _d2 >= _ticker_meta[_tk2]["d"]:
-                            _ticker_meta[_tk2] = {
-                                "co":  (_row2.get("company") or "")[:40],
-                                "d":   _d2,
-                                "syn": (_row2.get("synopsis") or "")[:90],
-                            }
-            # Build sorted consensus list (≥5 distinct specialists)
+            _consensus_map = defaultdict(set)   # ticker → set(agent_name) from today's run
+            _ticker_meta   = {}                 # ticker → {co, syn}
+            # Pull directly from today's specialist results (already in memory as _sp)
+            for _ag_name, _ag_data in _sp.items():
+                for _pp in (_ag_data.get("picks") or []):
+                    _ptk = (_pp.get("ticker") or "").strip().upper()
+                    if not _ptk:
+                        continue
+                    _consensus_map[_ptk].add(_ag_name)
+                    if _ptk not in _ticker_meta:
+                        _s_tmp = stocks.get(_ptk, {})
+                        _ticker_meta[_ptk] = {
+                            "co":  (_pp.get("company") or _s_tmp.get("companyName",""))[:40],
+                            "syn": (_pp.get("thesis") or _pp.get("synopsis") or "")[:90],
+                        }
+            # Build sorted consensus list (≥3 distinct specialists = meaningful agreement)
+            _min_consensus = max(3, len(_sp) // 4)  # ~25% of active agents
             _hi_consensus = sorted(
-                ((tk, len(srcs)) for tk, srcs in _consensus_map.items() if len(srcs) >= 5),
+                ((tk, len(srcs)) for tk, srcs in _consensus_map.items() if len(srcs) >= _min_consensus),
                 key=lambda x: -x[1]
             )[:20]   # cap at 20 most-consensus
             if _hi_consensus:
                 # Build lookup: ticker → best available AI thesis text
-                # Priority: judge pick (full story) > any specialist thesis > CSV synopsis
+                # Priority: judge pick (full story) > any specialist thesis
                 _judge_by_ticker = {p.get("ticker","").upper(): p for p in picks}
                 _spec_by_ticker  = {}   # ticker → best specialist pick dict
                 for _ag, _ag_data in _sp.items():
@@ -9192,10 +9180,10 @@ function showMacroDetail(el, id) {
                     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
                     '<span style="font-size:1rem;font-weight:700;color:#42a5f5">🎯 HIGH-CONSENSUS PICKS</span>'
                     f'<span style="font-size:.72rem;color:#78909c">— {len(_hi_consensus)} '
-                    'tickers nominated by 5+ specialists in the last 14 days</span>'
+                    f'tickers nominated by {_min_consensus}+ of today\'s {len(_sp)} specialists</span>'
                     '</div>'
                     '<p style="font-size:.7rem;color:#546e7a;margin-bottom:10px;line-height:1.5">'
-                    'When multiple independent lenses converge on the same name, that is the strongest '
+                    'When multiple independent lenses converge on the same name today, that is the strongest '
                     'signal in the system. Cross-check against your personal knowledge before sizing.'
                     '</p>'
                     f'<div style="display:flex;flex-wrap:wrap;gap:8px">{"".join(_cons_cards)}</div>'
