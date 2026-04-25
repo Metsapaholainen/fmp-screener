@@ -4205,7 +4205,179 @@ Urgency guide: ACT NOW=catalyst imminent + entry compelling today; WITHIN WEEKS=
         return {}
 
 
-def log_ai_picks(ai_result: dict, stocks: dict):
+def call_mall_manager(judge_result: dict, stocks: dict,
+                      macro: dict = None, market_intel: dict = None) -> dict:
+    """🛍️ Mall Manager — Peter Lynch "shopping mall" rationaliser.
+
+    Takes the existing judge's picks + all 11 specialists' picks (already in
+    judge_result["_specialist_picks"]) and re-screens them through a single lens:
+    is there a real-world consumer/observable thesis Wall Street is missing?
+
+    Returns a short list (5-8) of high-conviction names, each with a
+    `consumer_thesis` field describing what you'd literally observe in daily life.
+    Stocks with great financials but no plausible Lynch story are REJECTED.
+    """
+    if not ANTHROPIC_KEY:
+        return {}
+    if not judge_result or not judge_result.get("picks"):
+        return {}
+
+    print("\n  🛍️ Running AI Mall Manager (Lynch Shopping Mall rationaliser)...")
+
+    _MODEL = "claude-sonnet-4-6"
+
+    # Build candidate pool: union of judge picks + every specialist's picks
+    candidate_tickers = []
+    seen = set()
+    for p in judge_result.get("picks", []):
+        t = (p.get("ticker") or "").upper()
+        if t and t not in seen:
+            candidate_tickers.append(t); seen.add(t)
+    for spec_name, sr in judge_result.get("_specialist_picks", {}).items():
+        for p in sr.get("picks", []):
+            t = (p.get("ticker") or "").upper()
+            if t and t not in seen:
+                candidate_tickers.append(t); seen.add(t)
+
+    # Cap candidate pool at 50 (token budget)
+    candidate_tickers = candidate_tickers[:50]
+    if not candidate_tickers:
+        print("  ⚠️ Mall Manager: no candidates to evaluate")
+        return {}
+
+    # Build a compact per-stock format for the prompt — focus on consumer/identity signals
+    cand_lines = []
+    for t in candidate_tickers:
+        s = stocks.get(t, {})
+        co  = (s.get("companyName") or s.get("name") or t)[:50]
+        ind = (s.get("industry") or "")[:35]
+        sec = (s.get("sector") or "")[:20]
+        mc  = s.get("mktCap")
+        mc_s = (f"${mc/1e9:.1f}B" if mc and mc >= 1e9
+                else f"${mc/1e6:.0f}M" if mc else "—")
+        px  = s.get("price")
+        px_s = f"${px:.0f}" if px else "—"
+        rg  = s.get("revGrowth") or s.get("revenueGrowthYoy")
+        rg_s = f"RG {rg*100:.0f}%" if rg else ""
+        roic = s.get("roic")
+        roic_s = f"ROIC {roic*100:.0f}%" if roic else ""
+        tags = []
+        if s.get("consumerObservable"):
+            tags.append("🛒FamiliarBrand")
+        if s.get("underCovered"):
+            ac = s.get("analystCount")
+            tags.append(f"🔍UnderCovered({ac}an)" if ac else "🔍UnderCovered")
+        tag_s = " ".join(tags)
+        cand_lines.append(f"  {t} | {co} | {ind} ({sec}) | {mc_s} @ {px_s} | {rg_s} {roic_s} {tag_s}".rstrip())
+
+    candidates_block = "\n".join(cand_lines)
+
+    # Macro hint (compact — one line)
+    macro_line = ""
+    if macro:
+        try:
+            yc = macro.get("yield_curve")
+            vix = macro.get("vix")
+            macro_line = f"Macro: 10Y={macro.get('dgs10','?')}, VIX={vix}, yield curve={yc}"
+        except Exception:
+            macro_line = ""
+
+    sys_prompt = f"""You are the 🛍️ Mall Manager — a Peter Lynch-style investor whose ONLY job is to find stocks where there is a real-world, consumer-observable edge that the data-driven Wall Street consensus is structurally missing.
+
+You are NOT a financial analyst. You don't care about beating consensus on EPS by 2¢. You care about ONE thing: walking through a shopping mall, scrolling TikTok, opening your kid's bedroom door, glancing at your office software dock, or queuing at an airport — and noticing that people are using a product MORE than the data shows yet. That observation, before it shows up in next quarter's revenue, is the edge.
+
+CORE RULES — apply strictly:
+
+1. NO LYNCH STORY → NO PICK. If you cannot articulate a plausible "I would observe this in daily life" thesis in one sentence, REJECT the stock — regardless of how great the financials look. A name with 30% ROIC and great moats but no consumer-observable surface is the JUDGE'S job, not yours.
+
+2. STRONGLY PREFER 🛒FamiliarBrand candidates. That tag means the industry is consumer-observable (apps, retail, restaurants, EVs, streaming, healthcare you can name from CVS shelves). That's your hunting ground.
+
+3. STRONGLY PREFER 🔍UnderCovered candidates when a Lynch story exists. Wall Street has <8 sell-side analysts on these names. The combination of consumer-observable + analyst-neglected is the most fertile inefficiency you can exploit.
+
+4. REJECT pure B2B SaaS, enterprise data infra, industrial gear, financial services back-office, or commoditised commodity producers — UNLESS there is a true consumer-facing product surface. Examples that QUALIFY: Block (Cash App you actually use), Tesla (cars you see on the road), Spotify (app on your phone). Examples that DO NOT qualify: enterprise data warehouses, niche industrial valves, reinsurance carriers, B2B payment rails to merchants you never interact with.
+
+5. WRITE THE consumer_thesis FIELD AS YOU'D TELL A FRIEND AT DINNER. No P/E ratios. No ROIC. No PEG. Real-world product observation only. Examples of GREAT consumer_thesis lines:
+   - "Every coffee shop I walk into has a Square POS now — small merchants are switching from legacy terminals because the hardware is free and the app is faster."
+   - "My teenage daughter and three of her friends are all using Duolingo Max with the AI tutor — they've replaced their school's $200/yr language tutor with a $7/mo app."
+   - "Three of my colleagues started taking Halozyme-formulated subcutaneous Darzalex this month — patients are choosing the 5-min injection over the 4-hour IV infusion every time."
+
+6. PICK 5-8 NAMES. NOT MORE. The judge already gives a longer list. Your value is selectivity — saying "out of these 30 specialist nominations, only THESE have a real Lynch story". Forcing more dilutes the signal.
+
+7. CONTRARIAN ANGLE — explicitly call out, in the `wall_street_blindspot` field, what data-driven Wall Street is MISREADING. Examples: "Sell-side models a sub-pandemic baseline because they don't see how AI tools have made it sticky", "Street treats this as a melting ice cube because the legacy product is shrinking, but the new mobile app is doubling MAUs unmodeled".
+
+YOUR OUTPUT — JSON ONLY, no other text. Schema:
+
+{{
+  "synopsis": "One paragraph: today's overall Lynch-edge thesis — what consumer themes you noticed in the candidate pool",
+  "picks": [
+    {{
+      "ticker": "TICKER",
+      "company": "Company Name",
+      "sector": "Sector",
+      "consumer_thesis": "ONE SENTENCE — what you would observe in real life that confirms this thesis (no financial jargon)",
+      "headline": "Short punchy 1-line summary of the investment idea",
+      "story": "2-3 sentences: WHY this consumer trend translates to investable upside; what's accelerating; how durable",
+      "wall_street_blindspot": "ONE SENTENCE — what data-driven analysis is structurally missing or misreading",
+      "catalyst": "Specific 1-6 month event/metric where the consumer trend will become visible to the Street",
+      "watch": "Single biggest risk that breaks the consumer thesis (NOT a financial risk — a product/usage risk)",
+      "conviction": "HIGH | MEDIUM"
+    }}
+  ],
+  "rejected_examples": "Brief 1-2 sentence note on which judge picks you specifically rejected and WHY (no Lynch story present)"
+}}
+
+Today is {datetime.date.today()}. {macro_line}"""
+
+    user_prompt = f"""You have {len(candidate_tickers)} candidate stocks already nominated by the 11 specialist analysts AND/OR the data-driven Master Manager judge today. Your job is to identify the 5-8 with the strongest Peter Lynch "shopping mall" consumer-observable thesis.
+
+CANDIDATE POOL (union of judge picks + all specialists' picks):
+{candidates_block}
+
+JUDGE'S TOP PICKS TODAY (the data-driven manager's call — you may agree or disagree):
+{chr(10).join(f"  {p.get('ticker','?')} — {p.get('headline','')[:80]}" for p in judge_result.get('picks', [])[:11])}
+
+YOUR TASK:
+1. Walk through the candidate pool. For each one, ask: "Could I plausibly observe this trend in my daily life — in a mall, on TikTok, in my kid's room, on my phone, at an airport?"
+2. If yes, write the consumer_thesis. If no, REJECT.
+3. Output 5-8 picks where the Lynch story is strongest. Quality over quantity.
+4. In `rejected_examples`, name 2-3 of the judge's top picks you explicitly rejected and explain why (e.g., "RNR — reinsurance carrier with no consumer surface", "PLMR — specialty insurance, B2B distribution only").
+
+JSON only. No markdown, no preamble."""
+
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": ANTHROPIC_KEY,
+                     "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"},
+            json={"model": _MODEL, "max_tokens": 6000,
+                  "system": sys_prompt,
+                  "messages": [{"role": "user", "content": user_prompt}]},
+            timeout=240,
+        )
+        if resp.status_code != 200:
+            print(f"  ⚠️ Mall Manager error {resp.status_code}: {resp.text[:200]}")
+            return {}
+        text = resp.json()["content"][0]["text"].strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        text = text.strip().rstrip("`")
+        try:
+            result = json.loads(text)
+        except Exception as je:
+            print(f"  ⚠️ Mall Manager JSON parse failed: {str(je)[:100]}")
+            return {}
+        n = len(result.get("picks", []))
+        print(f"  ✅ Mall Manager picks: {n}")
+        return result
+    except Exception as e:
+        print(f"  ⚠️ Mall Manager failed: {str(e)[:120]}")
+        return {}
+
+
+def log_ai_picks(ai_result: dict, stocks: dict, mall_result: dict = None):
     """Auto-log AI picks to fmp_ai_picks_log.csv for performance tracking.
     Logs judge picks (source=AI-Judge) AND specialist picks (source=AI-Bull/Value/Contrarian).
     CSV fields: date, source, ticker, company, strategy, conviction, entry_price, headline
@@ -4294,8 +4466,33 @@ def log_ai_picks(ai_result: dict, stocks: dict):
                 "key_competitors": p.get("key_competitors", "")[:120],
             })
 
-    # Judge first (preserved ordering), then specialists
-    rows = judge_rows + specialist_rows
+    # ── Mall Manager picks (Lynch consumer-observable lens) ───────────────
+    mall_rows = []
+    for p in (mall_result or {}).get("picks", []) if mall_result else []:
+        t = p.get("ticker", "").upper()
+        s = stocks.get(t, {})
+        price = s.get("price")
+        if _valid_ticker(t) and price:
+            _hl = (p.get("consumer_thesis") or p.get("headline", ""))[:80]
+            if t in _strategy_today and "strat-echo" not in _hl:
+                _hl = (f"[strat-echo] {_hl}")[:80]
+            mall_rows.append({
+                "date": today, "source": "AI-MallManager",
+                "ticker": t,
+                "company": p.get("company", s.get("name", ""))[:30],
+                "strategy": "Lynch Mall",
+                "conviction": p.get("conviction", ""),
+                "entry_price": round(price, 2),
+                "headline": _hl,
+                "prompt_version": PROMPT_VERSION,
+                "strategy_echo": "1" if t in _strategy_today else "",
+                "synopsis": (p.get("story") or p.get("consumer_thesis", ""))[:300],
+                "industry": s.get("industry", "")[:60],
+                "key_competitors": "",
+            })
+
+    # Judge first (preserved ordering), then mall manager, then specialists
+    rows = judge_rows + mall_rows + specialist_rows
 
     if not rows:
         return
@@ -4343,9 +4540,11 @@ def log_ai_picks(ai_result: dict, stocks: dict):
         writer.writerows(new_rows)
     n_judge = sum(1 for r in new_rows if r["source"] == "AI-Judge")
     n_echo  = sum(1 for r in new_rows if r["source"] == "AI-Judge-Echo")
-    n_spec  = sum(1 for r in new_rows if r["source"] not in ("AI-Judge", "AI-Judge-Echo"))
+    n_mall  = sum(1 for r in new_rows if r["source"] == "AI-MallManager")
+    n_spec  = sum(1 for r in new_rows if r["source"] not in ("AI-Judge", "AI-Judge-Echo", "AI-MallManager"))
     echo_note = f" ({n_echo} echoes)" if n_echo else ""
-    print(f"  📝 AI picks logged: {n_judge} judge{echo_note} + {n_spec} specialist → {AI_PICKS_LOG}")
+    mall_note = f" + {n_mall} mall" if n_mall else ""
+    print(f"  📝 AI picks logged: {n_judge} judge{echo_note}{mall_note} + {n_spec} specialist → {AI_PICKS_LOG}")
 
 
 def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
@@ -7938,7 +8137,8 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       portfolio=None, fmp_call_count=0, ten_baggers=None,
                       agent_perf=None,     # B1: per-agent attribution dict
                       sparklines=None,
-                      hold_forever=None) -> str:  # Sprint 3 A4: long-term shortlist
+                      hold_forever=None,
+                      mall=None) -> str:  # 🛍️ Mall Manager picks (Lynch consumer-observable)
     """Generate a self-contained mobile-responsive HTML dashboard.
     Reads the same data structures that feed the Excel — no extra computation.
     Returns the full HTML string.
@@ -9192,6 +9392,104 @@ function showMacroDetail(el, id) {
         except Exception:
             consensus_html = ""
 
+        # ── 🛍️ MALL MANAGER SECTION (Lynch consumer-observable lens) ──────
+        # Picks where there's a real-world consumer/observable edge data-driven
+        # Wall Street is missing. Distinct mint/teal accent vs gold MM section.
+        mall_section_html = ""
+        try:
+            _mall_picks = (mall or {}).get("picks", []) if mall else []
+            if _mall_picks:
+                _mall_synopsis = (mall or {}).get("synopsis", "")
+                _mall_rejected = (mall or {}).get("rejected_examples", "")
+                _mall_cards = []
+                for _i, _mp in enumerate(_mall_picks):
+                    _mt   = (_mp.get("ticker") or "?").upper()
+                    _mco  = (_mp.get("company") or "")[:40]
+                    _msec = _mp.get("sector", "")
+                    _mhl  = _mp.get("headline", "")
+                    _mstory = _mp.get("story", "")
+                    _mthesis = _mp.get("consumer_thesis", "")
+                    _mblind = _mp.get("wall_street_blindspot", "")
+                    _mcat = _mp.get("catalyst", "")
+                    _mwatch = _mp.get("watch", "")
+                    _mconv = _mp.get("conviction", "MEDIUM")
+                    _ms   = stocks.get(_mt, {})
+                    _mprice = _ms.get("price")
+                    _mpx_s = f"${_mprice:.2f}" if _mprice else "—"
+                    _mmkt = _ms.get("mktCap")
+                    _mmkt_s = (f"${_mmkt/1e9:.1f}B" if _mmkt and _mmkt >= 1e9
+                               else f"${_mmkt/1e6:.0f}M" if _mmkt else "")
+                    _mind = (_ms.get("industry") or "")
+                    _mfam = _familiar_badge(_ms)
+                    _munc = _undercovered_badge(_ms)
+                    _mlynch = _lynch_badge(_ms.get("lynchCategory",""))
+                    _mspark = _sparkline_svg(_mt)
+                    _mconv_color = "#26a69a" if _mconv == "HIGH" else "#80cbc4"
+
+                    _mall_cards.append(
+                        f'<div class="mm-card xcard" onclick="toggleExpand(this)" '
+                        f'style="border-left:4px solid #26a69a">'
+                        f'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">'
+                        f'<span class="mm-rank" style="background:#004d40;color:#80cbc4">#{_i+1}</span>'
+                        f'<span class="mm-ticker">{_mt}</span>'
+                        f'<span class="mm-co">{_mco} · {_msec}</span>'
+                        f'<span class="badge" style="background:{_mconv_color};color:#000;font-size:.62rem;'
+                        f'padding:1px 6px;border-radius:3px;font-weight:700">{_mconv}</span>'
+                        f'{_mlynch}{_mfam}{_munc}'
+                        f'<span class="xarrow">▼</span>'
+                        f'</div>'
+                        # Always-visible thesis line — the unique value of the Mall Manager
+                        f'<p style="margin:6px 0 0;font-size:.78rem;color:#80cbc4;'
+                        f'font-style:italic;line-height:1.5">'
+                        f'🛍️ &ldquo;{_mthesis}&rdquo;</p>'
+                        f'<div class="xbody" style="display:none">'
+                        + (f'<div class="sparkline-wrap" style="margin-top:8px"><div style="width:100%">{_mspark}</div></div>' if _mspark else "")
+                        + (f'<p class="mm-hl" style="margin-top:8px">&ldquo;{_mhl}&rdquo;</p>' if _mhl else "")
+                        + (f'<p class="mm-story">{_mstory}</p>' if _mstory else "")
+                        + (f'<p style="font-size:.72rem;color:#ffab91;margin:6px 0 0;'
+                           f'background:#1a1a2e;padding:6px 8px;border-left:3px solid #ff7043;border-radius:3px">'
+                           f'<b>🔭 Wall Street Blindspot:</b> {_mblind}</p>' if _mblind else "")
+                        + f'<div class="mm-meta" style="margin-top:8px">'
+                        f'<span><b>Price</b> {_mpx_s}</span>'
+                        f'{f"<span><b>Mkt Cap</b> {_mmkt_s}</span>" if _mmkt_s else ""}'
+                        + (f'<span><b>Catalyst</b> {_mcat}</span>' if _mcat else "")
+                        + (f'<span><b>Watch</b> {_mwatch}</span>' if _mwatch else "")
+                        + f'</div>'
+                        + (f'<div style="font-size:.63rem;color:#546e7a;margin-top:5px">{_mind}</div>' if _mind else "")
+                        + f'</div>'
+                        f'</div>'
+                    )
+
+                _rejected_block = (
+                    f'<p style="font-size:.7rem;color:#9e9e9e;margin:10px 0 4px;font-style:italic">'
+                    f'<b>Rejected from Judge\'s list:</b> {_mall_rejected}</p>'
+                ) if _mall_rejected else ""
+                _synopsis_block = (
+                    f'<p style="font-size:.74rem;color:#b0bec5;margin-bottom:8px;line-height:1.5">'
+                    f'{_mall_synopsis}</p>'
+                ) if _mall_synopsis else ""
+
+                mall_section_html = (
+                    '<div style="background:#0d1117;border:1px solid #26a69a44;border-radius:8px;'
+                    'padding:12px 14px;margin-bottom:18px">'
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
+                    '<span style="font-size:1rem;font-weight:700;color:#26a69a">🛍️ AI Mall Manager</span>'
+                    f'<span style="font-size:.72rem;color:#78909c">— {len(_mall_picks)} picks where '
+                    'a real-world consumer-observable edge contradicts data-driven Wall Street consensus</span>'
+                    '</div>'
+                    '<p style="font-size:.72rem;color:#546e7a;margin-bottom:8px;line-height:1.5">'
+                    'Peter Lynch \"walking through a shopping mall\" lens: each pick has a thesis you could '
+                    'observe in daily life — products people are using more than the data shows yet. '
+                    '<b style="color:#78909c">Click any card to expand the full thesis.</b>'
+                    '</p>'
+                    + _synopsis_block
+                    + f'<div class="mm-grid">{"".join(_mall_cards)}</div>'
+                    + _rejected_block
+                    + '</div>'
+                )
+        except Exception as _emall:
+            mall_section_html = f"<!-- mall_section error: {str(_emall)[:80]} -->"
+
         mm_section = f"""
 {consensus_html}
 <div style="background:#0d1117;border:1px solid #ffd54f33;border-radius:8px;padding:12px 14px;margin-bottom:18px">
@@ -9210,7 +9508,8 @@ function showMacroDetail(el, id) {
   </div>
   <div class="mm-grid">{"".join(mm_cards)}</div>
   {risks_html}
-</div>"""
+</div>
+{mall_section_html}"""
 
         # ── 17 SPECIALIST SECTIONS ───────────────────────────────────────────
         _ADESC = {
@@ -12190,25 +12489,47 @@ def main():
     )
 
     if _ai_from_cache:
-        ai_result = _cached_ai["result"]
+        ai_result   = _cached_ai["result"]
+        mall_result = _cached_ai.get("mall_result", {}) or {}
         n_picks = len(ai_result.get("picks", []))
         n_specs = len(ai_result.get("_specialist_picks", {}))
-        print(f"\n  📦 Using cached AI analysis ({n_picks} judge picks, {n_specs} specialists — already run today)")
+        n_mall  = len(mall_result.get("picks", []))
+        mall_note = f" + {n_mall} mall" if n_mall else ""
+        print(f"\n  📦 Using cached AI analysis ({n_picks} judge picks, {n_specs} specialists{mall_note} — already run today)")
     else:
         if args.force_fresh_ai and _cached_ai.get("date") == _today_str:
-            print("\n  🔄 --force-fresh-ai: bypassing today's AI cache, re-running all specialists + judge")
+            print("\n  🔄 --force-fresh-ai: bypassing today's AI cache, re-running all specialists + judge + mall manager")
         phase_start("ai_analysis", "Running multi-agent AI analysis (11 specialists + judge)")
         ai_result = call_claude_analysis(picks_data, stocks, macro=macro_data,
                                          market_intel=market_intel,
                                          agent_perf=agent_perf)   # B4: performance feedback
-        # Cache result for remainder of today
+        mall_result = {}
         if ai_result and ai_result.get("picks"):
-            _cache[_AI_CACHE_KEY] = {"date": _today_str, "result": ai_result}
+            # Mall Manager runs after the judge, takes the same input + judge's picks
+            mall_result = call_mall_manager(ai_result, stocks,
+                                            macro=macro_data,
+                                            market_intel=market_intel) or {}
+            # Cache result for remainder of today
+            _cache[_AI_CACHE_KEY] = {"date": _today_str,
+                                     "result": ai_result,
+                                     "mall_result": mall_result}
+            save_cache()
+
+    # If cache was loaded but mall_result is missing (older cache schema), run only mall manager
+    if ai_result and ai_result.get("picks") and not mall_result and _ai_from_cache:
+        print("  🛍️ Cache pre-dates Mall Manager — running it now to backfill")
+        mall_result = call_mall_manager(ai_result, stocks,
+                                        macro=macro_data,
+                                        market_intel=market_intel) or {}
+        if mall_result:
+            _cache[_AI_CACHE_KEY] = {"date": _today_str,
+                                     "result": ai_result,
+                                     "mall_result": mall_result}
             save_cache()
 
     # Auto-log AI picks every run (no flag needed)
     if ai_result:
-        log_ai_picks(ai_result, stocks)
+        log_ai_picks(ai_result, stocks, mall_result=mall_result)
 
     # Tab 1b: AI Top Picks (uses pre-created sheet so it stays in position 2)
     build_ai_picks_tab(wb, ai_result, stocks, ws=ws_ai_picks)
@@ -12362,6 +12683,7 @@ def main():
         agent_perf=agent_perf,   # B1: per-agent attribution for leaderboard (B8)
         sparklines=_sparklines,  # 5Y price history for AI pick mini-charts
         hold_forever=hold_forever,  # Sprint 3 A4: long-term shortlist tab
+        mall=mall_result,        # 🛍️ Mall Manager picks (Lynch consumer-observable)
     )
     html_file = output_file.replace(".xlsx", ".html")
     with open(html_file, "w", encoding="utf-8") as _hf:
