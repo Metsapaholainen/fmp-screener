@@ -9093,10 +9093,38 @@ function showMacroDetail(el, id) {
                 key=lambda x: -x[1]
             )[:20]   # cap at 20 most-consensus
             if _hi_consensus:
+                # Build lookup: ticker → best available AI thesis text
+                # Priority: judge pick (full story) > any specialist thesis > CSV synopsis
+                _judge_by_ticker = {p.get("ticker","").upper(): p for p in picks}
+                _spec_by_ticker  = {}   # ticker → best specialist pick dict
+                for _ag, _ag_data in _sp.items():
+                    for _pp in (_ag_data.get("picks") or []):
+                        _ptk = (_pp.get("ticker") or "").upper()
+                        if _ptk and _ptk not in _spec_by_ticker:
+                            _spec_by_ticker[_ptk] = _pp
+
                 _cons_cards = []
                 for _tk2, _n2 in _hi_consensus:
                     _meta = _ticker_meta.get(_tk2, {})
                     _co2  = _meta.get("co", "")
+                    # Rich text: judge story > specialist thesis > CSV synopsis
+                    _judge_p = _judge_by_ticker.get(_tk2)
+                    _spec_p  = _spec_by_ticker.get(_tk2)
+                    if _judge_p:
+                        _hl2   = _judge_p.get("headline", "")
+                        _story2 = _judge_p.get("story", "")
+                        _cat2  = _judge_p.get("catalyst", "")
+                        _watch2 = _judge_p.get("watch", "")
+                    elif _spec_p:
+                        _hl2   = _spec_p.get("headline", "")
+                        _story2 = _spec_p.get("thesis", "") or _spec_p.get("story", "")
+                        _cat2  = _spec_p.get("catalyst", "")
+                        _watch2 = _spec_p.get("watch", "")
+                    else:
+                        _hl2   = ""
+                        _story2 = _meta.get("syn", "")
+                        _cat2  = ""
+                        _watch2 = ""
                     _syn2 = _meta.get("syn", "")
                     _s2   = stocks.get(_tk2, {})
                     _fam_b = _familiar_badge(_s2)
@@ -9141,8 +9169,9 @@ function showMacroDetail(el, id) {
                         f'{(" · " + _cap_s) if _cap_s else ""}</div>'
                         f'<div class="xbody" style="display:none;margin-top:8px;border-top:1px solid #263238;padding-top:8px">'
                         + (f'<div style="margin-bottom:6px">{_spark2}</div>' if _spark2 else "")
-                        + (f'<p style="font-size:.68rem;color:#9e9e9e;font-style:italic;margin:0 0 8px">{_syn2}</p>' if _syn2 else "")
-                        + f'<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:.7rem;color:#b0bec5">'
+                        + (f'<p class="mm-hl" style="font-size:.75rem;font-style:italic;color:#b0bec5;margin:0 0 6px">&ldquo;{_hl2}&rdquo;</p>' if _hl2 else "")
+                        + (f'<p class="mm-story" style="font-size:.72rem;color:#cfd8dc;line-height:1.6;margin:0 0 8px">{_story2}</p>' if _story2 else (f'<p style="font-size:.68rem;color:#9e9e9e;font-style:italic;margin:0 0 8px">{_syn2}</p>' if _syn2 else ""))
+                        + f'<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:.7rem;color:#b0bec5;margin-bottom:6px">'
                         f'<span><b>Price</b> {_price_s}</span>'
                         f'<span><b>P/E</b> {_pe_s}</span>'
                         f'<span><b>PEG</b> {_peg_s}</span>'
@@ -9151,7 +9180,9 @@ function showMacroDetail(el, id) {
                         f'<span><b>Rev Growth</b> {_rev_s}</span>'
                         f'{f"<span><b>Mkt Cap</b> {_cap_s}</span>" if _cap_s else ""}'
                         f'</div>'
-                        f'<div style="font-size:.65rem;color:#78909c;margin-top:5px">{_ind2}</div>'
+                        + (f'<p style="font-size:.68rem;color:#80cbc4;margin:0 0 3px"><b>Catalyst:</b> {_cat2}</p>' if _cat2 else "")
+                        + (f'<p style="font-size:.68rem;color:#ef9a9a;margin:0 0 3px"><b>Watch:</b> {_watch2}</p>' if _watch2 else "")
+                        + f'<div style="font-size:.63rem;color:#546e7a;margin-top:4px">{_ind2}</div>'
                         f'</div>'
                         f'</div>'
                     )
