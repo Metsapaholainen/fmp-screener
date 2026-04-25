@@ -291,6 +291,56 @@ _LYNCH_ASSET_HEAVY_SECTORS = {
 }
 
 
+# ── A1 (Sprint 2): "Familiar Brand" / consumer-observable industries ──────────
+# Companies in these GICS-style industries make products/services the user can
+# directly experience as a consumer or workplace user.  This is the primary
+# "do I know this?" cue for personal-knowledge-driven picking.
+# Adobe → Software—Application 🛒 ;  small B2B chip designer → no badge.
+_CONSUMER_OBSERVABLE_INDUSTRIES = {
+    # Software / Internet (consumer-facing or workplace-observable)
+    "Software—Application", "Software - Application",
+    "Internet Content & Information",
+    "Internet Retail",
+    # Retail
+    "Specialty Retail", "Apparel Retail", "Discount Stores", "Grocery Stores",
+    "Department Stores", "Home Improvement Retail", "Pharmaceutical Retailers",
+    "Auto & Truck Dealerships",
+    # Apparel & footwear
+    "Apparel Manufacturing", "Footwear & Accessories", "Luxury Goods",
+    # Restaurants & travel
+    "Restaurants", "Lodging", "Resorts & Casinos", "Travel Services",
+    "Gambling", "Leisure",
+    # Consumer staples
+    "Beverages—Non-Alcoholic", "Beverages - Non-Alcoholic",
+    "Beverages—Brewers", "Beverages—Wineries & Distilleries",
+    "Beverages - Brewers", "Beverages - Wineries & Distilleries",
+    "Confectioners", "Packaged Foods", "Personal Products",
+    "Household & Personal Products", "Tobacco",
+    # Consumer electronics & autos
+    "Consumer Electronics", "Auto Manufacturers",
+    # Media & entertainment
+    "Entertainment", "Broadcasting", "Publishing", "Electronic Gaming & Multimedia",
+    # Telecom & airlines
+    "Telecom Services", "Airlines",
+    # Toys
+    "Toys & Hobbies",
+    # Health / wellness consumer-touchable
+    "Drug Manufacturers—General", "Drug Manufacturers - General",
+    "Healthcare Plans",
+}
+
+
+def _classify_consumer_observable(s: dict) -> bool:
+    """Return True if a stock's industry suggests a product/service the user
+    can directly experience as a consumer or workplace user.
+
+    Used for the 🛒 Familiar Brand tag — the primary signal for personal-
+    knowledge-driven picking ("do I know this company?").
+    """
+    industry = (s.get("industry") or "").strip()
+    return industry in _CONSUMER_OBSERVABLE_INDUSTRIES
+
+
 def _classify_lynch(s: dict) -> str:
     """Classify a stock into one or more of Peter Lynch's six categories.
 
@@ -689,26 +739,26 @@ def fetch_macro_indicators() -> dict:
     print("  🌍 Fetching macro indicators from FRED...")
 
     FRED_URL = "https://www.ivo-welch.info/cgi-bin/fredwrap?symbol={}"
+    # Each value is a list of fallback series IDs — try left-to-right, use first that returns data.
+    # FEDFUNDS occasionally drops out of the gateway; DFF (daily fed funds) is a near-equivalent fallback.
     SERIES = {
-        "dgs10":    "DGS10",      # 10Y Treasury yield (%) — daily
-        "dgs2":     "GS2",        # 2Y Treasury yield (%) — monthly (GS2 works; DGS2 not in gateway)
-        "t10y2y":   "T10Y2Y",     # Yield curve spread 10Y-2Y (%) — daily
-        "vix":      "VIXCLS",     # VIX fear index — daily
-        "fedfunds": "FEDFUNDS",   # Fed Funds effective rate (monthly, %)
-        "cpi":      "CPIAUCSL",   # CPI all urban consumers (for YoY calc)
-        "unrate":   "UNRATENSA",  # Unemployment rate NSA (%) — UNRATE not in gateway
+        "dgs10":    ["DGS10"],                # 10Y Treasury yield (%) — daily
+        "dgs2":     ["GS2"],                  # 2Y Treasury yield (%) — monthly
+        "t10y2y":   ["T10Y2Y"],               # Yield curve spread 10Y-2Y (%) — daily
+        "vix":      ["VIXCLS"],               # VIX fear index — daily
+        "fedfunds": ["FEDFUNDS", "DFF"],      # Fed Funds rate — monthly preferred, daily fallback
+        "cpi":      ["CPIAUCSL"],             # CPI all urban consumers (for YoY calc)
+        "unrate":   ["UNRATENSA"],            # Unemployment rate NSA (%)
     }
 
-    raw = {}
-    for key, series_id in SERIES.items():
+    def _fetch_one_series(series_id):
+        """Fetch one FRED series; return list of (date_str, value) or None on failure."""
         try:
             r = requests.get(FRED_URL.format(series_id), timeout=12)
             if r.status_code != 200:
-                print(f"    ⚠️ FRED {series_id}: HTTP {r.status_code}")
-                continue
+                return None
             lines = [ln.strip() for ln in r.text.strip().splitlines()
                      if ln.strip() and not ln.startswith("#")]
-            # Filter valid data rows (format: yyyymmdd,value or date,value)
             data_rows = []
             for ln in lines:
                 parts = ln.split(",")
@@ -718,12 +768,29 @@ def fetch_macro_indicators() -> dict:
                         data_rows.append((parts[0].strip(), val))
                     except ValueError:
                         continue
-            if not data_rows:
-                print(f"    ⚠️ FRED {series_id}: no data rows")
-                continue
-            raw[key] = data_rows  # list of (date_str, value)
-        except Exception as e:
-            print(f"    ⚠️ FRED {series_id} error: {e}")
+            return data_rows or None
+        except Exception:
+            return None
+
+    raw = {}
+    for key, fallback_ids in SERIES.items():
+        success_id = None
+        for series_id in fallback_ids:
+            data_rows = _fetch_one_series(series_id)
+            if data_rows:
+                raw[key] = data_rows
+                success_id = series_id
+                if series_id != fallback_ids[0]:
+                    print(f"    ℹ️ FRED {fallback_ids[0]} unavailable — using fallback {series_id}")
+                break
+        if not success_id:
+            # All fallbacks failed — try last-known cached value if present
+            cached_last = (_cache.get(cache_key) or {}).get(f"_last_{key}")
+            if cached_last:
+                raw[key] = cached_last
+                print(f"    ℹ️ FRED {fallback_ids[0]}: all sources unavailable, using last-known cached value")
+            else:
+                print(f"    ⚠️ FRED {fallback_ids[0]}: unavailable and no cached fallback")
 
     if not raw:
         print("  ⚠️ All FRED fetches failed — macro indicators unavailable")
@@ -862,6 +929,11 @@ def fetch_macro_indicators() -> dict:
     macro["_hist_fedfunds"] = _clean_hist("fedfunds")
     macro["_hist_cpi_yoy"]  = _cpi_yoy_hist[-60:]   # last ~5 years of monthly data
     macro["_hist_unrate"]   = _clean_hist("unrate")
+
+    # Persist raw last-known series for next-run fallback (C1: FEDFUNDS resilience)
+    for _k, _rows in raw.items():
+        if _rows:
+            macro[f"_last_{_k}"] = _rows[-30:]   # last 30 datapoints is plenty for fallback
 
     _cache[cache_key] = macro
     fetched = [k for k in ["dgs10","dgs2","yield_curve","vix","fedfunds","cpi_yoy","unrate"]
@@ -2316,6 +2388,40 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
         except Exception:
             stocks[t]["lynchCategory"] = ""
 
+        # ── Sprint 2 A1: Familiar Brand (consumer-observable) tag ──────────
+        try:
+            stocks[t]["consumerObservable"] = _classify_consumer_observable(stocks[t])
+        except Exception:
+            stocks[t]["consumerObservable"] = False
+
+        # ── Sprint 3 A2: Analyst count + Under-Covered tag ──────────────────
+        # FMP analyst-estimates payload includes numAnalystsRevenue/numAnalystsEps per
+        # forward year.  Most-recent forward year's count is our coverage proxy.
+        # Under-covered = a structural Wall Street inefficiency the user can exploit.
+        try:
+            _ac = None
+            if isinstance(est, list):
+                # Walk forward to find first entry with a positive analyst count
+                for _e in est:
+                    _v = _e.get("numAnalystsRevenue") or _e.get("numAnalystsEps")
+                    if _v and _v > 0:
+                        _ac = int(_v)
+                        break
+            stocks[t]["analystCount"] = _ac
+            # Under-covered thresholds: small/mid cap < 8 analysts, large cap < 12
+            _mc_uc = stocks[t].get("mktCap") or 0
+            if _ac is not None:
+                if _mc_uc < 2e9:
+                    stocks[t]["underCovered"] = (_ac < 8)
+                else:
+                    stocks[t]["underCovered"] = (_ac < 12)
+            else:
+                # No analyst data at all = almost certainly under-covered (often <1 analyst)
+                stocks[t]["underCovered"] = True if _mc_uc and _mc_uc > 50e6 else False
+        except Exception:
+            stocks[t]["analystCount"] = None
+            stocks[t]["underCovered"] = False
+
     print(f"  ✅ Assembled {len(stocks)} stocks with full data")
     return stocks
 
@@ -2854,7 +2960,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         print("  ⏭️ No ANTHROPIC_KEY — skipping AI overview")
         return {}
 
-    print("\n  🤖 Running multi-agent AI analysis (17 specialists + judge)...")
+    print("\n  🤖 Running multi-agent AI analysis (11 specialists + judge)...")
 
     # ── Step 1: Cross-strategy meta-ranking ────────────────────────────────
     # A stock appearing in multiple strategies is cross-validated — stronger signal.
@@ -3104,6 +3210,19 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         _lc_ai = s.get("lynchCategory")
         if _lc_ai:
             parts.append(f"[Lynch={_lc_ai}]")
+        # Sprint 2 A1: Familiar Brand — consumer-observable industries
+        # Signal to agents that the user can directly evaluate the product/service
+        if s.get("consumerObservable"):
+            parts.append("🛒FamiliarBrand")
+        # Sprint 3 A2: Under-covered (Wall Street blindspot quantified)
+        _ac_ai = s.get("analystCount")
+        if s.get("underCovered"):
+            if _ac_ai is None:
+                parts.append("🔍UnderCovered(no analysts)")
+            elif _ac_ai <= 3:
+                parts.append(f"🔍UnderCovered({_ac_ai}an)")
+            else:
+                parts.append(f"🔍UnderCovered({_ac_ai}an)")
 
         return "  " + " | ".join(parts)
 
@@ -3330,12 +3449,9 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
     _pool_cap_appreciation = _agent_pool(_sc_cap_appreciation)
     _pool_emerging_growth  = _agent_pool(_sc_emerging_growth)
     _pool_lynch            = _agent_pool(_sc_lynch)
-    _pool_social_arb       = _agent_pool(_sc_social_arb)
     _pool_cathie_wood      = _agent_pool(_sc_cathie_wood)
-    _pool_magic_formula    = _agent_pool(_sc_magic_formula, strict=True)
     _pool_pabrai           = _agent_pool(_sc_pabrai)
     _pool_howard_marks     = _agent_pool(_sc_howard_marks)
-    _pool_nick_sleep       = _agent_pool(_sc_nick_sleep)
     _pool_burry            = _agent_pool(_sc_burry)
     _pool_insider          = _agent_pool(_sc_insider)
 
@@ -3380,13 +3496,12 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
     _AGENT_DISPLAY = {
         "AI-QualityGrowth":   "QualityGrowth",  "AI-SpecialSit":      "SpecialSit",
         "AI-CapAppreciation": "CapAppreciation", "AI-EmergingGrowth":  "EmergingGrowth",
-        "AI-TenBagger":       "TenBagger",       "AI-GoldmanSC":       "GoldmanSC",
-        "AI-LynchBWYK":       "LynchBWYK",       "AI-SocialArb":       "SocialArb",
-        "AI-Mayer100x":       "Mayer100x",       "AI-CathieWood":      "CathieWood",
-        "AI-MagicFormula":    "MagicFormula",    "AI-Pabrai":          "Pabrai",
-        "AI-HowardMarks":     "HowardMarks",     "AI-NickSleep":       "NickSleep",
+        "AI-TenBagger":       "TenBagger",
+        "AI-LynchBWYK":       "LynchBWYK",
+        "AI-CathieWood":      "CathieWood",
+        "AI-Pabrai":          "Pabrai",
+        "AI-HowardMarks":     "HowardMarks",
         "AI-Burry":           "Burry",           "AI-InsiderTrack":    "InsiderTrack",
-        "AI-WallStBlind":     "WallStBlind",
     }
     _perf_lines = {}   # agent_short_name → one-liner string
     if agent_perf:
@@ -3455,13 +3570,12 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         _JUDGE_AGENT_LABELS = {
             "AI-QualityGrowth":   "QualityGrowth",   "AI-SpecialSit":      "SpecialSit",
             "AI-CapAppreciation": "CapAppreciation",  "AI-EmergingGrowth":  "EmergingGrowth",
-            "AI-TenBagger":       "TenBagger",        "AI-GoldmanSC":       "GoldmanSC",
-            "AI-LynchBWYK":       "LynchBWYK",        "AI-SocialArb":       "SocialArb",
-            "AI-Mayer100x":       "Mayer100x",        "AI-CathieWood":      "CathieWood",
-            "AI-MagicFormula":    "MagicFormula",     "AI-Pabrai":          "Pabrai",
-            "AI-HowardMarks":     "HowardMarks",      "AI-NickSleep":       "NickSleep",
+            "AI-TenBagger":       "TenBagger",
+            "AI-LynchBWYK":       "LynchBWYK",
+            "AI-CathieWood":      "CathieWood",
+            "AI-Pabrai":          "Pabrai",
+            "AI-HowardMarks":     "HowardMarks",
             "AI-Burry":           "Burry",            "AI-InsiderTrack":    "InsiderTrack",
-            "AI-WallStBlind":     "WallStBlind",
         }
         _leaderboard_rows = []
         for src, label in _JUDGE_AGENT_LABELS.items():
@@ -3500,6 +3614,8 @@ YOUR LENS — find durable compounders growing consistently at above-average rat
 - Multi-strategy validation (★×2, ★×3) = cross-validated quality signal
 - Market cap is irrelevant — a $100B company with 37% ROIC and PEG 0.8 is a better pick than a $2B company with 12% ROIC
 - Quality Compounders, Stalwarts, and high-ROIC Fast Growers are your natural habitat
+- BONUS — owner-operator alignment: founder/family-led names with significant insider ownership and a long reinvestment runway compound longer than agency-led peers (Mayer's 100-bagger insight)
+- BONUS — Scale Economics Shared (SES): companies that pass scale benefits to customers as lower prices/better service create self-reinforcing flywheels that make the moat WIDEN with size (Costco/Amazon model, Nick Sleep's framework). Watch for intentionally flat/declining gross margin as scale grows = evidence of sharing.
 QUALITY FILTER:
 - Does the company have structural pricing power, network effects, or switching costs that competitors cannot easily replicate?
 - Is ROIC structurally high (moat-driven) or cyclically high (commodity peak, one-time)?
@@ -3616,6 +3732,7 @@ WHAT YOU ARE LOOKING FOR:
 - Low to moderate institutional ownership: smart money has started noticing but hasn't fully piled in yet — still early enough for meaningful upside
 - Market cap $50M–$2B: below the radar of most fund managers who can't move the needle at this size
 - EPS and revenue both growing 15-40%+ per year for 2+ consecutive years — not a one-year blip
+- WALL STREET BLINDSPOT — structural under-coverage is the single most reliable inefficiency. Look explicitly for: orphaned former mid-caps that lost coverage when they fell below $500M, post-restructuring names mandated investors still avoid, complex holding-company structures, sin-sector names (tobacco/firearms/gambling) trading at structural discounts, recent spinoffs, recent IPOs not yet picked up by sell-side. Estimate analyst count (0–2 = ideal blindspot).
 
 WHAT YOU ARE NOT LOOKING FOR:
 - Hot sectors, AI buzzwords, macro plays — Lynch ignored macro and bought earnings
@@ -3656,36 +3773,6 @@ In `rationale`: state the market cap ($XM), estimate sell-side analyst coverage 
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
-            "GoldmanSC",
-            "🏦 Goldman SC Scanner",
-            f"""You are a Goldman Sachs-style small-cap research analyst. Today is {datetime.date.today()}.{_perf_header("GoldmanSC")}
-HARD SIZE RULE: You ONLY consider companies with market cap between $100M and $2B. Any stock with Mcap > $2B is NOT a small-cap and must be immediately skipped — it already has full analyst coverage and is outside your mandate.
-YOUR LENS — find hidden gems before Wall Street discovers them:
-- Market cap $100M–$2B: big enough to be legitimate, small enough to still multiply 10x
-- Revenue growth ≥ 25% YoY — the hallmark of explosive companies still in their S-curve
-- Proxy for low analyst coverage: small market cap + low institutional interest = still undiscovered
-- Industry tailwinds: AI, cybersecurity, energy transition, aging demographics, automation
-- Unit economics quality: improving gross margins, revenue growing faster than costs (operating leverage)
-- Balance sheet: enough cash to survive 18+ months without profitability if growth requires investment
-- Competitive position: network effects, patents, switching costs, or unique proprietary data
-- Near-term catalysts: earnings beats, product launches, regulatory decisions in next 6-12 months
-- Red flags: dilutive share issuance, high debt, insider selling, inventory buildup
-FOCUS: find companies that will be on Goldman's coverage list in 3 years — right now they're too small to matter to the Street, which is exactly why the opportunity exists.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (pre-filtered $100M–$2B only):\n{sc_candidates_block}
-
-HARD RULES — NON-NEGOTIABLE (DISQUALIFY IMMEDIATELY):
-- Market cap must be $100M–$2B. Mcap ≥ $2B = DISQUALIFIED — skip it entirely.
-- ADV < $1M/day = DISQUALIFIED. Hidden gems you can't trade aren't opportunities. Check the ADV tag.
-- Dilution > +15%/yr = DISQUALIFIED. Constant share issuance offsets operating leverage entirely.
-If fewer than 7 stocks qualify, return fewer. Zero picks is fine if nothing meets the bar.
-
-Apply the Goldman Sachs small-cap hidden gem framework. Every pick must have Mcap under $2B.
-For each: name the industry tailwind, the specific competitive differentiator, and the catalyst in the next 6-12 months.
-State market cap in key_metric field.
-In `rationale`: state market cap ($XM), name the industry tailwind in 2-3 words (e.g. "defense modernisation", "nearshoring"), cite the specific competitive differentiator (not generic), and name the catalyst with estimated timeline.
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
-        (
             "LynchBWYK",
             "🛒 Lynch Buy What You Know",
             f"""You are a Peter Lynch-style analyst applying 'buy what you know'. Today is {datetime.date.today()}.{_perf_header("LynchBWYK")}
@@ -3703,71 +3790,14 @@ FOCUS: the best Lynch pick is a company whose product you use every day, whose s
 
 HARD RULES — NON-NEGOTIABLE (Lynch's own red lines):
 - PEG ≥ 1.0 = REJECT. Lynch's single hardest rule: "A company with earnings growing 15%/yr and P/E of 15 is better than one growing 30%/yr and P/E 40." If PEG (or Fwd PEG) ≥ 1.0, DO NOT PICK — regardless of how good the story is.
-- EPS growth < 10%/yr OR > 50%/yr = REJECT. Lynch's sweet spot is 15–25%. Below 10% is not a growth story; above 50% is an unsustainable spike that will mean-revert.
-- B2B-SaaS or complex financial-engineering business you cannot describe in ONE sentence to a 10-year-old = REJECT. "Buy what you KNOW" means consumer-observable or occupation-observable businesses.
-- FAVOURED: companies where you have seen the product (or a family member has), whose use case is obvious, where the brand has walk-in-the-store evidence.
-- BONUS (not required): at least one insider purchase in the last 90 days = +conviction. Management buying with their own dollars is the cleanest confirmation of a "buy what you know" thesis.
+- EPS growth < 10%/yr OR > 30%/yr = REJECT. Lynch's sweet spot is 15–25%. Below 10% is not a growth story; above 30% is an unsustainable spike that will mean-revert in 1-2 years.
+- 🛒 FamiliarBrand tag REQUIRED. The candidate data marks each stock — only pick stocks tagged 🛒FamiliarBrand. These are consumer-observable industries the user can directly evaluate (Software-Application, Internet Retail, Restaurants, Apparel, Beverages, Consumer Electronics, Streaming, etc.). Stocks WITHOUT this tag = REJECT, no exceptions. The user's edge IS personal product knowledge — picks they cannot personally evaluate are off-thesis.
+- B2B-SaaS or complex financial-engineering business you cannot describe in ONE sentence to a 10-year-old = REJECT.
+- BONUS (strong +conviction): at least one insider purchase in the last 90 days = upgrade conviction one notch. Management buying with their own dollars is the cleanest confirmation of a "buy what you know" thesis.
 
 Apply Lynch's 'buy what you know' framework. Look for companies with simple, understandable business models that serve everyday consumer or workplace needs, growing steadily with real earnings.
 Pick your TOP 7 stocks. For each: describe the business in ONE simple sentence (10-year-old test), identify the everyday observation that validates the thesis, and explain why the valuation is still reasonable (PEG < 1.0).
 In `rationale`: write the "everyday observation" insight (e.g. "every dentist office uses this software"), then state PEG (must be <1.0), EPS growth% (must be 10–50%), and whether any insider has bought recently.
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
-        (
-            "SocialArb",
-            "📱 Social Arbitrage",
-            f"""You are a Chris Camillo-style social arbitrage analyst. Today is {datetime.date.today()}.{_perf_header("SocialArb")}
-YOUR LENS — find companies whose products are going viral before Wall Street quantifies it:
-- Consumer trend momentum: revenue acceleration (current RevGrowth > prior year) = trend hitting mainstream
-- Brand and product velocity: companies in consumer sectors where adoption is outpacing analyst estimates
-- Revenue surprise potential: beat rate > 75% + RevGrowth accelerating = analysts are too conservative
-- Early adoption indicators: small-mid cap companies in consumer, tech, or healthcare with exploding unit metrics
-- Analyst blindspot: small enough that major banks don't cover it, but large enough that the trend is real
-- The information gap: what the market KNOWS vs what is HAPPENING in the real world (social, behavioral data)
-- Platform momentum: apps, marketplaces, or brands where user growth is compounding faster than reported revenue
-- Sentiment divergence: stock price down or flat while fundamental trend data is clearly accelerating
-B3 HARD RULES — NON-NEGOTIABLE:
-- Revenue growth must be ACCELERATING YoY by ≥5 percentage points (e.g. 10%→15%+, not 15%→15%)
-- Business must be consumer-facing OR consumer-adjacent (B2B SaaS with no consumer touchpoint = wrong lens)
-- Market cap must be <$15B — you are finding information gaps, not validating well-covered large-caps
-- Beat rate must be >60% — analysts must be consistently wrong (underestimating) for the arbitrage to exist
-ANTI-PATTERN: do not pick a stock because it has "strong brand" or "viral product" without the revenue data confirming actual adoption — anecdote without acceleration is not social arbitrage.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by rev acceleration + beat rate + consumer/tech momentum — your lens):\n{_pool_social_arb}{(chr(10)*2 + _consumer_intel) if _consumer_intel else ""}
-
-Apply social arbitrage thinking. Find companies with revenue acceleration (current growth ≥ prior year +5pp), high beat rates (>60%), and consumer/behavioral trends that institutional analysts haven't yet quantified.
-If RECENT CONSUMER NEWS is provided above, prioritise companies whose products appear there — real-world trend confirmation is your edge.
-Pick your TOP 7 stocks. For each: name the SPECIFIC consumer or behavioral trend (e.g. "Gen-Z shift to X, causing 22% rev acceleration"), state rev growth direction, and quantify the analyst gap (e.g. "consensus: 10% growth; data suggests 25%+").
-In `rationale`: confirm (1) revenue is accelerating YoY by ≥5pp, (2) sector is consumer-facing, (3) named behavioral trend.
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
-        (
-            "Mayer100x",
-            "💯 100-Bagger Framework",
-            f"""You are a Christopher Mayer-style 100-bagger analyst. Today is {datetime.date.today()}.{_perf_header("Mayer100x")}
-HARD SIZE RULE: You ONLY consider companies with market cap UNDER $2 BILLION. A $3B company cannot be a 100-bagger starting point — the math doesn't work. If a company has Mcap ≥ $2B, skip it immediately without analysis.
-YOUR LENS — find companies with genuine 100x potential based on Mayer's historical research:
-- Small starting market cap: under $2B — 100x is mathematically impossible from $50B
-- Long growth runway: the market served must support decades of revenue growth (large, growing TAM)
-- High ROIC (Return on Invested Capital) > 15%, ideally 20%+: Mayer's single most predictive metric
-- Earnings growth potential: 15-20%+ annual EPS growth for many years — the mathematical engine of 100x
-- Owner-operator leadership: CEO and management with significant personal stock ownership (skin in the game)
-- Reinvestment opportunity: company redeploys profits into new growth at high rates, not dividends
-- Economic moat: structural competitive advantages that protect profits as the company scales
-- No dilution: company not issuing massive amounts of new shares (dilution kills 100-bagger math)
-- "Twin engines": both earnings growth AND P/E multiple expansion working together
-FOCUS: Mayer found that 100-baggers typically took 20-25 years. You're looking for the starting conditions — small size, high ROIC, owner-operated, large TAM, reinvestment runway — not the arrival.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (pre-filtered <$2B):\n{sc_candidates_block}
-
-HARD RULES — NON-NEGOTIABLE (DISQUALIFY IMMEDIATELY):
-- Mcap ≥ $2B = DISQUALIFIED. 100x math doesn't work from there.
-- ADV < $1M/day = DISQUALIFIED. 100-baggers you can't exit at scale are lottery tickets.
-- Dilution > +15%/yr = DISQUALIFIED. Mayer is emphatic: dilution above modest levels makes 100x mathematically impossible.
-- Net Debt/EBITDA > 4 = DISQUALIFIED. Leveraged 100-baggers don't exist; debt compounds against you.
-If the list contains fewer than 7 qualifying small-caps, return fewer picks. Zero picks is acceptable if no stock meets the bar.
-
-Apply Mayer's 100-bagger framework. Every pick MUST have market cap under $2B. Prioritize: ROIC >15%, large reinvestable TAM, owner-operator management, no excessive dilution, compounding earnings power.
-Pick up to 7 potential 100-baggers (only from stocks with Mcap < $2B). For each: state the market cap explicitly in key_metric, assess ROIC quality, and explain the TAM that justifies decades of growth.
-In `rationale`: cite ROIC%, state market cap vs estimated TAM (e.g. "$350M cap / $15B TAM = 2.3% penetration"), note if founder/owner-operator leads (% ownership), and annual dilution rate. These are Mayer's four 100-bagger signals.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3796,33 +3826,6 @@ Apply ARK's disruptive innovation framework. Find pure-play companies in AI, rob
 If RECENT TECH NEWS is provided above, use it to identify which innovation platforms are accelerating RIGHT NOW and which companies are best positioned to benefit.
 Pick your TOP 7 disruptive innovators. BEFORE finalising each pick, confirm: (1) ≥50% revenue from the named disruptive segment, (2) named platform is one of the five (AI/robotics/genomics/energy/blockchain), (3) dilution ≤20%/yr. Drop any pick that fails.
 In `rationale`: lead with "Platform: [name] | Segment Rev: X%" to confirm the pure-play rule passes. Then describe the cost-curve dynamic (e.g. "unit cost falling 40%/yr") and the network-effect or winner-take-most dynamic that makes scale an advantage.
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
-        (
-            "MagicFormula",
-            "🔢 Magic Formula",
-            f"""You are a Joel Greenblatt Magic Formula analyst. Today is {datetime.date.today()}.{_perf_header("MagicFormula")}
-YOUR LENS — find stocks that are BOTH high quality AND cheap using Greenblatt's two-factor screen:
-- Return on Invested Capital (ROIC) > 20%: the highest-quality businesses that generate strong returns on every dollar invested
-- Earnings Yield > 10% (the inverse of P/E): cheap relative to earnings — you're paying $10 for $1 of earnings
-- Combined ranking: the Magic Formula ranks companies by the combination of these two metrics
-- Market cap filter: $50M–$10B — exclude illiquid micro-caps and already-discovered mega-caps
-- Sector exclusions: skip pure financials and utilities (different capital structures distort the formula)
-- Debt check: verify high ROIC isn't just financial leverage amplifying mediocre returns
-- Earnings quality: FCF conversion > 0.70 — are the earnings real or accounting-driven
-- Reversion check: is this company's high ROIC structural (moat-driven) or about to compress (cyclical peak)
-- The Magic Formula works because: high ROIC = quality, high earnings yield = value; together they beat the market because Wall Street rarely finds both simultaneously
-FOCUS: Greenblatt proved this two-factor screen works over 20+ years. Your job is to apply it rigorously and check whether the high ROIC is truly structural or will revert.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by earnings yield + ROIC — Greenblatt's two factors, your lens):\n{_pool_magic_formula}
-
-HARD RULES — DISQUALIFY IMMEDIATELY:
-- ROIC < 20% OR earnings yield < 10% (i.e. P/E > 10) = DISQUALIFIED. The candidate list is pre-filtered but verify each pick yourself.
-- Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. Levered "high-ROIC" names are usually cyclical-peak earnings with debt masking the return.
-Return fewer than 7 picks if needed — quality over quantity.
-
-Apply Greenblatt's Magic Formula: find stocks with BOTH high ROIC (quality) AND high earnings yield (value). The combination of these two metrics, simultaneously present, is the rare opportunity.
-Pick your TOP 7 Magic Formula stocks. For each: explicitly confirm the ROIC (must be ≥20%) and earnings yield (must be ≥10%), assess whether the ROIC is structural or cyclical, and verify earnings quality via FCF conversion.
-In `rationale`: lead with "ROIC: X% | EY: Y%" — these two numbers are the entire thesis. Then add FCF conversion% and one clause on whether ROIC is structural or cyclical.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
@@ -3873,30 +3876,6 @@ In `rationale`: format as "Consensus: '[what the crowd thinks]' | Reality: [spec
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
         (
-            "NickSleep",
-            "🌀 Scale Economics Shared",
-            f"""You are a Nick Sleep-style compounder analyst. Today is {datetime.date.today()}.{_perf_header("NickSleep")}
-YOUR LENS — find companies that share their scale economics with customers, creating self-reinforcing flywheels:
-- Scale Economics Shared (SES): as the company grows larger, it becomes CHEAPER or MORE VALUABLE for customers — not more expensive
-- Flywheel mechanics: lower costs → better prices for customers → more customers → more scale → lower costs again
-- Customer obsession evidence: willingness to sacrifice short-term margin to improve long-term customer value
-- Costco model: keeps margins artificially low (15%) to give members the best deal → unbreakable loyalty
-- Amazon model: reinvests every dollar of profit into infrastructure that makes the service better and cheaper
-- Long-term thinking: quarterly earnings suppressed by reinvestment, founder letters focused on decades
-- Non-obvious moat: the advantage isn't patents or brand — it's a culture and business model the whole organization embodies
-- Capital allocation: management reinvests into high-return growth rather than dividends or buybacks at peaks
-- Expanding customer lifetime value: the business creates more value per customer every year
-FOCUS: Sleep identified Amazon and Costco before most because he looked for THIS specific flywheel pattern — not earnings per share, but the structural mechanism that makes the business permanently stronger.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by gross margin + FCF conversion + sticky revenue growth — your lens):\n{_pool_nick_sleep}
-
-HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. SES compounders (Costco, Amazon, Berkshire) famously run with net cash or low leverage — the flywheel requires the balance sheet freedom to share savings with customers.
-
-Apply Nick Sleep's Scale Economics Shared framework. Find companies that become MORE customer-friendly as they grow — where scale benefits are passed to customers rather than captured as margin, creating a self-reinforcing flywheel.
-Pick your TOP 7 SES compounders. For each: describe the specific flywheel mechanism, provide evidence of customer obsession over margin maximization, and explain why scale makes the competitive advantage stronger not weaker.
-In `rationale`: name the flywheel in one clause (e.g. "more users → lower unit cost → lower prices → more users"), cite gross margin trend (intentionally flat/declining as scale grows = evidence of sharing), and name one specific instance of customer obsession over margin extraction.
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
-        (
             "Burry",
             "🕳️ Burry Deep Value",
             f"""You are a Michael Burry-style deep value analyst. Today is {datetime.date.today()}.{_perf_header("Burry")}
@@ -3941,35 +3920,6 @@ Apply insider buying and smart money tracking. Focus on stocks with cluster insi
 If RECENT INSIDER NEWS is provided above, cross-reference it with the candidate list — stocks appearing in both the candidate pool AND recent insider news are your highest-priority targets.
 Pick your TOP 7 stocks with the strongest insider/smart money signals. For each: describe the specific buying pattern (who, how much, timing), explain what the insiders likely know that the market doesn't, and confirm with the fundamental data.
 In `rationale`: state who bought (CEO/CFO/Director/10%+ holder), the dollar amount and approximate date, whether it's cluster (multiple insiders) or single buyer, and one fundamental data point confirming the signal. Format: "[Role] $X (~date) — [cluster/single]. Confirmation: [data point]."
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
-        (
-            "WallStBlind",
-            "🔍 Wall St Blindspot",
-            f"""You are a senior analyst at a boutique firm specializing in opportunities Wall Street can't or won't cover. Today is {datetime.date.today()}.{_perf_header("WallStBlind")}
-HARD SIZE RULE: You ONLY consider companies with market cap under $2B. A $3B or $4B company has full sell-side coverage — it is NOT a blindspot by definition. Any Mcap ≥ $2B must be immediately disqualified.
-YOUR LENS — systematically find what the major banks structurally miss:
-- Coverage gap: companies below $2B market cap where major banks don't assign dedicated analysts
-- Orphaned small-caps: former mid-caps that fell below $500M and lost analyst coverage (often at huge discounts)
-- Complex structures: holding companies, partnerships, or unusual corporate structures that discourage institutional buyers
-- Sin stock discounts: quality companies in hated sectors (tobacco, fossil fuels, firearms, gambling) at structural discounts
-- Micro-cap gems: companies under $500M where institutional size limits force smart money to pass — their loss, your gain
-- Post-restructuring: companies emerging from debt restructuring with clean balance sheets still avoided by mandated investors
-- Misclassified companies: businesses categorized incorrectly by indexes or screeners (e.g. fintech labeled as "banking")
-- Foreign-listed quality: companies with strong US operations but trading on foreign exchanges at a discount
-- The structural inefficiency: Wall Street's economic incentives (big fees require big market caps) mean small-cap quality is permanently undercovered
-FOCUS: the most reliable inefficiency in markets is structural: large institutions CAN'T own small companies (position size economics), so genuinely good small companies often trade cheap for years. Find the best ones.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (pre-filtered <$2B — Wall Street's blind spot by definition):\n{sc_candidates_block}
-
-HARD RULES — NON-NEGOTIABLE (DISQUALIFY IMMEDIATELY):
-- Mcap ≥ $2B = DISQUALIFIED. Full analyst coverage, not a blindspot.
-- ADV < $1M/day = DISQUALIFIED. Coverage gap is worthless if the stock cannot be bought.
-- Dilution > +15%/yr = DISQUALIFIED. Chronic issuers aren't hidden gems, they're cash-raisers.
-If fewer than 7 qualify, return fewer picks. Zero is fine if nothing qualifies.
-
-Apply the Wall Street Blindspot framework. Every pick must have Mcap under $2B.
-For each: explain the specific structural reason Wall Street misses this, confirm business quality, and describe how the coverage gap creates pricing opportunity. State market cap in key_metric.
-In `rationale`: state market cap ($XM), estimated sell-side analyst count (0-2), name the specific reason for no coverage (too small / spin-off / boring sector / non-US-listed / recent IPO), and cite one business quality metric (e.g. EBITDA margin%, FCF yield%, revenue retention rate).
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
     ]
@@ -4041,9 +3991,9 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
     )
 
     # ── Step 7: Judge agent — final synthesis ───────────────────────────────
-    judge_system = f"""You are the Master Manager — a chief investment officer and final decision-maker who synthesises recommendations from seventeen specialist analysts into a single, high-conviction portfolio list.
+    judge_system = f"""You are the Master Manager — a chief investment officer and final decision-maker who synthesises recommendations from eleven specialist analysts into a single, high-conviction portfolio list for an investor whose edge is personal knowledge of companies they directly use as a consumer or workplace user.
 Today is {datetime.date.today()}.
-Your seventeen specialists are: Quality Growth, Special Situation, Capital Appreciation, Emerging Growth, 10-Bagger Hunter, Goldman SC Scanner, Lynch Buy What You Know, Social Arbitrage, 100-Bagger Framework, Disruptive Innovation, Magic Formula, Pabrai Asymmetric Bet, Marks Second-Level, Scale Economics Shared, Burry Deep Value, Insider & Smart Money, Wall St Blindspot.
+Your eleven specialists are: Quality Growth (compounders), Special Situation, Capital Appreciation, Emerging Growth, 10-Bagger Hunter, Lynch Buy What You Know, Disruptive Innovation, Pabrai Asymmetric Bet, Marks Second-Level, Burry Deep Value, Insider & Smart Money.
 
 YOUR INVESTMENT PHILOSOPHY:
 - Quality first: ROIC > 15% sustained is the clearest indicator of durable competitive advantage; it is the CORE decision variable — check ROIC before anything else
@@ -4052,6 +4002,8 @@ YOUR INVESTMENT PHILOSOPHY:
 - A great business at a fair price beats a fair business at a great price every time (Buffett), but an average business at a "cheap" price destroys capital (value trap)
 - Catalyst discipline: prefer picks where a specific, identifiable event in 1-6 months can unlock value — "cheap" without a catalyst is a portfolio deadweight
 - Size neutrality: a $100B compounder at PEG 0.8 and 35% ROIC beats a $1B name at PEG 0.8 with 15% ROIC; size is irrelevant to quality
+- 🛒 FAMILIAR-BRAND PREFERENCE — the user picks stocks based on personal knowledge of products/services they directly use (Adobe, Microsoft, Costco, etc.). Candidates carrying the 🛒FamiliarBrand tag are consumer-observable — the user can independently evaluate the product. When two picks are otherwise equal in quality and valuation, PREFER the 🛒 one. Note in synopsis when a pick is 🛒 ("user can directly evaluate this product/service").
+- 🔍 UNDER-COVERED PREFERENCE — names tagged 🔍UnderCovered have <8 sell-side analysts (or <12 for >$2B caps). This is structural Wall Street inefficiency: analysts cluster on big mega-caps because that's where the fees are; small/mid quality names get neglected and persistently mispriced. When two picks are otherwise equal, PREFER the 🔍 one — that's where personal-knowledge edge generates alpha vs the consensus crowd.
 - LYNCH-CATEGORY BALANCE (target distribution across final picks):
     * ~40% Fast Growers / Stalwarts  (compounders — the portfolio core)
     * ~30% Asset Plays / Turnarounds (cheap optionality — uncorrelated alpha)
@@ -4071,7 +4023,7 @@ QUALITY STANDARD — hard filter before including any pick:
 - Survivability: would this business remain competitively relevant through a recession AND an aggressive well-funded new entrant simultaneously?
 - For 10-Bagger candidates: gross margin > 30% + positive operating income replaces FCF as the quality gate — but dilution < 5%/yr is non-negotiable
 
-YOUR ROLE: Synthesise the seventeen specialist reports into a final 5-20 pick list diversified across lenses (quality + special situations + appreciation + emerging growth + small-cap + deep value + contrarian + insider signals). Prioritise consensus names rigorously. Include at least one pick from each specialist lens where quality meets the bar. Never pad the list — 8 genuine picks beat 20 forced ones.{_judge_track_block}"""
+YOUR ROLE: Synthesise the eleven specialist reports into a final 5-20 pick list diversified across lenses (quality + special situations + appreciation + emerging growth + small-cap + deep value + contrarian + insider signals). Prioritise consensus names rigorously. Include at least one pick from each specialist lens where quality meets the bar. Never pad the list — 8 genuine picks beat 20 forced ones.{_judge_track_block}"""
 
     # ── Build macro context block for judge (from live FRED data) ──────────
     macro_block = ""
@@ -4090,7 +4042,7 @@ Use these REAL numbers to anchor your macro_context, market_outlook, and crash_r
 YIELD CURVE INVERTED (<0) historically precedes recession 6-18 months out. VIX>25 = genuine fear.
 Rates ELEVATED (>4%) compress growth multiples — prefer quality cash generators over pure-growth names."""
 
-    judge_user = f"""SEVENTEEN SPECIALIST REPORTS:
+    judge_user = f"""ELEVEN SPECIALIST REPORTS:
 {specialist_block}
 
 {consensus_block}
@@ -4414,40 +4366,28 @@ def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
         "EmergingGrowth": ("🚀 Emerging Growth",
                           "Identifies smaller fast-growing companies ($100M-$15B) at the early stage of becoming compounders. Targets 20%+ revenue growth, rising ROIC, and large underserved TAMs."),
         "TenBagger":      ("🎯 10-Bagger Hunter",
-                          "Peter Lynch-style small-cap hunter. Looks for underfollowed companies ($50M-$2B) with 15-40% EPS+revenue growth, simple competitive advantages, and at least 2 expansion levers not yet exhausted."),
-        "GoldmanSC":      ("🏦 Goldman SC Scanner",
-                          "Goldman Sachs-style small-cap hidden gem scanner. Targets $100M-$2B companies with 25%+ revenue growth, industry tailwinds, operating leverage, and near-term catalysts before mainstream coverage."),
+                          "Peter Lynch-style small-cap hunter. Looks for underfollowed companies ($50M-$2B) with 15-40% EPS+revenue growth, simple competitive advantages, at least 2 expansion levers not yet exhausted, and structural Wall Street under-coverage (orphans, post-restructuring, complex/sin-sector names)."),
         "LynchBWYK":      ("🛒 Lynch Buy What You Know",
                           "Lynch's 'buy what you know' approach — simple, understandable businesses serving everyday consumer or workplace needs, growing 15-25%/yr with real earnings at PEG <1.0."),
-        "SocialArb":      ("📱 Social Arbitrage",
-                          "Chris Camillo-style trend hunting. Finds companies whose products/services show viral consumer adoption patterns with revenue acceleration that institutional analysts haven't yet quantified."),
-        "Mayer100x":      ("💯 100-Bagger Framework",
-                          "Christopher Mayer's 100-bagger criteria: small market cap (<$2B), ROIC >15%, large reinvestable TAM, owner-operator management, no dilution, and 'twin engines' of earnings growth + multiple expansion."),
         "CathieWood":     ("🚀 Disruptive Innovation",
                           "ARK Invest-style innovation screen. Identifies pure-play companies in AI, robotics, genomics, energy storage, or blockchain riding Wright's Law cost curves with network effects and expanding TAMs."),
-        "MagicFormula":   ("🔢 Magic Formula",
-                          "Greenblatt's two-factor screen: ROIC >20% (quality) combined with earnings yield >10% (value). The simultaneous presence of both is rare and historically signals market-beating returns."),
         "Pabrai":         ("🎲 Pabrai Asymmetric Bet",
                           "Mohnish Pabrai's 'heads I win, tails I don't lose much' framework. Finds bets with 3:1+ upside/downside asymmetry where downside is protected by real assets or essential business value."),
         "HowardMarks":    ("🔄 Marks Second-Level",
                           "Howard Marks' second-level thinking — contrarian analysis where market consensus is factually wrong. Targets oversold stocks where the negative narrative exceeds actual fundamental deterioration."),
-        "NickSleep":      ("🌀 Scale Economics Shared",
-                          "Nick Sleep's rare framework that identified Amazon and Costco early. Finds companies that share scale benefits with customers rather than capturing them as margin — creating self-reinforcing flywheels."),
         "Burry":          ("🕳️ Burry Deep Value",
                           "Michael Burry-style catalyst-driven deep value. Identifies hidden assets, temporary earnings distortions, and specific upcoming events that will FORCE the market to reprice."),
         "InsiderTrack":   ("👁️ Insider & Smart Money",
                           "Tracks cluster insider buying (multiple executives buying simultaneously) and significant open-market purchases. Insiders are the most informed buyers — their conviction buying with personal capital is a high-signal indicator."),
-        "WallStBlind":    ("🔍 Wall St Blindspot",
-                          "Systematically finds quality companies that fall below institutional radar — too small for major bank coverage, with structures or sectors that discourage large fund participation, creating persistent mispricings."),
     }
 
     AGENT_COLORS = {
         "QualityGrowth": "2E7D32", "SpecialSit": "6A1B9A", "CapAppreciation": "1565C0",
-        "EmergingGrowth": "E65100", "TenBagger": "BF360D", "GoldmanSC": "1B5E20",
-        "LynchBWYK": "880E4F", "SocialArb": "4A148C", "Mayer100x": "1A237E",
-        "CathieWood": "0D47A1", "MagicFormula": "004D40", "Pabrai": "33691E",
-        "HowardMarks": "827717", "NickSleep": "01579B", "Burry": "3E2723",
-        "InsiderTrack": "263238", "WallStBlind": "37474F",
+        "EmergingGrowth": "E65100", "TenBagger": "BF360D",
+        "LynchBWYK": "880E4F",
+        "CathieWood": "0D47A1", "Pabrai": "33691E",
+        "HowardMarks": "827717", "Burry": "3E2723",
+        "InsiderTrack": "263238",
     }
 
     specialist_picks = ai_result.get("_specialist_picks", {})
@@ -4482,8 +4422,8 @@ def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
 
     # Order: existing 5 first, then 12 new
     agent_order = ["QualityGrowth", "SpecialSit", "CapAppreciation", "EmergingGrowth", "TenBagger",
-                   "GoldmanSC", "LynchBWYK", "SocialArb", "Mayer100x", "CathieWood", "MagicFormula",
-                   "Pabrai", "HowardMarks", "NickSleep", "Burry", "InsiderTrack", "WallStBlind"]
+                   "LynchBWYK", "CathieWood",
+                   "Pabrai", "HowardMarks", "Burry", "InsiderTrack"]
 
     for agent_key in agent_order:
         if agent_key not in specialist_picks:
@@ -6410,20 +6350,20 @@ def build_picks_tracking(wb, stocks):
         "AI-CapAppreciation":  "📈 Cap.Apprecn",
         "AI-EmergingGrowth":   "🚀 Emerg.Growth",
         "AI-TenBagger":        "🎯 10-Bagger",
-        "AI-GoldmanSC":        "🏦 Goldman SC",
         "AI-LynchBWYK":        "🛒 Lynch BWYK",
-        "AI-SocialArb":        "📱 Social Arb",
-        "AI-Mayer100x":        "💯 100-Bagger",
         "AI-CathieWood":       "🚀 Disruptive",
-        "AI-MagicFormula":     "🔢 Magic Formula",
         "AI-Pabrai":           "🎲 Pabrai",
         "AI-HowardMarks":      "🔄 Contrarian",
-        "AI-NickSleep":        "🌀 Scale Econ",
         "AI-Burry":            "🕳️ Deep Value",
         "AI-InsiderTrack":     "👁️ Insider",
-        "AI-WallStBlind":      "🔍 WallStBlind",
         "AI-Judge":            "⚖️ Master Manager",
         # legacy labels kept for old log entries
+        "AI-GoldmanSC":        "🏦 Goldman SC (retired)",
+        "AI-SocialArb":        "📱 Social Arb (retired)",
+        "AI-Mayer100x":        "💯 100-Bagger (retired)",
+        "AI-MagicFormula":     "🔢 Magic Formula (retired)",
+        "AI-NickSleep":        "🌀 Scale Econ (retired)",
+        "AI-WallStBlind":      "🔍 WallStBlind (retired)",
         "AI-Bull":             "🐂 Bull (legacy)",
         "AI-Value":            "🛡️ Value (legacy)",
         "AI-Contrarian":       "🔄 Contrarian (legacy)",
@@ -6887,6 +6827,97 @@ def build_quality_compounders(wb, stocks):
     write_table(ws, qualified[:TOP_N], headers, sr, header_color="B71C1C", widths=widths)
     print(f"  ✅ Quality Compounders tab done — {min(len(qualified), TOP_N)} (from {len(qualified)})")
     return qualified
+
+
+def build_hold_forever_tab(wb, stocks):
+    """Sprint 3 A4: 💎 Hold Forever — the user's natural long-term shortlist.
+
+    Stricter than Quality Compounders. Only names that pass:
+    - ROIC > 15% (current TTM proxy for sustained quality)
+    - Revenue consistency >= 80% (4/5 years positive growth)
+    - FCF growth consistency >= 60% (FCF positive most years)
+    - 5Y revenue CAGR 5-25% (steady but not unsustainable)
+    - Gross margin > 40% OR Operating margin > 15% (moat proxy)
+    - Net Debt/EBITDA < 3 (or net cash)
+    - Net buybacks (sharesGrowth <= 0.02 — no significant dilution)
+    - Piotroski >= 6 (financial health)
+    - mktCap > $1B (need scale to compound for years)
+
+    Limit 25 names. The user-philosophy shortlist for personal-knowledge evaluation.
+    """
+    print("\n📊 Building Tab: 💎 Hold Forever...")
+    qualified = []
+    for t, s in stocks.items():
+        if not _is_common_stock(s):
+            continue
+        roic = s.get("roic")
+        rc   = s.get("revConsistency")
+        fgc  = s.get("fcfGrowthConsistency")
+        rg5  = s.get("revGrowth5y") or s.get("fiveYRevGrowth")
+        gm   = s.get("grossMargin")
+        om   = s.get("operatingMargin")
+        nde  = s.get("netDebtEbitda")
+        sg   = s.get("sharesGrowth")
+        pio  = s.get("piotroski")
+        mc   = s.get("mktCap") or 0
+        sec  = s.get("sector") or ""
+
+        # Hard gates
+        if mc < 1e9: continue
+        if not roic or roic < 0.15: continue
+        if rc is None or rc < 0.80: continue
+        if fgc is not None and fgc < 0.60: continue   # may be missing for new IPOs — allow None
+        if rg5 is None or rg5 < 0.05 or rg5 > 0.25: continue
+        # Moat proxy: high gross margin OR high operating margin (business has pricing power)
+        moat = (gm and gm > 0.40) or (om and om > 0.15)
+        if not moat: continue
+        if nde is not None and nde > 3.0: continue
+        if sg is not None and sg > 0.02: continue   # net buybacks (or flat) — no significant dilution
+        if pio is not None and pio < 6: continue
+        # Skip cyclical commodity-driven sectors — moat is structural, not cyclical
+        if sec in ("Basic Materials", "Energy"): continue
+
+        # Score: how strongly does this fit the "compound for a decade" pattern?
+        score = 0
+        score += min(40, roic * 100)            # ROIC contributes up to 40
+        score += rc * 20                        # consistency up to 20
+        if fgc is not None: score += fgc * 15
+        score += min(15, rg5 * 50)              # 5Y CAGR up to 15
+        if gm: score += min(10, gm * 12)        # gross margin up to 10
+        if sg is not None and sg < 0: score += min(8, abs(sg) * 100)   # buyback bonus
+        if nde is not None and nde < 0: score += 5   # net cash bonus
+        # Familiar Brand bonus — user can directly evaluate
+        if s.get("consumerObservable"): score += 8
+        # Under-covered bonus — Wall St hasn't piled in
+        if s.get("underCovered"): score += 5
+
+        row = format_stock_row(s)
+        row["Score"] = round(score, 1)
+        # Add Hold Forever-specific columns the user wants to see
+        row["Rev Consist."] = rc
+        row["FCF Consist."] = fgc
+        row["Familiar"]     = "🛒" if s.get("consumerObservable") else ""
+        row["Under-Cov"]    = "🔍" if s.get("underCovered") else ""
+        qualified.append(row)
+
+    qualified.sort(key=lambda x: -x["Score"])
+    for i, row in enumerate(qualified):
+        row["Rank"] = i + 1
+
+    ws = wb.create_sheet("3c. Hold Forever")
+    ws.sheet_view.showGridLines = False
+    sr = add_title(ws,
+                   "💎 Hold Forever — Buy-and-Forget Quality",
+                   f"ROIC >15% + 80%+ rev consistency + steady 5–25% CAGR + moat (gross margin >40% or op margin >15%) "
+                   f"+ no dilution + Piotroski ≥6. Top 25 names — your natural long-term shortlist. {datetime.date.today()}")
+
+    headers = ["Rank", "Ticker", "Company", "Sector", "Familiar", "Under-Cov", "Price", "ROIC", "ROE",
+               "FCF Yield", "Gross Mgn", "Oper Mgn", "Rev Consist.", "FCF Consist.",
+               "Rev Growth 5Y", "Shares Δ", "Net Debt/EBITDA", "Piotroski", "MktCap ($B)", "Score"]
+    widths = [5, 8, 24, 14, 8, 9, 8, 7, 7, 9, 9, 9, 11, 11, 12, 8, 14, 9, 11, 7]
+    write_table(ws, qualified[:25], headers, sr, header_color="6A1B9A", widths=widths)
+    print(f"  ✅ Hold Forever tab done — {min(len(qualified), 25)} (from {len(qualified)} qualifying)")
+    return qualified[:25]
 
 
 def fetch_etf_returns(etf_tickers: list) -> dict:
@@ -7906,7 +7937,8 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       sector_rows=None, etf_rows=None, ai=None, macro=None,
                       portfolio=None, fmp_call_count=0, ten_baggers=None,
                       agent_perf=None,     # B1: per-agent attribution dict
-                      sparklines=None) -> str:  # {ticker: [float]} 5Y sampled prices
+                      sparklines=None,
+                      hold_forever=None) -> str:  # Sprint 3 A4: long-term shortlist
     """Generate a self-contained mobile-responsive HTML dashboard.
     Reads the same data structures that feed the Excel — no extra computation.
     Returns the full HTML string.
@@ -8245,6 +8277,27 @@ function showMacroDetail(el, id) {
             out.append(f'<span class="badge {cls}" style="font-size:.63rem">{lbl}</span>')
         return " ".join(out)
 
+    # Sprint 2 A1: 🛒 Familiar Brand badge — surfaces consumer-observable names
+    # to help the user spot picks they can evaluate from personal experience.
+    def _familiar_badge(stock):
+        if stock and stock.get("consumerObservable"):
+            return ('<span class="badge" style="font-size:.63rem;background:#4a148c;'
+                    'color:#fff;padding:2px 6px;border-radius:3px" '
+                    'title="Familiar brand — consumer-observable industry, you can evaluate this from personal experience">'
+                    '🛒 Familiar</span>')
+        return ""
+
+    # Sprint 3 A2: 🔍 Under-Covered badge — Wall Street has not noticed yet
+    def _undercovered_badge(stock):
+        if stock and stock.get("underCovered"):
+            ac = stock.get("analystCount")
+            label = f"🔍 {ac} analyst{'s' if ac != 1 else ''}" if ac else "🔍 Uncovered"
+            return ('<span class="badge" style="font-size:.63rem;background:#0d47a1;'
+                    'color:#fff;padding:2px 6px;border-radius:3px" '
+                    'title="Wall Street has not noticed — low analyst coverage, structural inefficiency to exploit">'
+                    f'{label}</span>')
+        return ""
+
     _sparklines_data = sparklines or {}
 
     def _sparkline_svg(ticker, w=200, h=44):
@@ -8376,47 +8429,30 @@ function showMacroDetail(el, id) {
                 "compounders. Targets 20%+ revenue growth, rising ROIC, and large underserved TAMs."),
             "TenBagger":      ("🎯 10-Bagger Hunter", "BF360D",
                 "Peter Lynch-style small-cap hunter. Looks for underfollowed companies ($50M–$2B) with "
-                "15–40% EPS+revenue growth, simple competitive advantages, and at least 2 expansion levers."),
-            "GoldmanSC":      ("🏦 Goldman SC Scanner","1B5E20",
-                "Goldman Sachs-style small-cap hidden gem scanner. Targets $100M–$2B companies with 25%+ "
-                "revenue growth, industry tailwinds, operating leverage, and near-term catalysts before coverage."),
+                "15–40% EPS+revenue growth, simple competitive advantages, at least 2 expansion levers, and "
+                "structural Wall Street under-coverage (orphans, post-restructuring, complex/sin-sector names)."),
             "LynchBWYK":      ("🛒 Lynch Buy What You Know","880E4F",
                 "Lynch's 'buy what you know' approach — simple, understandable businesses serving everyday "
                 "consumer or workplace needs, growing 15–25%/yr with real earnings at PEG <1.0."),
-            "SocialArb":      ("📱 Social Arbitrage",  "4A148C",
-                "Chris Camillo-style trend hunting. Finds companies whose products show viral consumer "
-                "adoption patterns with revenue acceleration that institutional analysts haven't yet quantified."),
-            "Mayer100x":      ("💯 100-Bagger Framework","1A237E",
-                "Christopher Mayer's 100-bagger criteria: small market cap (<$2B), ROIC >15%, large "
-                "reinvestable TAM, owner-operator management, no dilution, and 'twin engines' of growth."),
             "CathieWood":     ("🚀 Disruptive Innovation","0D47A1",
                 "ARK Invest-style innovation screen. Identifies pure-play companies in AI, robotics, "
                 "genomics, energy storage, or blockchain riding Wright's Law cost curves with network effects."),
-            "MagicFormula":   ("🔢 Magic Formula",     "004D40",
-                "Greenblatt's two-factor screen: ROIC >20% (quality) + earnings yield >10% (value). "
-                "The simultaneous presence of both is rare and historically signals market-beating returns."),
             "Pabrai":         ("🎲 Pabrai Asymmetric Bet","33691E",
                 "Mohnish Pabrai's 'heads I win, tails I don't lose much' framework. Finds bets with "
                 "3:1+ upside/downside asymmetry where downside is protected by real assets or essential value."),
             "HowardMarks":    ("🔄 Marks Second-Level","827717",
                 "Howard Marks' second-level thinking — contrarian analysis where market consensus is factually "
                 "wrong. Targets oversold stocks where the negative narrative exceeds actual deterioration."),
-            "NickSleep":      ("🌀 Scale Economics Shared","01579B",
-                "Nick Sleep's rare framework that identified Amazon and Costco early. Finds companies that "
-                "share scale benefits with customers rather than capturing them — creating self-reinforcing flywheels."),
             "Burry":          ("🕳️ Burry Deep Value",  "3E2723",
                 "Michael Burry-style catalyst-driven deep value. Identifies hidden assets, temporary earnings "
                 "distortions, and specific upcoming events that will FORCE the market to reprice."),
             "InsiderTrack":   ("👁️ Insider & Smart Money","263238",
                 "Tracks cluster insider buying (multiple executives buying simultaneously) and significant "
                 "open-market purchases. Insiders are the most informed buyers with personal-capital conviction."),
-            "WallStBlind":    ("🔍 Wall St Blindspot", "37474F",
-                "Systematically finds quality companies that fall below institutional radar — too small for "
-                "major bank coverage, creating persistent mispricings that patient investors can exploit."),
         }
         _AGENT_ORDER = ["QualityGrowth", "SpecialSit", "CapAppreciation", "EmergingGrowth", "TenBagger",
-                        "GoldmanSC", "LynchBWYK", "SocialArb", "Mayer100x", "CathieWood", "MagicFormula",
-                        "Pabrai", "HowardMarks", "NickSleep", "Burry", "InsiderTrack", "WallStBlind"]
+                        "LynchBWYK", "CathieWood",
+                        "Pabrai", "HowardMarks", "Burry", "InsiderTrack"]
 
         sections_html = []
         for ak in _AGENT_ORDER:
@@ -8475,17 +8511,19 @@ function showMacroDetail(el, id) {
     tabs = [
         ("ai",       "🤖 AI Analysis"),
         ("macro",    "🌍 Macro"),
-        ("iv",       "📊 IV Discount"),
-        ("stalwart", "🏛 Stalwarts"),
+        ("hold",     "💎 Hold Forever"),
+        ("qual",     "🏆 Quality Comp."),
         ("fastg",    "🚀 Fast Growers"),
         ("tenb",     "🎯 10-Baggers"),
-        ("slowg",    "🐢 Slow Growers"),
-        ("cycl",     "🔄 Cyclicals"),
         ("turn",     "🔁 Turnarounds"),
         ("asset",    "🏗 Asset Plays"),
-        ("qual",     "💎 Quality"),
+        ("cycl",     "🔄 Cyclicals"),
+        ("slowg",    "🐢 Slow Growers"),
         ("sector",   "🗺 Sectors"),
         ("perf",     "📈 Performance"),
+        # Legacy tabs (still rendered to allow deep-links / Excel cross-reference but not in primary nav)
+        # ("iv",       "📊 IV Discount"),    # B4: merged into Quality Compounders
+        # ("stalwart", "🏛 Stalwarts"),       # B4: merged into Quality Compounders
     ]
     nav_html = "\n".join(
         f'<button onclick="showTab(\'{tid}\', this)" class="{"active" if i==0 else ""}">{label}</button>'
@@ -8832,7 +8870,7 @@ function showMacroDetail(el, id) {
 
     # ── AI PICKS SECTION ──────────────────────────────────────────────────
     def _ai_section():
-        """Merged tab: AI Master Manager top picks + all 17 specialist reports."""
+        """Merged tab: AI Master Manager top picks + all 11 specialist reports."""
         _sp = (ai or {}).get("_specialist_picks", {})
         picks = (ai or {}).get("picks", [])
 
@@ -8846,22 +8884,21 @@ function showMacroDetail(el, id) {
 
         _ATTR_ICONS = {
             "QualityGrowth": "🌱", "SpecialSit": "⚡", "CapAppreciation": "📈",
-            "EmergingGrowth": "🚀", "TenBagger": "🎯", "GoldmanSC": "🏦",
-            "LynchBWYK": "🛒", "SocialArb": "📱", "Mayer100x": "💯",
-            "CathieWood": "🚀", "MagicFormula": "🔢", "Pabrai": "🎲",
-            "HowardMarks": "🔄", "NickSleep": "🌀", "Burry": "🕳️",
-            "InsiderTrack": "👁️", "WallStBlind": "🔍",
+            "EmergingGrowth": "🚀", "TenBagger": "🎯",
+            "LynchBWYK": "🛒",
+            "CathieWood": "🚀", "Pabrai": "🎲",
+            "HowardMarks": "🔄", "Burry": "🕳️",
+            "InsiderTrack": "👁️",
         }
         _ATTR_LABELS = {
             "QualityGrowth": "Quality Growth", "SpecialSit": "Special Sit",
             "CapAppreciation": "Cap Appreciation", "EmergingGrowth": "Emerging Growth",
-            "TenBagger": "10-Bagger Hunter", "GoldmanSC": "Goldman SC",
-            "LynchBWYK": "Lynch BWYK", "SocialArb": "Social Arb",
-            "Mayer100x": "100-Bagger", "CathieWood": "Disruptive Innov.",
-            "MagicFormula": "Magic Formula", "Pabrai": "Pabrai Asym.",
-            "HowardMarks": "Marks 2nd-Level", "NickSleep": "Scale Econ.",
+            "TenBagger": "10-Bagger Hunter",
+            "LynchBWYK": "Lynch BWYK",
+            "CathieWood": "Disruptive Innov.",
+            "Pabrai": "Pabrai Asym.",
+            "HowardMarks": "Marks 2nd-Level",
             "Burry": "Burry Deep Val.", "InsiderTrack": "Insider Track",
-            "WallStBlind": "Wall St Blindspot",
         }
 
         # ── MASTER MANAGER PICKS ─────────────────────────────────────────────
@@ -8958,6 +8995,8 @@ function showMacroDetail(el, id) {
     {_mm_trend}
     <span class="badge badge-hold" style="font-size:.63rem">{strat}</span>
     {lynch_badge}
+    {_familiar_badge(s)}
+    {_undercovered_badge(s)}
     <span class="xarrow">▼</span>
   </div>
   <div class="xbody" style="display:none">
@@ -9014,11 +9053,99 @@ function showMacroDetail(el, id) {
             for c, n in sorted(_lynch_dist.items(), key=lambda x: -x[1])
         ) if _lynch_dist else '<span style="font-size:.72rem;color:#546e7a">No Lynch category data yet</span>'
 
+        # ── Sprint 2 A3: 🎯 HIGH-CONSENSUS PICKS panel (14-day rolling) ──────
+        # Surfaces tickers picked by 5+ distinct specialists in the last 14 days.
+        # When many independent lenses converge, that's the strongest signal.
+        consensus_html = ""
+        try:
+            import csv as _csv2
+            from collections import defaultdict
+            _consensus_map = defaultdict(set)   # ticker → set(source) over last 14 days
+            _ticker_meta   = {}                 # ticker → {company, latest_date}
+            _today2 = datetime.date.today()
+            _cutoff2 = _today2 - datetime.timedelta(days=14)
+            if os.path.exists(AI_PICKS_LOG):
+                with open(AI_PICKS_LOG, "r", encoding="utf-8") as _cf:
+                    for _row2 in _csv2.DictReader(_cf):
+                        _src2 = (_row2.get("source") or "").strip()
+                        if not _src2 or _src2 == "AI-Judge":
+                            continue   # ignore judge — count specialists only
+                        try:
+                            _d2 = datetime.date.fromisoformat(_row2.get("date",""))
+                        except Exception:
+                            continue
+                        if _d2 < _cutoff2:
+                            continue
+                        _tk2 = (_row2.get("ticker") or "").strip().upper()
+                        if not _tk2:
+                            continue
+                        _consensus_map[_tk2].add(_src2)
+                        # Keep most-recent metadata for the ticker
+                        if _tk2 not in _ticker_meta or _d2 >= _ticker_meta[_tk2]["d"]:
+                            _ticker_meta[_tk2] = {
+                                "co":  (_row2.get("company") or "")[:40],
+                                "d":   _d2,
+                                "syn": (_row2.get("synopsis") or "")[:90],
+                            }
+            # Build sorted consensus list (≥5 distinct specialists)
+            _hi_consensus = sorted(
+                ((tk, len(srcs)) for tk, srcs in _consensus_map.items() if len(srcs) >= 5),
+                key=lambda x: -x[1]
+            )[:20]   # cap at 20 most-consensus
+            if _hi_consensus:
+                _cons_cards = []
+                for _tk2, _n2 in _hi_consensus:
+                    _meta = _ticker_meta.get(_tk2, {})
+                    _co2  = _meta.get("co", "")
+                    _syn2 = _meta.get("syn", "")
+                    _s2   = stocks.get(_tk2, {})
+                    _fam_b = _familiar_badge(_s2)
+                    _price2 = _s2.get("price")
+                    _price_s = f"${_price2:.0f}" if _price2 else ""
+                    _sec2   = _s2.get("sector", "") or ""
+                    # Color intensity by consensus count: 5-7 = blue, 8-12 = amber, 13+ = green
+                    _bg = ("#1b5e20" if _n2 >= 13 else
+                           "#bf360d" if _n2 >= 8 else
+                           "#1565c0")
+                    _cons_cards.append(
+                        f'<div style="background:#1a1a2e;border-left:4px solid {_bg};'
+                        f'border-radius:4px;padding:8px 10px;min-width:180px;flex:1 1 200px;max-width:280px">'
+                        f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
+                        f'<span style="font-weight:700;font-size:.95rem;color:#90caf9">{_tk2}</span>'
+                        f'<span style="background:{_bg};color:#fff;border-radius:3px;padding:1px 6px;'
+                        f'font-size:.65rem;font-weight:700">{_n2} agents</span>'
+                        f'{_fam_b}'
+                        f'</div>'
+                        f'<div style="font-size:.7rem;color:#b0bec5;margin-bottom:2px">{_co2}</div>'
+                        f'<div style="font-size:.65rem;color:#78909c">'
+                        f'{_sec2}{(" · " + _price_s) if _price_s else ""}</div>'
+                        f'{f"<div style=\"font-size:.66rem;color:#9e9e9e;font-style:italic;margin-top:4px\">{_syn2}</div>" if _syn2 else ""}'
+                        f'</div>'
+                    )
+                consensus_html = (
+                    '<div style="background:#0d1117;border:1px solid #42a5f533;border-radius:8px;'
+                    'padding:12px 14px;margin-bottom:14px">'
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
+                    '<span style="font-size:1rem;font-weight:700;color:#42a5f5">🎯 HIGH-CONSENSUS PICKS</span>'
+                    f'<span style="font-size:.72rem;color:#78909c">— {len(_hi_consensus)} '
+                    'tickers nominated by 5+ specialists in the last 14 days</span>'
+                    '</div>'
+                    '<p style="font-size:.7rem;color:#546e7a;margin-bottom:10px;line-height:1.5">'
+                    'When multiple independent lenses converge on the same name, that is the strongest '
+                    'signal in the system. Cross-check against your personal knowledge before sizing.'
+                    '</p>'
+                    f'<div style="display:flex;flex-wrap:wrap;gap:8px">{"".join(_cons_cards)}</div>'
+                    '</div>'
+                )
+        except Exception:
+            consensus_html = ""
+
         mm_section = f"""
+{consensus_html}
 <div style="background:#0d1117;border:1px solid #ffd54f33;border-radius:8px;padding:12px 14px;margin-bottom:18px">
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
     <span style="font-size:1rem;font-weight:700;color:#ffd54f">🧠 AI Master Manager</span>
-    <span style="font-size:.72rem;color:#78909c">— synthesises {len(picks)} top picks from 17 specialist agents</span>
+    <span style="font-size:.72rem;color:#78909c">— synthesises {len(picks)} top picks from 11 specialist agents</span>
   </div>
   <p style="font-size:.73rem;color:#546e7a;margin-bottom:8px;line-height:1.5">
     The Master Manager conducts no independent research. It selects and ranks only from agent-nominated
@@ -9049,47 +9176,30 @@ function showMacroDetail(el, id) {
                 "Targets 20%+ revenue growth, rising ROIC, and large underserved TAMs."),
             "TenBagger":      ("🎯 10-Bagger Hunter", "BF360D",
                 "Peter Lynch-style small-cap hunter. Looks for underfollowed companies ($50M–$2B) with "
-                "15–40% EPS+revenue growth and at least 2 expansion levers not yet exhausted."),
-            "GoldmanSC":      ("🏦 Goldman SC Scanner","1B5E20",
-                "Goldman-style small-cap hidden gem scanner. Targets $100M–$2B companies with 25%+ "
-                "revenue growth, industry tailwinds, operating leverage, and near-term catalysts."),
+                "15–40% EPS+revenue growth, at least 2 expansion levers not yet exhausted, and structural "
+                "Wall Street under-coverage (orphans, post-restructuring, complex/sin-sector names)."),
             "LynchBWYK":      ("🛒 Lynch Buy What You Know","880E4F",
                 "Lynch's 'buy what you know' — simple understandable businesses serving everyday needs, "
                 "growing 15–25%/yr with real earnings at PEG <1.0."),
-            "SocialArb":      ("📱 Social Arbitrage",  "4A148C",
-                "Finds companies whose products show viral consumer adoption that analysts haven't yet "
-                "quantified in revenue estimates — social signal leads fundamental signal."),
-            "Mayer100x":      ("💯 100-Bagger Framework","1A237E",
-                "Christopher Mayer's criteria: small market cap (<$2B), ROIC >15%, large reinvestable TAM, "
-                "owner-operator management, no dilution, and 'twin engines' of growth + multiple expansion."),
             "CathieWood":     ("🚀 Disruptive Innovation","0D47A1",
                 "ARK Invest-style screen. Identifies pure-play companies in AI, robotics, genomics, "
                 "or energy storage riding Wright's Law cost curves with network effects."),
-            "MagicFormula":   ("🔢 Magic Formula",     "004D40",
-                "Greenblatt's two-factor screen: ROIC >20% (quality) + earnings yield >10% (value). "
-                "Both together simultaneously is rare and historically signals outperformance."),
             "Pabrai":         ("🎲 Pabrai Asymmetric Bet","33691E",
                 "Mohnish Pabrai's framework: 3:1+ upside/downside asymmetry where downside is protected "
                 "by real assets or essential business value — 'heads I win, tails I don't lose much'."),
             "HowardMarks":    ("🔄 Marks Second-Level","827717",
                 "Howard Marks' contrarian analysis where market consensus is factually wrong. Targets "
                 "oversold stocks where the negative narrative exceeds actual deterioration."),
-            "NickSleep":      ("🌀 Scale Economics Shared","01579B",
-                "Nick Sleep's framework that identified Amazon and Costco early — companies that share "
-                "scale benefits with customers rather than capturing them, creating flywheels."),
             "Burry":          ("🕳️ Burry Deep Value",  "3E2723",
                 "Michael Burry-style catalyst-driven deep value — hidden assets, temporary earnings "
                 "distortions, and specific upcoming events that will force the market to reprice."),
             "InsiderTrack":   ("👁️ Insider & Smart Money","263238",
                 "Tracks cluster insider buying (multiple executives buying simultaneously) and significant "
                 "open-market purchases with personal capital — the highest-signal conviction indicator."),
-            "WallStBlind":    ("🔍 Wall St Blindspot", "37474F",
-                "Finds quality companies that fall below institutional radar — too small for major bank "
-                "coverage, creating persistent mispricings patient investors can exploit."),
         }
         _AGENT_ORDER = ["QualityGrowth", "SpecialSit", "CapAppreciation", "EmergingGrowth", "TenBagger",
-                        "GoldmanSC", "LynchBWYK", "SocialArb", "Mayer100x", "CathieWood", "MagicFormula",
-                        "Pabrai", "HowardMarks", "NickSleep", "Burry", "InsiderTrack", "WallStBlind"]
+                        "LynchBWYK", "CathieWood",
+                        "Pabrai", "HowardMarks", "Burry", "InsiderTrack"]
 
         spec_sections = []
         for ak in _AGENT_ORDER:
@@ -9182,6 +9292,8 @@ function showMacroDetail(el, id) {
     {_conv_badge(conv2)}
     {_sp_trend}
     {_lb3}
+    {_familiar_badge(s2)}
+    {_undercovered_badge(s2)}
     <span class="xarrow">▼</span>
   </div>
   {f'<div style="font-size:.72rem;color:#78909c;margin-top:4px;font-style:italic">{key_m[:90]}</div>' if key_m else ''}
@@ -9394,18 +9506,19 @@ function showMacroDetail(el, id) {
             "AI-CapAppreciation": "📈 Cap.Apprecn",
             "AI-SpecialSit":      "⚡ Special Sit",
             "AI-TenBagger":       "🎯 10-Bagger",
-            "AI-GoldmanSC":       "🏦 Goldman SC",
             "AI-LynchBWYK":       "🛒 Lynch BWYK",
-            "AI-SocialArb":       "📱 Social Arb",
-            "AI-Mayer100x":       "💯 100-Bagger",
             "AI-CathieWood":      "🚀 Disruptive",
-            "AI-MagicFormula":    "🔢 Magic Formula",
             "AI-Pabrai":          "🎲 Pabrai",
             "AI-HowardMarks":     "🔄 Contrarian",
-            "AI-NickSleep":       "🌀 Scale Econ",
             "AI-Burry":           "🕳️ Deep Value",
             "AI-InsiderTrack":    "👁️ Insider",
-            "AI-WallStBlind":     "🔍 WallStBlind",
+            # Retired agents — labels kept so historical CSV entries display correctly
+            "AI-GoldmanSC":       "🏦 Goldman SC (retired)",
+            "AI-SocialArb":       "📱 Social Arb (retired)",
+            "AI-Mayer100x":       "💯 100-Bagger (retired)",
+            "AI-MagicFormula":    "🔢 Magic Formula (retired)",
+            "AI-NickSleep":       "🌀 Scale Econ (retired)",
+            "AI-WallStBlind":     "🔍 WallStBlind (retired)",
         }
         _AGENT_ORDER = list(_AGENT_ICONS.keys())
 
@@ -9888,9 +10001,14 @@ Sharpe on alpha series. Click any column header to sort.</p>
 {_strategy_table(asset_plays, STRAT_COLS + ["P/B","Graham NN"],        "asset",    "🏗 Asset Plays",
     "P/B <1 · Hidden tangible asset value (real estate, cash, IP) · FCF positive. "
     "Lynch/Graham: buy $1 of assets for <$1. Best in Financial Services, Real Estate, Industrials.")}
-{_strategy_table(quality_compounders, STRAT_COLS + ["P/FCF","EV/EBITDA"], "qual",  "💎 Quality Compounders",
+{_strategy_table(quality_compounders, STRAT_COLS + ["P/FCF","EV/EBITDA"], "qual",  "🏆 Quality Compounders",
     "ROIC >15% · PEG <2 · FCF positive · Operating margin >20% · Revenue growth >8%. "
-    "Buffett category: wonderful companies at fair prices — hold forever, let compounding work.")}
+    "Buffett category: wonderful companies at fair prices — hold forever, let compounding work. "
+    "(absorbs IV Discount + Stalwarts cuts — same compounding thesis, different ranking lenses)")}
+{_strategy_table(hold_forever or [], STRAT_COLS + ["FCF Margin"], "hold",  "💎 Hold Forever — Buy-and-Forget",
+    "Strict cuts: ROIC >15% · 80%+ rev consistency · 5–25% steady CAGR · moat (gross margin >40% or oper margin >15%) · "
+    "no dilution · low debt · Piotroski ≥6. Top 25 names. The user's natural buy-and-hold candidate pool — "
+    "scan for 🛒 (Familiar Brand) and 🔍 (Wall St under-coverage) tags; cross-check against personal knowledge before sizing.")}
 {_sector_section()}
 {_perf_section()}
 <footer style="padding:16px;color:#555;font-size:.72rem;text-align:center">
@@ -10499,6 +10617,8 @@ def main():
                         help="B5: Run backtest on picks before this date and exit (e.g. 2026-01-01)")
     parser.add_argument("--replay", metavar="YYYY-MM-DD", nargs="?", const="all",
                         help="C4: Walk-forward portfolio replay from date (or all-time if omitted)")
+    parser.add_argument("--force-fresh-ai", action="store_true",
+                        help="Bypass the daily AI cache and re-run all specialists + judge for this run")
     args = parser.parse_args()
 
     # B5: Backtest mode — run and exit without building the full report
@@ -11955,10 +12075,12 @@ def main():
                                   custom_headers=_tb_headers, custom_widths=_tb_widths)
 
     quality_compounders = build_quality_compounders(wb, stocks)
+    # Sprint 3 A4: 💎 Hold Forever — strict long-term shortlist (~25 names)
+    hold_forever = build_hold_forever_tab(wb, stocks)
 
-    # Sector Valuations + ETF Rotation
+    # Sector Valuations (ETF Rotation tab retired in v4 — pure trader signal, not aligned with long-term picking)
     _sector_rows, _etf_rets = build_sector_valuations(wb, stocks)
-    _etf_rows = build_sector_etf_rotation(wb, stocks, _etf_rets)
+    _etf_rows = None
 
     # Insider Buying
     build_insider_tab(wb, stocks, insider_data)
@@ -12003,12 +12125,13 @@ def main():
         "Asset Plays (Lynch)": asset_plays,
         "Lynch 10-Baggers": ten_baggers,
     }
-    # ── Daily AI result cache — skip 18 Claude calls if already run today ──
+    # ── Daily AI result cache — skip Claude calls if already run today ──
     _AI_CACHE_KEY = "_ai_result"
     _today_str    = datetime.date.today().isoformat()
     _cached_ai    = _cache.get(_AI_CACHE_KEY, {})
     _ai_from_cache = (
-        isinstance(_cached_ai, dict)
+        not args.force_fresh_ai      # C2: --force-fresh-ai bypasses the daily cache
+        and isinstance(_cached_ai, dict)
         and _cached_ai.get("date") == _today_str
         and isinstance(_cached_ai.get("result"), dict)
         and _cached_ai["result"].get("picks")
@@ -12020,7 +12143,9 @@ def main():
         n_specs = len(ai_result.get("_specialist_picks", {}))
         print(f"\n  📦 Using cached AI analysis ({n_picks} judge picks, {n_specs} specialists — already run today)")
     else:
-        phase_start("ai_analysis", "Running multi-agent AI analysis (17 specialists + judge)")
+        if args.force_fresh_ai and _cached_ai.get("date") == _today_str:
+            print("\n  🔄 --force-fresh-ai: bypassing today's AI cache, re-running all specialists + judge")
+        phase_start("ai_analysis", "Running multi-agent AI analysis (11 specialists + judge)")
         ai_result = call_claude_analysis(picks_data, stocks, macro=macro_data,
                                          market_intel=market_intel,
                                          agent_perf=agent_perf)   # B4: performance feedback
@@ -12184,6 +12309,7 @@ def main():
         ten_baggers=ten_baggers,
         agent_perf=agent_perf,   # B1: per-agent attribution for leaderboard (B8)
         sparklines=_sparklines,  # 5Y price history for AI pick mini-charts
+        hold_forever=hold_forever,  # Sprint 3 A4: long-term shortlist tab
     )
     html_file = output_file.replace(".xlsx", ".html")
     with open(html_file, "w", encoding="utf-8") as _hf:
