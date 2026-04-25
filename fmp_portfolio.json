@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 31533.837500000005,
+  "cash": 21568.654300000006,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -98,6 +98,30 @@
       "sell_trigger": "Underwriting profitability deteriorates OR investment portfolio realizes material losses OR M&A becomes destructive",
       "lynch_category": "Stalwart+Cyclical",
       "sector": "Financial Services"
+    },
+    {
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 133,
+      "entry_price": 37.33,
+      "entry_date": "2026-04-25",
+      "rationale": "Stalwart/FastGrower: 21% ROIC, 7.8% FCF yield, PEG 0.44 (excellent), +17% revenue growth. Fills Technology sector opening without violating 4-position cap (currently 2 in Tech). Low-valuation compound",
+      "conviction": "HIGH",
+      "sell_trigger": "Platform adoption slows (organic growth <10% for 2 consecutive quarters) or ROIC falls below 15%",
+      "lynch_category": "Stalwart+FastGrower",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 111,
+      "entry_price": 44.94,
+      "entry_date": "2026-04-25",
+      "rationale": "IV Discount/Healthcare: 30% ROIC, 7.3% FCF yield, PEG 0.64, +7% growth, 81% margin of safety. Diversified oncology portfolio (CABOMETYX, COTELLIC) with structural pricing power and pipeline. Fills Hea",
+      "conviction": "HIGH",
+      "sell_trigger": "Pipeline failure (phase 3 trial failure in lead indication) or ROIC drops below 20%",
+      "lynch_category": "Stalwart+Turnaround",
+      "sector": "Healthcare"
     }
   ],
   "transactions": [
@@ -448,6 +472,30 @@
       "return_pct": -0.6,
       "transaction_cost": 5.9,
       "rationale": "Thesis broken by portfolio structure, not fundamentals: Financial Services sector is at hard cap (4 positions: HIG, TRV, CB, ALL). Portfolio rule explicitly forbids a 5th sector position. ALL is the weakest of the four on ROIC (21% vs. HIG 29%, TRV 47%, CB 35%) and has lowest FCF yield (17.9% vs. TRV 17.8%, but lowest quality overall). Only 2 days held, but adding it violated sector cap rule. Sell to return to 4-position Financial Services max and free capital for diversification into under-represented sectors (Industrials, Consumer Cyclical, Healthcare)."
+    },
+    {
+      "date": "2026-04-25",
+      "action": "BUY",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 133,
+      "price": 37.33,
+      "value": 4964.89,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "Stalwart/FastGrower: 21% ROIC, 7.8% FCF yield, PEG 0.44 (excellent), +17% revenue growth. Fills Technology sector opening without violating 4-position cap (currently 2 in Tech). Low-valuation compound"
+    },
+    {
+      "date": "2026-04-25",
+      "action": "BUY",
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 111,
+      "price": 44.94,
+      "value": 4988.34,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "IV Discount/Healthcare: 30% ROIC, 7.3% FCF yield, PEG 0.64, +7% growth, 81% margin of safety. Diversified oncology portfolio (CABOMETYX, COTELLIC) with structural pricing power and pipeline. Fills Hea"
     }
   ],
   "last_updated": "2026-04-25"
