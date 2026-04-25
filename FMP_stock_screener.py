@@ -9100,26 +9100,59 @@ function showMacroDetail(el, id) {
                     _syn2 = _meta.get("syn", "")
                     _s2   = stocks.get(_tk2, {})
                     _fam_b = _familiar_badge(_s2)
+                    _unc_b = _undercovered_badge(_s2)
                     _price2 = _s2.get("price")
-                    _price_s = f"${_price2:.0f}" if _price2 else ""
-                    _sec2   = _s2.get("sector", "") or ""
-                    # Color intensity by consensus count: 5-7 = blue, 8-12 = amber, 13+ = green
+                    _price_s = f"${_price2:.2f}" if _price2 else "—"
+                    _sec2   = (_s2.get("sector") or "")
+                    _ind2   = (_s2.get("industry") or "")
+                    _mktcap2 = _s2.get("mktCap")
+                    _cap_s  = (f"${_mktcap2/1e9:.1f}B" if _mktcap2 and _mktcap2 >= 1e9
+                               else f"${_mktcap2/1e6:.0f}M" if _mktcap2 else "")
+                    _peg2   = _s2.get("pegRatio")
+                    _pe2    = _s2.get("peRatioTTM")
+                    _roic2  = _s2.get("roic")
+                    _fcfm2  = _s2.get("fcfMargin")
+                    _rev2   = _s2.get("revenueGrowthYoy")
+                    _peg_s  = f"{_peg2:.1f}" if _peg2 and abs(_peg2) < 99 else "—"
+                    _pe_s   = f"{_pe2:.1f}x" if _pe2 and abs(_pe2) < 999 else "—"
+                    _roic_s = f"{_roic2*100:.1f}%" if _roic2 else "—"
+                    _fcfm_s = f"{_fcfm2*100:.1f}%" if _fcfm2 else "—"
+                    _rev_s  = f"{_rev2*100:.1f}%" if _rev2 else "—"
+                    _spark2 = _sparkline_svg(_tk2)
+                    _lynch2 = _lynch_badge(_s2.get("lynchCategory",""))
+                    # Color intensity by consensus count: 5-7 = blue, 8-12 = red/amber, 13+ = green
                     _bg = ("#1b5e20" if _n2 >= 13 else
                            "#bf360d" if _n2 >= 8 else
                            "#1565c0")
                     _cons_cards.append(
-                        f'<div style="background:#1a1a2e;border-left:4px solid {_bg};'
-                        f'border-radius:4px;padding:8px 10px;min-width:180px;flex:1 1 200px;max-width:280px">'
-                        f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
+                        f'<div class="xcard" onclick="toggleExpand(this)" style="background:#1a1a2e;'
+                        f'border-left:4px solid {_bg};border-radius:4px;padding:8px 10px;'
+                        f'min-width:180px;flex:1 1 200px;max-width:280px;cursor:pointer">'
+                        f'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-bottom:3px">'
                         f'<span style="font-weight:700;font-size:.95rem;color:#90caf9">{_tk2}</span>'
                         f'<span style="background:{_bg};color:#fff;border-radius:3px;padding:1px 6px;'
                         f'font-size:.65rem;font-weight:700">{_n2} agents</span>'
-                        f'{_fam_b}'
+                        f'{_fam_b}{_unc_b}{_lynch2}'
+                        f'<span class="xarrow" style="margin-left:auto;font-size:.7rem;color:#546e7a">▼</span>'
                         f'</div>'
                         f'<div style="font-size:.7rem;color:#b0bec5;margin-bottom:2px">{_co2}</div>'
                         f'<div style="font-size:.65rem;color:#78909c">'
-                        f'{_sec2}{(" · " + _price_s) if _price_s else ""}</div>'
-                        f'{f"<div style=\"font-size:.66rem;color:#9e9e9e;font-style:italic;margin-top:4px\">{_syn2}</div>" if _syn2 else ""}'
+                        f'{_sec2}{(" · " + _price_s) if _price_s else ""}'
+                        f'{(" · " + _cap_s) if _cap_s else ""}</div>'
+                        f'<div class="xbody" style="display:none;margin-top:8px;border-top:1px solid #263238;padding-top:8px">'
+                        + (f'<div style="margin-bottom:6px">{_spark2}</div>' if _spark2 else "")
+                        + (f'<p style="font-size:.68rem;color:#9e9e9e;font-style:italic;margin:0 0 8px">{_syn2}</p>' if _syn2 else "")
+                        + f'<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:.7rem;color:#b0bec5">'
+                        f'<span><b>Price</b> {_price_s}</span>'
+                        f'<span><b>P/E</b> {_pe_s}</span>'
+                        f'<span><b>PEG</b> {_peg_s}</span>'
+                        f'<span><b>ROIC</b> {_roic_s}</span>'
+                        f'<span><b>FCF Margin</b> {_fcfm_s}</span>'
+                        f'<span><b>Rev Growth</b> {_rev_s}</span>'
+                        f'{f"<span><b>Mkt Cap</b> {_cap_s}</span>" if _cap_s else ""}'
+                        f'</div>'
+                        f'<div style="font-size:.65rem;color:#78909c;margin-top:5px">{_ind2}</div>'
+                        f'</div>'
                         f'</div>'
                     )
                 consensus_html = (
