@@ -4206,7 +4206,9 @@ Urgency guide: ACT NOW=catalyst imminent + entry compelling today; WITHIN WEEKS=
 
 
 def call_mall_manager(judge_result: dict, stocks: dict,
-                      macro: dict = None, market_intel: dict = None) -> dict:
+                      macro: dict = None, market_intel: dict = None,
+                      fast_growers: list = None,
+                      quality_compounders: list = None) -> dict:
     """🛍️ Mall Manager — Peter Lynch "shopping mall" rationaliser.
 
     Takes the existing judge's picks + all 11 specialists' picks (already in
@@ -4226,18 +4228,29 @@ def call_mall_manager(judge_result: dict, stocks: dict,
 
     _MODEL = "claude-sonnet-4-6"
 
-    # Build candidate pool: ONLY the 11 specialist picks (independent of the judge)
+    # Build candidate pool: specialist picks + Fast Growers + Quality Compounders
     # The judge's output is shown separately as context but does NOT seed the pool.
     candidate_tickers = []
     seen = set()
+    # 1. Specialist nominations (primary signal)
     for spec_name, sr in judge_result.get("_specialist_picks", {}).items():
         for p in sr.get("picks", []):
             t = (p.get("ticker") or "").upper()
             if t and t not in seen:
                 candidate_tickers.append(t); seen.add(t)
+    # 2. Fast Growers tab (Lynch-aligned: high-growth, PEG-driven)
+    for row in (fast_growers or []):
+        t = (row.get("Ticker") or row.get("ticker") or "").upper()
+        if t and t not in seen:
+            candidate_tickers.append(t); seen.add(t)
+    # 3. Quality Compounders tab (durable moats, high ROIC — some are consumer brands)
+    for row in (quality_compounders or []):
+        t = (row.get("Ticker") or row.get("ticker") or "").upper()
+        if t and t not in seen:
+            candidate_tickers.append(t); seen.add(t)
 
-    # Cap at 65 (11 specialists × ~6 picks each ≈ 40-65 unique tickers)
-    candidate_tickers = candidate_tickers[:65]
+    # Cap at 150 (specialists ~65 + fast growers 50 + quality compounders 50)
+    candidate_tickers = candidate_tickers[:150]
     if not candidate_tickers:
         print("  ⚠️ Mall Manager: no candidates to evaluate")
         return {}
@@ -4329,9 +4342,9 @@ Today is {datetime.date.today()}. {macro_line}"""
         f"  {p.get('ticker','?')} — {p.get('headline','')[:80]}"
         for p in judge_result.get('picks', [])[:11]
     )
-    user_prompt = f"""You have {len(candidate_tickers)} candidate stocks nominated by today's 11 specialist analysts. Your job is to identify the 5-8 with the strongest Peter Lynch "shopping mall" consumer-observable thesis.
+    user_prompt = f"""You have {len(candidate_tickers)} candidate stocks drawn from today's 11 specialist analysts, the Fast Growers tab, and the Quality Compounders tab. Your job is to identify the 5-8 with the strongest Peter Lynch "shopping mall" consumer-observable thesis.
 
-CANDIDATE POOL (all 11 specialist nominations today — this is your sole input):
+CANDIDATE POOL (specialist nominations + Fast Growers + Quality Compounders):
 {candidates_block}
 
 FOR REFERENCE ONLY — what the data-driven Master Manager picked today (you are fully independent and can agree, disagree, or overlap):
@@ -12508,10 +12521,12 @@ def main():
                                          agent_perf=agent_perf)   # B4: performance feedback
         mall_result = {}
         if ai_result and ai_result.get("picks"):
-            # Mall Manager runs after the judge, takes the same input + judge's picks
+            # Mall Manager runs after the judge, takes specialist pool + strategy tabs
             mall_result = call_mall_manager(ai_result, stocks,
                                             macro=macro_data,
-                                            market_intel=market_intel) or {}
+                                            market_intel=market_intel,
+                                            fast_growers=fast_growers,
+                                            quality_compounders=quality_compounders) or {}
             # Cache result for remainder of today
             _cache[_AI_CACHE_KEY] = {"date": _today_str,
                                      "result": ai_result,
@@ -12523,7 +12538,9 @@ def main():
         print("  🛍️ Cache pre-dates Mall Manager — running it now to backfill")
         mall_result = call_mall_manager(ai_result, stocks,
                                         macro=macro_data,
-                                        market_intel=market_intel) or {}
+                                        market_intel=market_intel,
+                                        fast_growers=fast_growers,
+                                        quality_compounders=quality_compounders) or {}
         if mall_result:
             _cache[_AI_CACHE_KEY] = {"date": _today_str,
                                      "result": ai_result,
