@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 21568.654300000006,
+  "cash": 21585.989100000006,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,28 +100,28 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "PEGA",
-      "company": "Pegasystems Inc.",
-      "shares": 133,
-      "entry_price": 37.33,
-      "entry_date": "2026-04-25",
-      "rationale": "Stalwart/FastGrower: 21% ROIC, 7.8% FCF yield, PEG 0.44 (excellent), +17% revenue growth. Fills Technology sector opening without violating 4-position cap (currently 2 in Tech). Low-valuation compound",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 363,
+      "entry_price": 13.76,
+      "entry_date": "2026-04-26",
+      "rationale": "FastGrower replacement: 29% ROIC, 10.1% FCF yield, PEG 0.90, +47% revenue growth, 84% MoS. Latin American fintech rails with structural moat (regional payment network effects). Portfolio severely unde",
       "conviction": "HIGH",
-      "sell_trigger": "Platform adoption slows (organic growth <10% for 2 consecutive quarters) or ROIC falls below 15%",
-      "lynch_category": "Stalwart+FastGrower",
+      "sell_trigger": "Chargeback rates rise >2% or revenue growth decelerates below +25% YoY",
+      "lynch_category": "FastGrower+Turnaround",
       "sector": "Technology"
     },
     {
-      "ticker": "EXEL",
-      "company": "Exelixis, Inc.",
-      "shares": 111,
-      "entry_price": 44.94,
-      "entry_date": "2026-04-25",
-      "rationale": "IV Discount/Healthcare: 30% ROIC, 7.3% FCF yield, PEG 0.64, +7% growth, 81% margin of safety. Diversified oncology portfolio (CABOMETYX, COTELLIC) with structural pricing power and pipeline. Fills Hea",
-      "conviction": "HIGH",
-      "sell_trigger": "Pipeline failure (phase 3 trial failure in lead indication) or ROIC drops below 20%",
-      "lynch_category": "Stalwart+Turnaround",
-      "sector": "Healthcare"
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 49,
+      "entry_price": 100.35,
+      "entry_date": "2026-04-26",
+      "rationale": "IV Discount/Turnaround replacement (EXEL sale): 13% ROIC, 11.1% FCF yield, PEG 0.19 (lowest in pool), +9% growth, 83% MoS. Portfolio's Turnaround category is OVER-cap (7/3), but NICE's PEG 0.19 and FC",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "Gross margin declines below 70% or ARR churn accelerates above 5%",
+      "lynch_category": "Stalwart+FastGrower+Turnaround",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -496,6 +496,54 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "IV Discount/Healthcare: 30% ROIC, 7.3% FCF yield, PEG 0.64, +7% growth, 81% margin of safety. Diversified oncology portfolio (CABOMETYX, COTELLIC) with structural pricing power and pipeline. Fills Hea"
+    },
+    {
+      "date": "2026-04-26",
+      "action": "SELL",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 133,
+      "price": 37.33,
+      "value": 4958.93,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "Thesis deteriorating: Category constraint, not fundamentals. Pegasystems is a legitimate 21% ROIC Stalwart/FastGrower with PEG 0.44 and +17% growth. However, Stalwart category is OVER-cap at 8/5, and PEGA is lowest-conviction holding in that category (lowest ROIC at 21%, lowest FCF yield at 7.8%). Selling to create FastGrower slot for DLO (29% ROIC, +47% growth, 84% MoS) or BKNG (51% ROIC, +13% growth, 29% MoS). PEGA held only 1d; superior alternatives exist."
+    },
+    {
+      "date": "2026-04-26",
+      "action": "SELL",
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 111,
+      "price": 44.94,
+      "value": 4982.35,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "Thesis deteriorating: Category constraint, not fundamentals. Exelixis is a solid 30% ROIC Healthcare IV Discount with PEG 0.64 and 81% MoS. However, Healthcare at 2/2 positions, and EXEL is youngest holding (1d) with lowest FCF yield (7.3%) among portfolio's IV Discounts. NICE (11.1% FCF, PEG 0.19, 83% MoS) or BAH (9.8% FCF, 18% ROIC, 85% MoS) would be superior turnaround/IV discount choices. Selling to make room for FastGrower (DLO/BKKING/ESTC) which are portfolio's most underweighted category and have clearest moats."
+    },
+    {
+      "date": "2026-04-26",
+      "action": "BUY",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 363,
+      "price": 13.76,
+      "value": 4994.88,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "FastGrower replacement: 29% ROIC, 10.1% FCF yield, PEG 0.90, +47% revenue growth, 84% MoS. Latin American fintech rails with structural moat (regional payment network effects). Portfolio severely unde"
+    },
+    {
+      "date": "2026-04-26",
+      "action": "BUY",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 49,
+      "price": 100.35,
+      "value": 4917.15,
+      "return_pct": 0.0,
+      "transaction_cost": 5.92,
+      "rationale": "IV Discount/Turnaround replacement (EXEL sale): 13% ROIC, 11.1% FCF yield, PEG 0.19 (lowest in pool), +9% growth, 83% MoS. Portfolio's Turnaround category is OVER-cap (7/3), but NICE's PEG 0.19 and FC"
     }
   ],
   "last_updated": "2026-04-26"
