@@ -4226,21 +4226,18 @@ def call_mall_manager(judge_result: dict, stocks: dict,
 
     _MODEL = "claude-sonnet-4-6"
 
-    # Build candidate pool: union of judge picks + every specialist's picks
+    # Build candidate pool: ONLY the 11 specialist picks (independent of the judge)
+    # The judge's output is shown separately as context but does NOT seed the pool.
     candidate_tickers = []
     seen = set()
-    for p in judge_result.get("picks", []):
-        t = (p.get("ticker") or "").upper()
-        if t and t not in seen:
-            candidate_tickers.append(t); seen.add(t)
     for spec_name, sr in judge_result.get("_specialist_picks", {}).items():
         for p in sr.get("picks", []):
             t = (p.get("ticker") or "").upper()
             if t and t not in seen:
                 candidate_tickers.append(t); seen.add(t)
 
-    # Cap candidate pool at 50 (token budget)
-    candidate_tickers = candidate_tickers[:50]
+    # Cap at 65 (11 specialists × ~6 picks each ≈ 40-65 unique tickers)
+    candidate_tickers = candidate_tickers[:65]
     if not candidate_tickers:
         print("  ⚠️ Mall Manager: no candidates to evaluate")
         return {}
@@ -4323,24 +4320,28 @@ YOUR OUTPUT — JSON ONLY, no other text. Schema:
       "conviction": "HIGH | MEDIUM"
     }}
   ],
-  "rejected_examples": "Brief 1-2 sentence note on which judge picks you specifically rejected and WHY (no Lynch story present)"
+  "rejected_examples": "Brief 1-2 sentence note on 2-3 specialist-nominated stocks you rejected and WHY (no consumer-observable story present)"
 }}
 
 Today is {datetime.date.today()}. {macro_line}"""
 
-    user_prompt = f"""You have {len(candidate_tickers)} candidate stocks already nominated by the 11 specialist analysts AND/OR the data-driven Master Manager judge today. Your job is to identify the 5-8 with the strongest Peter Lynch "shopping mall" consumer-observable thesis.
+    judge_context = "\n".join(
+        f"  {p.get('ticker','?')} — {p.get('headline','')[:80]}"
+        for p in judge_result.get('picks', [])[:11]
+    )
+    user_prompt = f"""You have {len(candidate_tickers)} candidate stocks nominated by today's 11 specialist analysts. Your job is to identify the 5-8 with the strongest Peter Lynch "shopping mall" consumer-observable thesis.
 
-CANDIDATE POOL (union of judge picks + all specialists' picks):
+CANDIDATE POOL (all 11 specialist nominations today — this is your sole input):
 {candidates_block}
 
-JUDGE'S TOP PICKS TODAY (the data-driven manager's call — you may agree or disagree):
-{chr(10).join(f"  {p.get('ticker','?')} — {p.get('headline','')[:80]}" for p in judge_result.get('picks', [])[:11])}
+FOR REFERENCE ONLY — what the data-driven Master Manager picked today (you are fully independent and can agree, disagree, or overlap):
+{judge_context}
 
 YOUR TASK:
-1. Walk through the candidate pool. For each one, ask: "Could I plausibly observe this trend in my daily life — in a mall, on TikTok, in my kid's room, on my phone, at an airport?"
+1. Walk through the specialist candidate pool. For each one, ask: "Could I plausibly observe this trend in my daily life — in a mall, on TikTok, in my kid's room, on my phone, at an airport?"
 2. If yes, write the consumer_thesis. If no, REJECT.
 3. Output 5-8 picks where the Lynch story is strongest. Quality over quantity.
-4. In `rejected_examples`, name 2-3 of the judge's top picks you explicitly rejected and explain why (e.g., "RNR — reinsurance carrier with no consumer surface", "PLMR — specialty insurance, B2B distribution only").
+4. In `rejected_examples`, name 2-3 stocks from the specialist pool you rejected and explain why (e.g., "RNR — reinsurance carrier, zero consumer surface", "PLMR — specialty B2B insurance, no observable product").
 
 JSON only. No markdown, no preamble."""
 
