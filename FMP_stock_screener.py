@@ -6556,6 +6556,7 @@ def build_picks_tracking(wb, stocks):
         "AI-Burry":            "🕳️ Deep Value",
         "AI-InsiderTrack":     "👁️ Insider",
         "AI-Judge":            "⚖️ Master Manager",
+        "AI-MallManager":      "🛍️ Mall Manager",
         # legacy labels kept for old log entries
         "AI-GoldmanSC":        "🏦 Goldman SC (retired)",
         "AI-SocialArb":        "📱 Social Arb (retired)",
@@ -9852,6 +9853,7 @@ function showMacroDetail(el, id) {
 
         _AGENT_ICONS = {
             "AI-Judge":           "⚖️ Master Manager",
+            "AI-MallManager":     "🛍️ Mall Manager",
             "AI-QualityGrowth":   "🌱 Qual.Growth",
             "AI-EmergingGrowth":  "🚀 Emerg.Growth",
             "AI-CapAppreciation": "📈 Cap.Apprecn",
