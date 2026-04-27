@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 26485.250800000005,
+  "cash": 21562.183700000005,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -109,6 +109,18 @@
       "conviction": "HIGH",
       "sell_trigger": "Chargeback rates rise >2% or revenue growth decelerates below +25% YoY",
       "lynch_category": "FastGrower+Turnaround",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 49,
+      "entry_price": 100.35,
+      "entry_date": "2026-04-27",
+      "rationale": "Turnaround replacement post-category rebalance. 13% ROIC marginally meets threshold but 11.1% FCF yield, PEG 0.19, and 83% MoS are compelling. Contact center software experiencing AI-driven renaissanc",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "ROIC falls below 11% for 2 consecutive quarters OR FCF margin collapses below 9% OR contact center AI adoption stalls (evidenced by <5% software subsc",
+      "lynch_category": "Stalwart+FastGrower+Turnaround",
       "sector": "Technology"
     }
   ],
@@ -568,6 +580,18 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "THESIS BROKEN BY PORTFOLIO STRUCTURE: Added yesterday (2026-04-27) as post-NICE placeholder to free Turnaround slot. Now revealed: Turnaround category is at 8/3 (max 3), Stalwart at 7/5 (max 5), FastGrower at 6/4 (max 4). This position is caught in all three overlapping category constraints. EXLS itself is sound (18% ROIC, 6.3% FCF, PEG 0.64, +14% growth) but adding it worsened the category imbalance that forced NICE out. MUST SELL to unlock dry powder and rebalance. This is a structural error, not fundamental deterioration."
+    },
+    {
+      "date": "2026-04-27",
+      "action": "BUY",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 49,
+      "price": 100.35,
+      "value": 4917.15,
+      "return_pct": 0.0,
+      "transaction_cost": 5.92,
+      "rationale": "Turnaround replacement post-category rebalance. 13% ROIC marginally meets threshold but 11.1% FCF yield, PEG 0.19, and 83% MoS are compelling. Contact center software experiencing AI-driven renaissanc"
     }
   ],
   "last_updated": "2026-04-27"
