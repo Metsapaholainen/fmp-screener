@@ -290,7 +290,7 @@ date,strategy,ticker,entry_price,company
 2026-04-03,Quality Compounders,KLAC,1516.84,KLA Corporation
 2026-04-03,Stalwarts,QLYS,88.36,"Qualys, Inc."
 2026-04-03,Fast Growers,PTCT,67.77,"PTC Therapeutics, Inc."
-2026-04-03,Fast Growers,BKNG,4194.31,Booking Holdings Inc.
+2026-04-03,Fast Growers,BKNG,167.77,Booking Holdings Inc.
 2026-04-03,Slow Growers,RF,26.47,Regions Financial Corporation
 2026-04-03,Slow Growers,FRME,39.43,First Merchants Corporation
 2026-04-03,Asset Plays,RDY,13.32,Dr. Reddy's Laboratories Limit
@@ -312,7 +312,7 @@ date,strategy,ticker,entry_price,company
 2026-04-04,Fast Growers,DLO,12.86,DLocal Limited
 2026-04-04,Fast Growers,PTCT,67.77,"PTC Therapeutics, Inc."
 2026-04-04,Fast Growers,RDDT,136.04,"Reddit, Inc."
-2026-04-04,Fast Growers,BKNG,4194.31,Booking Holdings Inc.
+2026-04-04,Fast Growers,BKNG,167.77,Booking Holdings Inc.
 2026-04-04,Fast Growers,PEGA,42.62,Pegasystems Inc.
 2026-04-04,Turnarounds,CQP,65.1,"Cheniere Energy Partners, L.P."
 2026-04-04,Turnarounds,DUOL,96.54,"Duolingo, Inc."
