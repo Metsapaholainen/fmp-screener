@@ -1663,15 +1663,21 @@ def _extract_ceo(executives: list) -> dict | None:
             return -1
         score = 10
         # Divisional / sub-entity CEO: penalise heavily
-        if " of " in t and "chief executive officer of" in t:
-            score -= 8   # "CEO of Commercial & Investment Bank" etc.
-        if t.startswith("co-") or " co-" in t or "co- " in t:
+        # Catches: "CEO of Sam's Club", "CEO of Walmart US", "CEO of Commercial & IB"
+        if " of " in t and ("chief executive officer of" in t or "ceo of" in t or "& ceo of" in t):
+            score -= 8
+        # "Executive VP" / "EVP" prefix strongly suggests a divisional role, not the company CEO
+        if t.startswith("executive vp") or t.startswith("evp") or t.startswith("executive vice president"):
+            score -= 6
+        # Only penalise actual co-CEO (not "co-founder")
+        if "co-chief executive" in t or "co- chief executive" in t \
+           or t.startswith("co-ceo") or "& co-ceo" in t or ", co-ceo" in t:
             score -= 5   # "Co-CEO" / "Co- Chief Executive Officer"
         # Prefer Chairman+CEO combos (usually the #1 executive)
         if "chairman" in t:
             score += 2
-        if "president" in t:
-            score += 1
+        if "president" in t and "chief executive officer" in t:
+            score += 1   # "President & CEO" is the classic top-dog title
         return score
 
     today = datetime.date.today()
