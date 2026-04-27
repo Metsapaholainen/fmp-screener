@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 21562.183700000005,
+  "cash": 26473.416600000004,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -109,18 +109,6 @@
       "conviction": "HIGH",
       "sell_trigger": "Chargeback rates rise >2% or revenue growth decelerates below +25% YoY",
       "lynch_category": "FastGrower+Turnaround",
-      "sector": "Technology"
-    },
-    {
-      "ticker": "NICE",
-      "company": "NICE Ltd.",
-      "shares": 49,
-      "entry_price": 100.35,
-      "entry_date": "2026-04-27",
-      "rationale": "Turnaround replacement post-category rebalance. 13% ROIC marginally meets threshold but 11.1% FCF yield, PEG 0.19, and 83% MoS are compelling. Contact center software experiencing AI-driven renaissanc",
-      "conviction": "MEDIUM-HIGH",
-      "sell_trigger": "ROIC falls below 11% for 2 consecutive quarters OR FCF margin collapses below 9% OR contact center AI adoption stalls (evidenced by <5% software subsc",
-      "lynch_category": "Stalwart+FastGrower+Turnaround",
       "sector": "Technology"
     }
   ],
@@ -592,6 +580,18 @@
       "return_pct": 0.0,
       "transaction_cost": 5.92,
       "rationale": "Turnaround replacement post-category rebalance. 13% ROIC marginally meets threshold but 11.1% FCF yield, PEG 0.19, and 83% MoS are compelling. Contact center software experiencing AI-driven renaissanc"
+    },
+    {
+      "date": "2026-04-27",
+      "action": "SELL",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 49,
+      "price": 100.35,
+      "value": 4911.23,
+      "return_pct": 0.0,
+      "transaction_cost": 5.92,
+      "rationale": "THESIS BROKEN BY PORTFOLIO STRUCTURE (NOT FUNDAMENTALS): Portfolio currently has 8 Turnarounds (cap 3), 7 Stalwarts (cap 5), 6 FastGrowers (cap 4). NICE is categorized as Turnaround and we are massively over-cap. This is the second forced cycle\u2014buying and selling NICE same-day violates the 60-day hold principle. The fundamental thesis (13% ROIC at IV discount) is sound, but portfolio structure prevents conviction. Sell to free Turnaround slot and reduce churn."
     }
   ],
   "last_updated": "2026-04-27"
