@@ -9591,6 +9591,152 @@ function showMacroDetail(el, id) {
                 f'</div>'
             )
 
+        # ── Stock Style Regime signal ──────────────────────────────────────
+        _rate_sig  = mc.get("rate_signal", "")
+        _vix_sig   = mc.get("vix_signal", "")
+        _curve_sig = mc.get("curve_signal", "")
+        _cpi_sig   = mc.get("inflation_signal", "")
+
+        # Score each dimension: positive = growth-friendly, negative = value/defensive
+        _style_score = 0
+        if _rate_sig in ("LOW",):              _style_score += 2
+        elif _rate_sig == "NORMAL":            _style_score += 1
+        elif _rate_sig == "ELEVATED":          _style_score -= 1
+        elif _rate_sig == "HIGH":              _style_score -= 2
+        if _cpi_sig in ("LOW", "NEAR_TARGET"): _style_score += 1
+        elif _cpi_sig == "ABOVE_TARGET":       _style_score -= 1
+        elif _cpi_sig == "HOT":                _style_score -= 2
+        if _curve_sig == "INVERTED":           _style_score -= 2
+        elif _curve_sig == "FLAT":             _style_score -= 1
+        elif _curve_sig in ("NORMAL", "STEEP"): _style_score += 1
+        if _vix_sig in ("PANIC", "FEAR"):      _style_score -= 2
+        elif _vix_sig == "CAUTION":            _style_score -= 1
+        elif _vix_sig == "CALM":               _style_score += 1
+
+        # Map score to regime
+        if _style_score >= 3:
+            _regime_label = "FAVOR GROWTH"
+            _regime_color = "#42a5f5"
+            _regime_bg    = "#0d47a122"
+            _regime_icon  = "🚀"
+            _regime_desc  = "Low yields + benign inflation = growth stocks outperform. High-P/E multiples supported; favor tech, biotech, emerging growth."
+        elif _style_score >= 1:
+            _regime_label = "BALANCED"
+            _regime_color = "#66bb6a"
+            _regime_bg    = "#1b5e2022"
+            _regime_icon  = "⚖️"
+            _regime_desc  = "Mixed signals. Both growth and value can work — quality and earnings consistency matter most. Avoid extreme duration bets."
+        elif _style_score >= -1:
+            _regime_label = "FAVOR VALUE / CASH FLOW"
+            _regime_color = "#ff9800"
+            _regime_bg    = "#e65100" + "22"
+            _regime_icon  = "💰"
+            _regime_desc  = "Elevated yields raise the hurdle rate for speculative growth. Cash-flow-generative companies and value names have a structural tailwind."
+        elif _style_score >= -3:
+            _regime_label = "DEFENSIVE — VOLATILITY RISK"
+            _regime_color = "#ef5350"
+            _regime_bg    = "#b71c1c22"
+            _regime_icon  = "🛡️"
+            _regime_desc  = "High rates + elevated VIX or curve stress. Favor quality compounders, dividend payers, and cash-generative defensives. Reduce speculative exposure."
+        else:
+            _regime_label = "RISK-OFF"
+            _regime_color = "#ef5350"
+            _regime_bg    = "#b71c1c33"
+            _regime_icon  = "⚠️"
+            _regime_desc  = "Multiple red flags: inverted curve, elevated inflation, and market stress. Historically strong signal to raise quality and reduce cyclical / high-leverage exposure."
+
+        _dgs10_val = mc.get("dgs10")
+
+        # Sector guidance per regime
+        _SECTOR_GUIDANCE = {
+            "FAVOR GROWTH": {
+                "favor":  ["Technology", "Biotech / Healthcare Innovation", "Consumer Discretionary", "Emerging Growth"],
+                "avoid":  ["Utilities", "Telecom (dividend plays)", "Traditional Banks"],
+                "note":   "Low rates compress the discount rate — long-duration earnings are worth more today.",
+            },
+            "BALANCED": {
+                "favor":  ["Quality Compounders (any sector)", "Financials", "Industrials"],
+                "avoid":  ["Highly leveraged names", "Speculative unprofitable growth"],
+                "note":   "Earnings quality and FCF consistency beat style tilts in neutral regimes.",
+            },
+            "FAVOR VALUE / CASH FLOW": {
+                "favor":  ["Banks & Insurers", "Energy", "Defensive dividend companies", "Cash-generating value stocks"],
+                "avoid":  ["High-P/E unprofitable growth", "Long-duration tech", "Speculative biotech"],
+                "note":   "Elevated yields mean bond alternatives compete with equities — cash flow today beats growth tomorrow.",
+            },
+            "DEFENSIVE — VOLATILITY RISK": {
+                "favor":  ["Healthcare", "Consumer Staples", "Utilities", "Banks (net interest margin)"],
+                "avoid":  ["High-beta cyclicals", "Leveraged companies", "Unprofitable growth"],
+                "note":   "Stress environments reward quality balance sheets and predictable earnings.",
+            },
+            "RISK-OFF": {
+                "favor":  ["Cash / short-duration bonds", "Defensive staples", "Gold / commodity producers"],
+                "avoid":  ["Cyclicals", "Leveraged buyouts / high-debt", "Speculative growth"],
+                "note":   "Preserve capital first. History shows patience is rewarded — best entries follow peak fear.",
+            },
+        }
+        _sg = _SECTOR_GUIDANCE.get(_regime_label, {})
+        _favor_tags = "".join(
+            f'<span style="background:#1b5e2044;border:1px solid #66bb6a44;color:#a5d6a7;'
+            f'border-radius:3px;padding:2px 6px;font-size:.65rem;margin:2px 2px 0 0;display:inline-block">'
+            f'✓ {s}</span>' for s in _sg.get("favor", [])
+        )
+        _avoid_tags = "".join(
+            f'<span style="background:#b71c1c22;border:1px solid #ef535044;color:#ef9a9a;'
+            f'border-radius:3px;padding:2px 6px;font-size:.65rem;margin:2px 2px 0 0;display:inline-block">'
+            f'✗ {s}</span>' for s in _sg.get("avoid", [])
+        )
+        _sector_block = (
+            f'<div style="flex:2;min-width:220px;border-left:1px solid #ffffff11;padding-left:14px">'
+            f'<div style="font-size:.60rem;font-weight:700;color:#78909c;text-transform:uppercase;'
+            f'letter-spacing:.07em;margin-bottom:5px">Sectors in this regime</div>'
+            f'<div style="margin-bottom:4px"><span style="font-size:.62rem;color:#78909c">TEND TO OUTPERFORM &nbsp;</span>'
+            f'{_favor_tags}</div>'
+            f'<div><span style="font-size:.62rem;color:#78909c">HEADWINDS &nbsp;</span>'
+            f'{_avoid_tags}</div>'
+            + (f'<div style="font-size:.65rem;color:#546e7a;margin-top:6px;font-style:italic">{_sg["note"]}</div>'
+               if _sg.get("note") else "")
+            + f'</div>'
+        ) if _sg else ""
+
+        _thumb_lines = [
+            ("🔵 Low yields (<3%)",     "Growth / tech outperform"),
+            ("🟢 Normal (3–4%)",        "Balanced — quality wins"),
+            ("🟡 Elevated (4–5%)",      "Value, banks, energy edge"),
+            ("🔴 High yields (>5%)",    "Defensives; compress multiples"),
+        ]
+        _thumb_html = "".join(
+            f'<div style="display:flex;gap:6px;font-size:.66rem;color:#b0bec5;margin-bottom:3px">'
+            f'<span>{lv}</span><span style="color:#546e7a">→</span><span>{rv}</span></div>'
+            for lv, rv in _thumb_lines
+        )
+
+        _regime_bar = (
+            f'<div style="margin:10px 0 8px;background:{_regime_bg};border-left:3px solid {_regime_color};'
+            f'border-radius:4px;padding:10px 14px">'
+            f'<div style="font-size:.62rem;font-weight:700;color:#78909c;text-transform:uppercase;'
+            f'letter-spacing:.07em;margin-bottom:8px">📐 Market Regime &amp; Stock Style Signal</div>'
+            f'<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">'
+            # Col 1: regime label + description
+            f'<div style="flex:2;min-width:190px">'
+            f'<div style="font-size:.92rem;font-weight:700;color:{_regime_color};margin-bottom:4px">'
+            f'{_regime_icon} {_regime_label}</div>'
+            f'<div style="font-size:.72rem;color:#b0bec5;line-height:1.55">{_regime_desc}</div>'
+            f'<div style="font-size:.65rem;color:#546e7a;margin-top:6px">'
+            f'Current 10Y: <b style="color:{_regime_color}">{_dgs10_val}%</b> ({_rate_sig.lower()})</div>'
+            f'</div>'
+            # Col 2: sector guidance
+            + _sector_block +
+            # Col 3: rule of thumb cheat-sheet
+            f'<div style="flex:1;min-width:170px;border-left:1px solid #ffffff11;padding-left:14px">'
+            f'<div style="font-size:.60rem;font-weight:700;color:#78909c;text-transform:uppercase;'
+            f'letter-spacing:.07em;margin-bottom:6px">Simple rule of thumb</div>'
+            f'{_thumb_html}'
+            f'</div>'
+            f'</div>'
+            f'</div>'
+        )
+
         # ── Interpretation bar ─────────────────────────────────────────────
         parts = []
         vc = mc.get("yield_curve")
@@ -9679,6 +9825,7 @@ function showMacroDetail(el, id) {
     <span style="font-size:.65rem;font-weight:400;color:#666">— click any tile to see history &amp; context</span>
   </h2>
   <div class="macro-grid">{tiles_html}</div>
+  {_regime_bar}
   {detail_panels}
   <p class="interp">{interp}</p>
   {ai_rows}
