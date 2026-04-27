@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 26473.416600000004,
+  "cash": 26467.973400000003,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,16 +100,16 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "DLO",
-      "company": "DLocal Limited",
-      "shares": 363,
-      "entry_price": 13.76,
-      "entry_date": "2026-04-26",
-      "rationale": "FastGrower replacement: 29% ROIC, 10.1% FCF yield, PEG 0.90, +47% revenue growth, 84% MoS. Latin American fintech rails with structural moat (regional payment network effects). Portfolio severely unde",
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 111,
+      "entry_price": 44.94,
+      "entry_date": "2026-04-27",
+      "rationale": "IV Discount healthcare play with fortress metrics (30% ROIC, 7.3% FCF yield, PEG 0.64, +7% RG, 81% MoS). Oncology pipeline de-risks through royalty-like revenue base. Replaces DLO (FastGrower) with a ",
       "conviction": "HIGH",
-      "sell_trigger": "Chargeback rates rise >2% or revenue growth decelerates below +25% YoY",
-      "lynch_category": "FastGrower+Turnaround",
-      "sector": "Technology"
+      "sell_trigger": "Revenue declines 2 consecutive quarters OR ROIC falls below 18% OR pipeline setbacks reduce PEG above 1.2",
+      "lynch_category": "Stalwart+Turnaround",
+      "sector": "Healthcare"
     }
   ],
   "transactions": [
@@ -592,6 +592,30 @@
       "return_pct": 0.0,
       "transaction_cost": 5.92,
       "rationale": "THESIS BROKEN BY PORTFOLIO STRUCTURE (NOT FUNDAMENTALS): Portfolio currently has 8 Turnarounds (cap 3), 7 Stalwarts (cap 5), 6 FastGrowers (cap 4). NICE is categorized as Turnaround and we are massively over-cap. This is the second forced cycle\u2014buying and selling NICE same-day violates the 60-day hold principle. The fundamental thesis (13% ROIC at IV discount) is sound, but portfolio structure prevents conviction. Sell to free Turnaround slot and reduce churn."
+    },
+    {
+      "date": "2026-04-27",
+      "action": "SELL",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 363,
+      "price": 13.76,
+      "value": 4988.89,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "THESIS BROKEN BY PORTFOLIO STRUCTURE (NOT FUNDAMENTALS): DLO is a FastGrower but portfolio is already AT HARD CAP with 5 FastGrowers (HALO, BKNG, PTCT, DLO, and one more). Adding DLO yesterday (1 day old) was category-driven folly. Fundamentals are strong (29% ROIC, 10.1% FCF, PEG 0.90, +47% RG), but category balance must be restored. Sell at market to free the FastGrower slot and redeploy toward Stalwart/Cyclical/SlowGrower categories."
+    },
+    {
+      "date": "2026-04-27",
+      "action": "BUY",
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 111,
+      "price": 44.94,
+      "value": 4988.34,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "IV Discount healthcare play with fortress metrics (30% ROIC, 7.3% FCF yield, PEG 0.64, +7% RG, 81% MoS). Oncology pipeline de-risks through royalty-like revenue base. Replaces DLO (FastGrower) with a "
     }
   ],
   "last_updated": "2026-04-27"
