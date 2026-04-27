@@ -9505,28 +9505,7 @@ function showMacroDetail(el, id) {
         except Exception as _emall:
             mall_section_html = f"<!-- mall_section error: {str(_emall)[:80]} -->"
 
-        mm_section = f"""
-{consensus_html}
-<div style="background:#0d1117;border:1px solid #ffd54f33;border-radius:8px;padding:12px 14px;margin-bottom:18px">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-    <span style="font-size:1rem;font-weight:700;color:#ffd54f">🧠 AI Master Manager</span>
-    <span style="font-size:.72rem;color:#78909c">— synthesises {len(picks)} top picks from 11 specialist agents</span>
-  </div>
-  <p style="font-size:.73rem;color:#546e7a;margin-bottom:8px;line-height:1.5">
-    The Master Manager conducts no independent research. It selects and ranks only from agent-nominated
-    stocks, prioritising cross-specialist consensus, quality filters, and catalyst timing.
-    <b style="color:#78909c">Click any card to expand.</b>
-  </p>
-  <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;align-items:center">
-    <span style="font-size:.66rem;color:#78909c;text-transform:uppercase;letter-spacing:.04em">Lynch Mix:</span>
-    {_dist_chips}
-  </div>
-  <div class="mm-grid">{"".join(mm_cards)}</div>
-  {risks_html}
-</div>
-{mall_section_html}"""
-
-        # ── 17 SPECIALIST SECTIONS ───────────────────────────────────────────
+        # ── SPECIALIST SECTIONS ───────────────────────────────────────────
         _ADESC = {
             "QualityGrowth":  ("🌱 Quality Growth",  "2E7D32",
                 "Finds durable compounders with ROIC >15%, consistent multi-year revenue growth, "
@@ -9567,33 +9546,152 @@ function showMacroDetail(el, id) {
                         "LynchBWYK", "CathieWood",
                         "Pabrai", "HowardMarks", "Burry", "InsiderTrack"]
 
-        spec_sections = []
+        # ── Strategy Picks Summary table ──────────────────────────────────
+        _strat_defs = [
+            ("💎 IV Discount",        iv_rows,             "1A237E"),
+            ("💎 Quality Comp.",       quality_compounders, "1B5E20"),
+            ("📊 Stalwarts",           stalwarts,           "1565C0"),
+            ("🚀 Fast Growers",        fast_growers,        "E65100"),
+            ("🔄 Turnarounds",         turnarounds,         "6A1B9A"),
+            ("📉 Slow Growers",        slow_growers,        "37474F"),
+            ("🔁 Cyclicals",           cyclicals,           "827717"),
+            ("🏗️ Asset Plays",         asset_plays,         "4E342E"),
+            ("🎯 10-Baggers",          ten_baggers,         "BF360D"),
+        ]
+        _strat_rows_html = []
+        for _sl, _sd, _sc in _strat_defs:
+            if not _sd:
+                continue
+            _top3 = [r.get("Ticker","") for r in _sd[:3]]
+            _top1  = _sd[0]
+            _peg   = _top1.get("PEG")
+            _mos   = _top1.get("MoS")
+            _pio   = _top1.get("Piotroski")
+            _co    = (_top1.get("Company") or "")[:28]
+            _n     = len(_sd)
+            _peg_s = f'{_peg:.2f}' if _peg else '—'
+            _mos_s = f'{_mos*100:.0f}%' if _mos else '—'
+            _pio_s = str(int(_pio)) if _pio else '—'
+            _pio_color = ("#1b5e20" if _pio and _pio >= 7 else
+                          "#e65100" if _pio and _pio <= 4 else "#263238")
+            _top3_html = " ".join(
+                f'<span style="background:#ffffff11;border-radius:3px;padding:1px 5px;'
+                f'font-size:.68rem;font-family:monospace">{t}</span>' for t in _top3
+            )
+            _strat_rows_html.append(f"""<tr>
+  <td style="padding:5px 8px;border-bottom:1px solid #ffffff0f">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+      background:#{_sc};margin-right:5px"></span>{_sl}
+  </td>
+  <td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;color:#78909c;text-align:right">{_n}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #ffffff0f">{_top3_html}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;color:#b0bec5;font-size:.72rem">{_co}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;color:#90caf9;text-align:right">{_peg_s}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;color:#a5d6a7;text-align:right">{_mos_s}</td>
+  <td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;background:{_pio_color};
+    border-radius:3px;text-align:center;font-weight:700">{_pio_s}</td>
+</tr>""")
+        strat_summary_html = f"""
+<details open style="margin-bottom:14px">
+  <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+    padding:8px 12px;background:#161b22;border-radius:6px;border:1px solid #ffffff18;
+    font-size:.75rem;font-weight:700;color:#90caf9;text-transform:uppercase;letter-spacing:.05em;
+    user-select:none">
+    <span style="font-size:.9rem">📊</span> Strategy Picks Summary
+    <span style="font-size:.65rem;color:#546e7a;font-weight:400;text-transform:none;margin-left:4px">
+      — top quantitative picks per strategy tab (rule-based, not AI)
+    </span>
+    <span style="margin-left:auto;font-size:.7rem;color:#546e7a">▼ click to collapse</span>
+  </summary>
+  <div style="margin-top:8px;background:#0d1117;border:1px solid #ffffff12;border-radius:6px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.73rem">
+      <thead>
+        <tr style="background:#161b22">
+          <th style="padding:6px 8px;text-align:left;color:#546e7a;font-weight:600">Strategy</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600"># Qualifying</th>
+          <th style="padding:6px 8px;text-align:left;color:#546e7a;font-weight:600">Top 3 Tickers</th>
+          <th style="padding:6px 8px;text-align:left;color:#546e7a;font-weight:600">Top Pick</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600">PEG</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600">MoS</th>
+          <th style="padding:6px 8px;text-align:center;color:#546e7a;font-weight:600">Piotroski</th>
+        </tr>
+      </thead>
+      <tbody>{"".join(_strat_rows_html)}</tbody>
+    </table>
+  </div>
+</details>""" if _strat_rows_html else ""
+
+        # ── Wrap major AI blocks in collapsible <details> ─────────────────
+        def _collapsible(title, subtitle, content, open_by_default=True, accent="#42a5f5"):
+            _open = "open" if open_by_default else ""
+            return f"""
+<details {_open} style="margin-bottom:14px">
+  <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+    padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid {accent}33;
+    font-size:.8rem;font-weight:700;color:{accent};user-select:none">
+    {title}
+    <span style="font-size:.65rem;color:#546e7a;font-weight:400;margin-left:4px">{subtitle}</span>
+    <span style="margin-left:auto;font-size:.7rem;color:#546e7a">▼</span>
+  </summary>
+  <div style="margin-top:6px">{content}</div>
+</details>"""
+
+        # Wrap consensus + MM + Mall into collapsibles
+        n_agents = sum(1 for ak in _AGENT_ORDER if ak in _sp)
+        wrapped_mm = _collapsible("🧠 AI Master Manager",
+                                  f"— synthesises {len(picks)} top picks from {n_agents} specialists",
+                                  f"""<div style="background:#0d1117;border:1px solid #ffd54f33;border-radius:8px;padding:12px 14px">
+  <p style="font-size:.73rem;color:#546e7a;margin-bottom:8px;line-height:1.5">
+    The Master Manager conducts no independent research. It selects and ranks only from agent-nominated
+    stocks, prioritising cross-specialist consensus, quality filters, and catalyst timing.
+    <b style="color:#78909c">Click any card to expand.</b>
+  </p>
+  <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;align-items:center">
+    <span style="font-size:.66rem;color:#78909c;text-transform:uppercase;letter-spacing:.04em">Lynch Mix:</span>
+    {_dist_chips}
+  </div>
+  <div class="mm-grid">{"".join(mm_cards)}</div>
+  {risks_html}
+</div>""",
+                                  open_by_default=True, accent="#ffd54f")
+
+        # Mall Manager collapsible
+        mall_inner = mall_section_html.strip()
+        wrapped_mall = (_collapsible("🛍️ AI Mall Manager",
+                                     "— Peter Lynch consumer-observable lens on specialist picks",
+                                     mall_inner,
+                                     open_by_default=True, accent="#26a69a")
+                        if mall_inner and not mall_inner.startswith("<!--") else "")
+
+        consensus_wrapped = (_collapsible("🎯 High-Consensus Picks",
+                                          f"— tickers nominated by 3+ of today's {n_agents} specialists",
+                                          consensus_html.strip(),
+                                          open_by_default=True, accent="#42a5f5")
+                             if consensus_html.strip() else "")
+
+        # Build specialist collapsibles directly from _sp iteration order
+        spec_collapsibles = []
         for ak in _AGENT_ORDER:
             if ak not in _sp:
                 continue
-            sr_data = _sp[ak]
-            agent_picks = sr_data.get("picks", [])
-            label, color_hex, desc = _ADESC.get(ak, (ak, "37474F", ""))
-
-            pick_cards_html = []
-            for pp in agent_picks:
+            sr_data   = _sp[ak]
+            ap        = sr_data.get("picks", [])
+            lbl, chx, dsc = _ADESC.get(ak, (ak, "37474F", ""))
+            # Reuse already-built pick_cards from spec_sections loop
+            # Re-build pick cards for this agent inline
+            _pkc = []
+            for pp in ap:
                 tk = pp.get("ticker", "")
                 s2 = stocks.get(tk, {})
                 mc_b = s2.get("mktCapB")
                 prc  = s2.get("price")
                 conv2 = (pp.get("conviction") or "MEDIUM").upper()
-                conv_color = "#1b5e20" if conv2 == "HIGH" else "#0d47a1"
                 brief = pp.get("brief_case", "")
                 key_m = pp.get("key_metric", "")
                 price_disp  = f"${prc:.0f}" if prc else ""
                 mktcap_disp = f"${mc_b:.1f}B" if mc_b else ""
-                meta_parts = [x for x in [key_m[:80] if key_m else "", price_disp, mktcap_disp] if x]
-                meta_str = "  ·  ".join(meta_parts)
-
                 rationale3 = pp.get("rationale", "") or brief
-                # A9: Lynch category badge in the expandable agent pick card
                 _lb3 = _lynch_badge(s2.get("lynchCategory"))
-                # Business synopsis + competitors block for specialist cards
                 _sp_syn   = pp.get("business_synopsis", "")
                 _sp_ind   = pp.get("industry", "") or s2.get("industry", "")
                 _sp_comp  = pp.get("key_competitors", "")
@@ -9603,26 +9701,21 @@ function showMacroDetail(el, id) {
                         (f"<b>Industry:</b> {_sp_ind}" if _sp_ind else ""),
                         (f"<b>vs:</b> {_sp_comp}"      if _sp_comp else ""),
                     ] if x)
-                    _sp_syn_div  = (f'<div style="font-size:.68rem;color:#b0bec5;line-height:1.5">'
-                                    f'{_sp_syn}</div>') if _sp_syn else ""
-                    _sp_meta_div = (f'<div style="font-size:.65rem;color:#78909c;margin-top:3px">'
-                                    f'{_sp_meta}</div>') if _sp_meta else ""
                     _sp_biz = (
                         f'<div style="background:#12122088;border-left:2px solid #42a5f555;'
                         f'border-radius:3px;padding:5px 8px;margin-top:6px">'
                         f'<div style="font-size:.60rem;font-weight:700;color:#42a5f5;text-transform:uppercase;'
                         f'letter-spacing:.05em;margin-bottom:3px">🏢 About</div>'
-                        f'{_sp_syn_div}{_sp_meta_div}'
-                        f'</div>'
+                        + (f'<div style="font-size:.68rem;color:#b0bec5;line-height:1.5">{_sp_syn}</div>' if _sp_syn else "")
+                        + (f'<div style="font-size:.65rem;color:#78909c;margin-top:3px">{_sp_meta}</div>' if _sp_meta else "")
+                        + f'</div>'
                     )
-                # ── Unified specialist card — same structure as MM card ───────
                 _sp_co     = (pp.get("company") or s2.get("name") or tk)[:38]
-                _sp_sector = (s2.get("sector") or "")
+                _sp_sector = s2.get("sector", "")
                 _sp_cap    = _cap_badge(s2.get("mktCap", 0))
                 _sp_trend  = _trend_badge(tk)
                 _sp_spark  = _sparkline_svg(tk)
-                # Price/valuation metrics for expanded footer
-                _sp_price  = f"${s2['price']:.0f}"  if s2.get("price") else ""
+                _sp_price  = f"${s2['price']:.0f}" if s2.get("price") else ""
                 _sp_pe     = _num(s2.get("pe"))   if s2.get("pe")   else ""
                 _sp_peg    = _num(s2.get("peg"))  if s2.get("peg")  else ""
                 _sp_roic   = _pct(s2.get("roic")) if s2.get("roic") else ""
@@ -9633,24 +9726,21 @@ function showMacroDetail(el, id) {
                                   ("PEG", _sp_peg), ("ROIC", _sp_roic), ("MktCap", _sp_mc)]
                     if v
                 )
-                # Sparkline wrapper with low/high labels
                 if _sp_spark:
                     _sp_prices = _sparklines_data.get(tk, [])
                     _sp_lo = f"${min(_sp_prices):.0f}" if _sp_prices else ""
                     _sp_hi = f"${max(_sp_prices):.0f}" if _sp_prices else ""
                     _sp_spark_block = (
                         f'<div class="sparkline-wrap">'
-                        f'<div class="sparkline-label">'
-                        f'<span>5Y price</span>'
-                        f'<span>{_sp_lo} → {_sp_hi}</span>'
-                        f'</div>'
+                        f'<div class="sparkline-label"><span>5Y price</span>'
+                        f'<span>{_sp_lo} → {_sp_hi}</span></div>'
                         f'<div style="width:100%">{_sp_spark}</div>'
                         f'</div>'
                     )
                 else:
                     _sp_spark_block = ""
-                pick_cards_html.append(f"""
-<div class="mm-card xcard" style="border-left-color:#{color_hex}" onclick="toggleExpand(this)">
+                _pkc.append(f"""
+<div class="mm-card xcard" style="border-left-color:#{chx}" onclick="toggleExpand(this)">
   <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px">
     <span class="mm-ticker">{tk}</span>
     {_sp_cap}
@@ -9672,23 +9762,40 @@ function showMacroDetail(el, id) {
   </div>
 </div>""")
 
-            spec_sections.append(f"""
-<div class="agent-section">
-  <div class="agent-hdr" style="background:#{color_hex}">
-    <div class="ag-title">{label}</div>
-    <div class="ag-desc">{desc}</div>
-  </div>
-  <div class="agent-picks-grid">{"".join(pick_cards_html)}</div>
-</div>""")
+            inner_html = (
+                f'<div class="agent-section" style="margin-bottom:0">'
+                f'<div class="agent-hdr" style="background:#{chx}">'
+                f'<div class="ag-title">{lbl}</div>'
+                f'<div class="ag-desc">{dsc}</div>'
+                f'</div>'
+                f'<div class="agent-picks-grid">{"".join(_pkc)}</div>'
+                f'</div>'
+            )
+            spec_collapsibles.append(
+                _collapsible(lbl, f"— {len(ap)} picks", inner_html,
+                             open_by_default=False, accent=f"#{chx}")
+            )
 
-        n_agents = len(spec_sections)
         return f"""
 <section id="ai" class="active">
   <div class="section-title">🤖 AI Analysis — Master Manager + {n_agents} Specialists</div>
-  {mm_section}
-  <h2 style="font-size:.75rem;margin-bottom:10px;color:#78909c;text-transform:uppercase;
-     letter-spacing:.05em">— {n_agents} Specialist Reports — click any pick to expand —</h2>
-  {"".join(spec_sections)}
+  {strat_summary_html}
+  {consensus_wrapped}
+  {wrapped_mm}
+  {wrapped_mall}
+  <details style="margin-bottom:6px">
+    <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+      padding:8px 12px;background:#161b22;border-radius:6px;border:1px solid #ffffff18;
+      font-size:.75rem;font-weight:700;color:#78909c;text-transform:uppercase;letter-spacing:.05em;
+      user-select:none">
+      <span>📋 {n_agents} Specialist Reports</span>
+      <span style="font-size:.65rem;font-weight:400;text-transform:none;color:#546e7a">
+        — click any specialist to expand
+      </span>
+      <span style="margin-left:auto;font-size:.7rem;color:#546e7a">▼</span>
+    </summary>
+    <div style="margin-top:8px">{"".join(spec_collapsibles)}</div>
+  </details>
 </section>"""
 
     # ── MERGED SECTOR SECTION ─────────────────────────────────────────────
