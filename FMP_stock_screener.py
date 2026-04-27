@@ -1520,6 +1520,409 @@ def fetch_balance_sheet(tickers: list) -> dict:
                            {"period": "annual", "limit": "1"})
 
 
+# ─────────────────────────────────────────────
+# CAPITAL ALLOCATOR DATA — CEO + 5Y financials
+# ─────────────────────────────────────────────
+
+def fetch_balance_sheet_5y(tickers: list) -> dict:
+    """6Y annual balance sheets — for shares-outstanding history, debt trend, equity.
+    Returns full list (newest first) per ticker."""
+    cache_key = "balance_sheet_5y"
+    if _cache.get(cache_key):
+        print(f"  📦 Using cached 5Y balance sheets ({len(_cache[cache_key])} stocks)")
+        return _cache[cache_key]
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    print(f"\n  📊 Fetching 5Y balance sheets...")
+    results = {}
+    _lock = threading.Lock()
+    _throttle = threading.Semaphore(4)
+
+    def _f(t):
+        with _throttle:
+            data = fmp_get("balance-sheet-statement",
+                           {"symbol": t, "period": "annual", "limit": "6"})
+            time.sleep(0.2)
+            if data and isinstance(data, list) and len(data) >= 2:
+                return t, data
+            return t, None
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futs = {pool.submit(_f, t): t for t in tickers}
+        done = 0
+        for fut in as_completed(futs):
+            t, data = fut.result()
+            if data:
+                with _lock: results[t] = data
+            done += 1
+            if done % 200 == 0:
+                print(f"    [{done}/{len(tickers)}] 5Y balance sheets fetched...")
+
+    _cache[cache_key] = results
+    print(f"  ✅ 5Y balance sheets loaded: {len(results)} stocks")
+    return results
+
+
+def fetch_cash_flow_5y(tickers: list) -> dict:
+    """6Y annual cash-flow statements — capex, FCF, repurchases, dividends, M&A spend."""
+    cache_key = "cash_flow_5y"
+    if _cache.get(cache_key):
+        print(f"  📦 Using cached 5Y cash flows ({len(_cache[cache_key])} stocks)")
+        return _cache[cache_key]
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    print(f"\n  📊 Fetching 5Y cash flow statements...")
+    results = {}
+    _lock = threading.Lock()
+    _throttle = threading.Semaphore(4)
+
+    def _f(t):
+        with _throttle:
+            data = fmp_get("cash-flow-statement",
+                           {"symbol": t, "period": "annual", "limit": "6"})
+            time.sleep(0.2)
+            if data and isinstance(data, list) and len(data) >= 2:
+                return t, data
+            return t, None
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futs = {pool.submit(_f, t): t for t in tickers}
+        done = 0
+        for fut in as_completed(futs):
+            t, data = fut.result()
+            if data:
+                with _lock: results[t] = data
+            done += 1
+            if done % 200 == 0:
+                print(f"    [{done}/{len(tickers)}] 5Y cash flows fetched...")
+
+    _cache[cache_key] = results
+    print(f"  ✅ 5Y cash flows loaded: {len(results)} stocks")
+    return results
+
+
+def fetch_key_executives(tickers: list) -> dict:
+    """Fetch key executives — used to extract CEO name + tenure (since field).
+    Returns {ticker: list of officer dicts}."""
+    cache_key = "key_executives"
+    if _cache.get(cache_key):
+        print(f"  📦 Using cached key executives ({len(_cache[cache_key])} stocks)")
+        return _cache[cache_key]
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    print(f"\n  📊 Fetching key executives (CEO tenure)...")
+    results = {}
+    _lock = threading.Lock()
+    _throttle = threading.Semaphore(4)
+
+    def _f(t):
+        with _throttle:
+            data = fmp_get("key-executives", {"symbol": t})
+            time.sleep(0.2)
+            if data and isinstance(data, list) and data:
+                return t, data
+            return t, None
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futs = {pool.submit(_f, t): t for t in tickers}
+        done = 0
+        for fut in as_completed(futs):
+            t, data = fut.result()
+            if data:
+                with _lock: results[t] = data
+            done += 1
+            if done % 200 == 0:
+                print(f"    [{done}/{len(tickers)}] executives fetched...")
+
+    _cache[cache_key] = results
+    print(f"  ✅ key executives loaded: {len(results)} stocks")
+    return results
+
+
+def _extract_ceo(executives: list) -> dict | None:
+    """Find the current CEO from the executives list. Returns
+    {name, since, tenure_years} or None if no CEO found / data invalid.
+    FMP's titleSince is often null/0; when missing we return tenure_years=None
+    so the caller can still score on available financial data.
+    """
+    if not executives:
+        return None
+    today = datetime.date.today()
+    best = None
+    fallback = None   # CEO found but no usable date
+    for e in executives:
+        title = (e.get("title") or "").lower()
+        if "chief executive officer" not in title and not title.endswith("ceo") \
+           and " ceo" not in title and "ceo " not in title and title != "ceo":
+            continue
+        name = e.get("name") or ""
+        since_raw = e.get("since") or e.get("titleSince") or ""
+        try:
+            year = int(str(since_raw)[:4]) if since_raw else None
+        except (ValueError, TypeError):
+            year = None
+        if not year or year < 1950 or year > today.year:
+            # Keep as fallback if no valid date, but still a CEO title match
+            if fallback is None and name:
+                fallback = {"name": name, "since": None, "tenure_years": None}
+            continue
+        tenure = today.year - year + (today.month - 1) / 12.0
+        cand = {"name": name, "since": year, "tenure_years": round(tenure, 1)}
+        if best is None or cand["tenure_years"] > best["tenure_years"]:
+            best = cand
+    return best if best is not None else fallback
+
+
+def compute_per_share_growth_5y(bs_5y: list, cfs_5y: list) -> dict:
+    """5Y per-share CAGRs for revenue, FCF, and book value.
+    bs_5y / cfs_5y are lists of annual statements ordered newest→oldest.
+    Returns: {revPerShare5yCagr, fcfPerShare5yCagr, bvPerShare5yCagr}
+    """
+    out = {"revPerShare5yCagr": None, "fcfPerShare5yCagr": None, "bvPerShare5yCagr": None}
+    if not bs_5y or len(bs_5y) < 2:
+        return out
+
+    def _cagr(new, old, years):
+        if not new or not old or new <= 0 or old <= 0 or years <= 0:
+            return None
+        try:
+            return round((new / old) ** (1.0 / years) - 1, 4)
+        except Exception:
+            return None
+
+    # Pair newest with oldest available (up to 5y span)
+    newest_bs = bs_5y[0]
+    oldest_bs = bs_5y[-1]
+    span = len(bs_5y) - 1  # years between
+
+    # FCF/share — needs cash-flow + shares
+    if cfs_5y and len(cfs_5y) >= 2:
+        fcf_new = cfs_5y[0].get("freeCashFlow")
+        fcf_old = cfs_5y[-1].get("freeCashFlow")
+        sh_new  = newest_bs.get("commonStock") or newest_bs.get("weightedAverageShsOut") \
+                  or cfs_5y[0].get("weightedAverageShsOut") or cfs_5y[0].get("commonStock")
+        sh_old  = oldest_bs.get("commonStock") or oldest_bs.get("weightedAverageShsOut") \
+                  or cfs_5y[-1].get("weightedAverageShsOut") or cfs_5y[-1].get("commonStock")
+        if fcf_new and fcf_old and sh_new and sh_old and sh_new > 0 and sh_old > 0:
+            out["fcfPerShare5yCagr"] = _cagr(fcf_new / sh_new, fcf_old / sh_old, span)
+
+    # Book value per share — equity / shares
+    eq_new = newest_bs.get("totalStockholdersEquity") or newest_bs.get("totalEquity")
+    eq_old = oldest_bs.get("totalStockholdersEquity") or oldest_bs.get("totalEquity")
+    sh_new = newest_bs.get("commonStock") or newest_bs.get("weightedAverageShsOut")
+    sh_old = oldest_bs.get("commonStock") or oldest_bs.get("weightedAverageShsOut")
+    if eq_new and eq_old and sh_new and sh_old and sh_new > 0 and sh_old > 0:
+        out["bvPerShare5yCagr"] = _cagr(eq_new / sh_new, eq_old / sh_old, span)
+
+    # Revenue/share — from cash flow income statement is harder; try to use cfs net income proxy
+    # (revenue isn't on cash-flow or balance-sheet directly; we'll try common fields)
+    if cfs_5y and len(cfs_5y) >= 2:
+        rev_new = cfs_5y[0].get("revenue")
+        rev_old = cfs_5y[-1].get("revenue")
+        if rev_new and rev_old and sh_new and sh_old and sh_new > 0 and sh_old > 0:
+            out["revPerShare5yCagr"] = _cagr(rev_new / sh_new, rev_old / sh_old, span)
+
+    return out
+
+
+def compute_ceo_allocator_score(s: dict, bs_5y: list, cfs_5y: list,
+                                 executives: list) -> dict:
+    """Thorndike Outsiders-style score: did this CEO actually create per-share value?
+
+    Returns:
+      {
+        score: 0-100 or None,
+        grade: "A+"/"A"/.../"D" or None,
+        tenure_years, ceo_name, fcf_per_share_cagr,
+        shares_change_pct, roic_trend, callouts: [..]
+      }
+    """
+    out = {
+        "score": None, "grade": None, "tenure_years": None, "ceo_name": None,
+        "fcf_per_share_cagr": None, "shares_change_pct": None,
+        "roic_trend": None, "callouts": []
+    }
+    ceo = _extract_ceo(executives)
+    if ceo:
+        out["ceo_name"] = ceo["name"]
+        out["tenure_years"] = ceo["tenure_years"]
+
+    # Gate: need CEO found + enough financial data
+    # FMP often omits titleSince; when tenure_years is None we still score using
+    # the full 5Y data window (the financial track record speaks for itself).
+    if not ceo:
+        return out
+    if not bs_5y or len(bs_5y) < 3 or not cfs_5y or len(cfs_5y) < 3:
+        return out
+    # If tenure is known and < 3yr, skip (too early to score meaningfully)
+    if ceo["tenure_years"] is not None and ceo["tenure_years"] < 3.0:
+        return out
+
+    # Cap scoring window by tenure if known; otherwise use full available data
+    if ceo["tenure_years"] is not None:
+        max_years = min(int(ceo["tenure_years"]), len(bs_5y) - 1, len(cfs_5y) - 1, 5)
+    else:
+        max_years = min(len(bs_5y) - 1, len(cfs_5y) - 1, 5)
+    if max_years < 3:
+        return out
+
+    bs_window  = bs_5y[:max_years + 1]   # newest..max_years ago
+    cfs_window = cfs_5y[:max_years + 1]
+    span = max_years
+
+    # ── Component 1: Per-share value creation (40 pts) — FCF/share CAGR ──
+    fcf_new = cfs_window[0].get("freeCashFlow")
+    fcf_old = cfs_window[-1].get("freeCashFlow")
+    sh_new  = (bs_window[0].get("commonStock") or bs_window[0].get("weightedAverageShsOut") or
+               cfs_window[0].get("weightedAverageShsOut"))
+    sh_old  = (bs_window[-1].get("commonStock") or bs_window[-1].get("weightedAverageShsOut") or
+               cfs_window[-1].get("weightedAverageShsOut"))
+    fcf_cagr = None
+    if fcf_new and fcf_old and sh_new and sh_old and sh_new > 0 and sh_old > 0 and span > 0:
+        fcf_per_new = fcf_new / sh_new
+        fcf_per_old = fcf_old / sh_old
+        if fcf_per_new > 0 and fcf_per_old > 0:
+            try:
+                fcf_cagr = (fcf_per_new / fcf_per_old) ** (1.0 / span) - 1
+            except Exception:
+                fcf_cagr = None
+        elif fcf_per_new > 0 and fcf_per_old <= 0:
+            fcf_cagr = 0.30   # turning positive is good
+        elif fcf_per_new <= 0:
+            fcf_cagr = -0.10  # negative end state
+
+    out["fcf_per_share_cagr"] = round(fcf_cagr, 4) if fcf_cagr is not None else None
+
+    if fcf_cagr is None:
+        psv_pts = 0
+    elif fcf_cagr > 0.15: psv_pts = 40
+    elif fcf_cagr > 0.10: psv_pts = 32
+    elif fcf_cagr > 0.05: psv_pts = 22
+    elif fcf_cagr > 0.0:  psv_pts = 10
+    else:                 psv_pts = 0
+
+    if fcf_cagr is not None:
+        out["callouts"].append(f"FCF/share grew {fcf_cagr*100:+.0f}%/y over {span}y")
+
+    # ── Component 2: Buyback discipline (20 pts) — share count change ──
+    sh_pct = None
+    if sh_new and sh_old and sh_old > 0:
+        sh_pct = (sh_new - sh_old) / sh_old   # negative = buyback
+    out["shares_change_pct"] = round(sh_pct, 4) if sh_pct is not None else None
+
+    if sh_pct is None:
+        bb_pts = 5  # neutral default
+    else:
+        ann = sh_pct / span if span > 0 else sh_pct
+        if ann <= -0.03:   bb_pts = 20
+        elif ann <= -0.01: bb_pts = 14
+        elif ann <= 0.0:   bb_pts = 8
+        elif ann <= 0.02:  bb_pts = 4   # mild dilution
+        else:              bb_pts = 0   # heavy dilution
+        if ann <= -0.02:
+            out["callouts"].append(f"Reduced shares {abs(sh_pct)*100:.0f}% over tenure")
+        elif ann >= 0.05:
+            out["callouts"].append(f"⚠ Diluted shares {sh_pct*100:+.0f}% over tenure")
+
+    # ── Component 3: ROIC trend (15 pts) — current ROIC vs early-tenure proxy ──
+    # Proxy: net income / equity over the window (rough ROE/ROIC approximation since
+    # we don't have annual ROIC history without another endpoint call)
+    def _roi_proxy(bs_row, cfs_row):
+        ni = cfs_row.get("netIncome")
+        eq = bs_row.get("totalStockholdersEquity") or bs_row.get("totalEquity")
+        if ni and eq and eq > 0:
+            return ni / eq
+        return None
+    roi_new = _roi_proxy(bs_window[0], cfs_window[0])
+    roi_old = _roi_proxy(bs_window[-1], cfs_window[-1])
+    roic_trend = None
+    if roi_new is not None and roi_old is not None:
+        delta = roi_new - roi_old
+        if delta >= 0.03:    roic_trend = "rising";  rt_pts = 15
+        elif delta >= -0.02: roic_trend = "flat";    rt_pts = 10
+        else:                roic_trend = "falling"; rt_pts = max(0, 5 + int(delta * 50))
+    else:
+        rt_pts = 5
+    out["roic_trend"] = roic_trend
+    if roic_trend == "rising":
+        out["callouts"].append(f"ROI proxy rose {roi_old*100:.0f}% → {roi_new*100:.0f}%")
+    elif roic_trend == "falling":
+        out["callouts"].append(f"⚠ ROI proxy fell {roi_old*100:.0f}% → {roi_new*100:.0f}%")
+
+    # ── Component 4: Debt discipline (15 pts) — Net Debt/EBITDA stability ──
+    # Use total debt growth over window vs FCF as a rough proxy
+    debt_new = bs_window[0].get("totalDebt") or bs_window[0].get("longTermDebt")
+    debt_old = bs_window[-1].get("totalDebt") or bs_window[-1].get("longTermDebt")
+    dt_pts = 8  # neutral default
+    if debt_new is not None and debt_old is not None and debt_old > 0:
+        debt_change = (debt_new - debt_old) / debt_old
+        # If FCF grew faster than debt, that's healthy
+        if fcf_cagr is not None:
+            if debt_change <= 0:                  dt_pts = 15  # de-levered
+            elif debt_change < (fcf_cagr * span): dt_pts = 12  # debt grew but FCF outpaced
+            elif debt_change < 1.0:               dt_pts = 8
+            else:                                 dt_pts = 0   # >100% debt growth
+        else:
+            if debt_change <= 0:    dt_pts = 12
+            elif debt_change < 0.5: dt_pts = 8
+            else:                   dt_pts = 3
+
+    # ── Component 5: Reinvestment efficiency (10 pts) — capex vs revenue trend ──
+    rei_pts = 5  # neutral default
+    capex_new = abs(cfs_window[0].get("capitalExpenditure", 0) or 0)
+    rev_new   = cfs_window[0].get("revenue") or 1
+    if capex_new and rev_new and rev_new > 0:
+        cx_intensity = capex_new / rev_new
+        # Low capex with rising ROI = great compounder; high capex with falling ROI = bad
+        if roic_trend == "rising" and cx_intensity < 0.10:    rei_pts = 10
+        elif roic_trend == "rising":                          rei_pts = 8
+        elif roic_trend == "flat" and cx_intensity < 0.05:    rei_pts = 7
+        elif roic_trend == "falling" and cx_intensity > 0.15: rei_pts = 1
+        else:                                                 rei_pts = 5
+
+    score = psv_pts + bb_pts + rt_pts + dt_pts + rei_pts
+    score = max(0, min(100, int(score)))
+
+    if   score >= 88: grade = "A+"
+    elif score >= 78: grade = "A"
+    elif score >= 70: grade = "B+"
+    elif score >= 60: grade = "B"
+    elif score >= 50: grade = "C+"
+    elif score >= 40: grade = "C"
+    else:             grade = "D"
+
+    out["score"] = score
+    out["grade"] = grade
+    return out
+
+
+def classify_divergence(s: dict) -> str | None:
+    """Analyst-vs-Insider divergence flag.
+
+    hidden_gem      — insiders buying strongly, sell-side neutral/bearish
+    conviction_stack — insiders buying strongly, sell-side bullish (both agree)
+    quiet_signal    — insiders modestly buying, sell-side neutral/bearish
+    None            — no divergence signal worth surfacing
+    """
+    rating = (s.get("recommendation") or "").strip().lower()
+    n_buys = s.get("insiderBuys") or 0
+    val    = s.get("insiderValue") or 0
+    insider_strong = n_buys >= 3 or val >= 250_000
+    insider_any    = n_buys >= 1
+    bearish_or_neutral = rating in ("hold", "sell", "strong sell", "underperform", "")
+    bullish            = rating in ("buy", "strong buy", "outperform")
+    if insider_strong and bearish_or_neutral:
+        return "hidden_gem"
+    if insider_strong and bullish:
+        return "conviction_stack"
+    if insider_any and bearish_or_neutral and val >= 50_000:
+        return "quiet_signal"
+    return None
+
+
 def fetch_earnings_surprises(tickers: list) -> dict:
     """Fetch last 8 quarters of earnings surprises for beat-rate calculation.
     Beat rate = % of quarters where actual EPS beat estimated EPS.
@@ -1962,7 +2365,8 @@ def _first(*args):
 
 def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                         estimates, scores, ratings, growth_data, insider_data,
-                        balance_sheet=None, earnings_surp=None) -> dict:
+                        balance_sheet=None, earnings_surp=None,
+                        bs_5y=None, cfs_5y=None, executives=None) -> dict:
     """Merge all FMP data sources into a single dict per stock."""
     print("\n  🔧 Assembling unified stock data...")
 
@@ -2201,6 +2605,25 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
         if _per_share_corrupt:
             pb_val = roe_val = roa_val = roic_val = tb_val = None
 
+        # ── Capital Allocator: CEO score + 5Y per-share CAGRs ──────────
+        _bs5  = (bs_5y or {}).get(t) if bs_5y else None
+        _cfs5 = (cfs_5y or {}).get(t) if cfs_5y else None
+        _exec = (executives or {}).get(t) if executives else None
+        ceo_alloc_obj = None
+        per_share_cagrs = {"revPerShare5yCagr": None, "fcfPerShare5yCagr": None,
+                           "bvPerShare5yCagr": None}
+        if _bs5 or _cfs5 or _exec:
+            try:
+                ceo_alloc_obj = compute_ceo_allocator_score(
+                    {}, _bs5 or [], _cfs5 or [], _exec or []
+                )
+            except Exception:
+                ceo_alloc_obj = None
+            try:
+                per_share_cagrs = compute_per_share_growth_5y(_bs5 or [], _cfs5 or [])
+            except Exception:
+                pass
+
         stocks[t] = {
             "ticker": t,
             "name": u.get("name", ""),
@@ -2380,6 +2803,11 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                              if (_v and _p and _v > 0 and _p > 0) else None)(
                 u.get("volume") or u.get("volAvg"), price
             ),
+            # ── Capital Allocator metadata ───────────────────────────────
+            "ceoAllocator":      ceo_alloc_obj,          # full dict or None
+            "revPerShare5yCagr": per_share_cagrs.get("revPerShare5yCagr"),
+            "fcfPerShare5yCagr": per_share_cagrs.get("fcfPerShare5yCagr"),
+            "bvPerShare5yCagr":  per_share_cagrs.get("bvPerShare5yCagr"),
         }
         # ── A2: Explicit Lynch category — computed after all other fields ──
         # Self-contained classifier; safe to call even when fields are None.
@@ -2393,6 +2821,12 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             stocks[t]["consumerObservable"] = _classify_consumer_observable(stocks[t])
         except Exception:
             stocks[t]["consumerObservable"] = False
+
+        # ── Capital Allocator: Analyst-vs-Insider divergence flag ──────────
+        try:
+            stocks[t]["divergence"] = classify_divergence(stocks[t])
+        except Exception:
+            stocks[t]["divergence"] = None
 
         # ── Sprint 3 A2: Analyst count + Under-Covered tag ──────────────────
         # FMP analyst-estimates payload includes numAnalystsRevenue/numAnalystsEps per
@@ -2686,6 +3120,15 @@ def format_stock_row(s: dict) -> dict:
         "Cap Size": _cap_size_label(s.get("mktCap", 0)),
         "Lynch Cat": s.get("lynchCategory", ""),
         "🏦 Insider": ins_str,
+        # Capital Allocator metadata
+        "CEO Score": (lambda _c: f"{_c['grade']} ({_c['score']})" if _c and _c.get("grade")
+                      else (f"👤 New ({_c['tenure_years']:.0f}y)"
+                            if _c and _c.get("tenure_years") is not None and _c['tenure_years'] < 3.0
+                            else ""))(s.get("ceoAllocator")),
+        "FCF/Sh 5Y": s.get("fcfPerShare5yCagr"),
+        "Divergence": ({"hidden_gem": "🎯 Hidden Gem",
+                        "conviction_stack": "🔥 Conviction",
+                        "quiet_signal": "👁️ Quiet"}.get(s.get("divergence"), "")),
     }
 
 
@@ -3224,6 +3667,36 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
             else:
                 parts.append(f"🔍UnderCovered({_ac_ai}an)")
 
+        # ── Capital Allocator: CEO score + per-share CAGRs + divergence ──
+        _ceo = s.get("ceoAllocator") or {}
+        if _ceo.get("grade"):
+            _t  = _ceo.get("tenure_years")
+            _f  = _ceo.get("fcf_per_share_cagr")
+            _sc = _ceo.get("shares_change_pct")
+            _bits = [f"👑CEO={_ceo['grade']}"]
+            if _t is not None: _bits.append(f"{_t:.0f}y")
+            if _f is not None: _bits.append(f"FCF/sh{_f*100:+.0f}%/y")
+            if _sc is not None and abs(_sc) >= 0.02:
+                _bits.append(f"shares{_sc*100:+.0f}%")
+            parts.append("(" + ",".join(_bits) + ")")
+        elif _ceo.get("tenure_years") is not None and _ceo["tenure_years"] < 3.0:
+            parts.append(f"👤NewCEO({_ceo['tenure_years']:.0f}y)")
+        # Per-share growth (5Y) — explicit signal independent of CEO score
+        _fcf_ps = s.get("fcfPerShare5yCagr")
+        _bv_ps  = s.get("bvPerShare5yCagr")
+        if _fcf_ps is not None and _ceo.get("grade") is None:
+            parts.append(f"FCF/sh5y={_fcf_ps*100:+.0f}%/y")
+        if _bv_ps is not None and _bv_ps > 0.10:
+            parts.append(f"BV/sh5y={_bv_ps*100:+.0f}%/y")
+        # Divergence flag
+        _div = s.get("divergence")
+        if _div == "hidden_gem":
+            parts.append("🎯HiddenGem(insiders+bearishStreet)")
+        elif _div == "conviction_stack":
+            parts.append("🔥ConvictionStack(insiders+bullishStreet)")
+        elif _div == "quiet_signal":
+            parts.append("👁️QuietInsiderSignal")
+
         return "  " + " | ".join(parts)
 
     candidate_lines = [fmt_stock(m) for m in top_stocks]
@@ -3616,6 +4089,8 @@ YOUR LENS — find durable compounders growing consistently at above-average rat
 - Quality Compounders, Stalwarts, and high-ROIC Fast Growers are your natural habitat
 - BONUS — owner-operator alignment: founder/family-led names with significant insider ownership and a long reinvestment runway compound longer than agency-led peers (Mayer's 100-bagger insight)
 - BONUS — Scale Economics Shared (SES): companies that pass scale benefits to customers as lower prices/better service create self-reinforcing flywheels that make the moat WIDEN with size (Costco/Amazon model, Nick Sleep's framework). Watch for intentionally flat/declining gross margin as scale grows = evidence of sharing.
+- BONUS — 👑 CEO Capital Allocator score: stocks tagged 👑 A+/A/B+ have a CEO with ≥3yr tenure who created strong per-share value (positive FCF/sh CAGR, share buybacks, rising ROIC, debt discipline — Thorndike's *Outsiders* framework). Strong prior for compounders. C/D grade with long tenure = reverse signal (capital destruction). Treat 👤 New CEO as neutral.
+- BONUS — 🎯 Hidden Gem flag: insiders are buying significantly while sell-side is rated Hold/Sell. Highest-asymmetry signal in the dataset.
 QUALITY FILTER:
 - Does the company have structural pricing power, network effects, or switching costs that competitors cannot easily replicate?
 - Is ROIC structurally high (moat-driven) or cyclically high (commodity peak, one-time)?
@@ -3841,6 +4316,8 @@ YOUR LENS — find bets where the upside is 3-10x and the downside is limited by
 - Emerging market or overlooked listing discounts: quality companies trading at massive discounts due to investor fear not fundamentals
 - Dhandho mindset: low-risk, high-return businesses (franchise models, capital-light, recurring revenue) bought at depressed prices
 - Margin of safety: current price vs conservative intrinsic value — the gap must be large and verifiable
+- 👑 CEO Capital Allocator (≥B+) signals durable management — strong prior that capital won't be wasted while you wait for the catalyst. C/D-grade long-tenure CEOs are a yellow flag (capital destruction history) — only pick if the catalyst is forced (activist, restructuring) and not management-dependent.
+- 🎯 Hidden Gem (insiders buying + Street bearish) doubles the asymmetry — the people closest to the business are voting with their wallets while the consensus is the floor.
 FOCUS: Pabrai is famous for "heads I win big, tails I don't lose much." The key is asymmetry — the market must be pricing in worse outcomes than reality will deliver.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by DCF margin of safety + P/B cheapness + clean balance sheet — your lens):\n{_pool_pabrai}
 
@@ -3865,6 +4342,8 @@ YOUR LENS — find opportunities where market consensus is wrong, creating mispr
 - Narrative vs numbers gap: where is the market story contradicted by the actual financial data
 - Time horizon arbitrage: quarterly-focused Wall Street missing a multi-year thesis that's playing out
 - Short interest signal: heavily shorted stocks with genuinely improving fundamentals = potential for sharp re-rating
+- 🎯 Hidden Gem flag (insiders buying + sell-side rated Hold/Sell) is THE prototypical second-level setup: consensus is bearish, but the most-informed participants are buying. Strong contrarian prior.
+- 👑 CEO Capital Allocator score (≥B+) helps separate genuine misperceptions from value traps — a great CEO running a hated business is far more interesting than a hated business with a poor CEO.
 FOCUS: Marks' insight is that the market is not about being right — it's about being different from the consensus AND being right. Find where the crowd is clearly wrong.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by contrarian signal: most beaten-down + fundamentally OK + MoS — your lens):\n{_pool_howard_marks}
 
@@ -3889,6 +4368,8 @@ YOUR LENS — find hidden value with specific catalysts that will force market r
 - Accounting normalization: companies where write-downs or one-time items have temporarily depressed reported earnings
 - Structural shift beneficiaries: positioned to benefit from a major trend the market hasn't recognized
 - Catalyst timeline: when does the catalyst play out — 6 months, 1 year, 3 years — and how certain is the timing
+- 👑 CEO Capital Allocator signal: a deep-value name with a 👑 A/B+ CEO is a far stronger setup than the same multiple with a D-grade CEO — when value finally re-rates, you want a competent capital allocator at the wheel. C/D long-tenure CEOs in deep-value names = activist catalyst is preferred (forced repricing > management-dependent repricing).
+- 5Y per-share trends (FCF/sh, BV/sh CAGRs) reveal whether the "deep value" is real cheapness or persistent destruction.
 FOCUS: Burry's edge was doing deep quantitative work that others avoided — reading 10-Ks in detail, identifying specific structural mispricings, and waiting for a defined catalyst. The market must be forced to reprice, not just discover the value organically.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by cheapest EV/EBITDA + P/B + DCF discount — your lens):\n{_pool_burry}
 
@@ -3913,6 +4394,9 @@ YOUR LENS — follow executives and smart money buying their own stock:
 - Combined signal: stocks with BOTH insider buying AND improving fundamental momentum
 - Reject insider noise: open market purchases are meaningful; option exercises and scheduled 10b5-1 plans are less so
 - Balance sheet context: insider buying means more when the company has no obvious financial stress
+- 🎯 Hidden Gem flag (cluster insider buying + Street rated Hold/Sell) — pre-computed for you in the candidate data. This is your highest-priority setup: insider conviction in a name the consensus has given up on.
+- 🔥 Conviction Stack flag (cluster insider + Street bullish) — both signals agree, lower contrarian edge but high-conviction setup that you cross-validate when both insiders AND fundamental momentum align.
+- 👑 CEO grade: an insider-bought name with an A/B+ capital allocator at the helm is a much higher-quality signal than the same insider buying at a chronically capital-destroying company.
 FOCUS: insider buying is one of the most reliable signals in markets — these are the people who know the business best, buying with their own after-tax dollars. When the CEO spends $1M buying stock in a down market, pay attention.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (stocks with insider buying flagged first, then ranked by quality — your lens):\n{_pool_insider}{(chr(10)*2 + _insider_intel) if _insider_intel else ""}
 
@@ -4004,6 +4488,8 @@ YOUR INVESTMENT PHILOSOPHY:
 - Size neutrality: a $100B compounder at PEG 0.8 and 35% ROIC beats a $1B name at PEG 0.8 with 15% ROIC; size is irrelevant to quality
 - 🛒 FAMILIAR-BRAND PREFERENCE — the user picks stocks based on personal knowledge of products/services they directly use (Adobe, Microsoft, Costco, etc.). Candidates carrying the 🛒FamiliarBrand tag are consumer-observable — the user can independently evaluate the product. When two picks are otherwise equal in quality and valuation, PREFER the 🛒 one. Note in synopsis when a pick is 🛒 ("user can directly evaluate this product/service").
 - 🔍 UNDER-COVERED PREFERENCE — names tagged 🔍UnderCovered have <8 sell-side analysts (or <12 for >$2B caps). This is structural Wall Street inefficiency: analysts cluster on big mega-caps because that's where the fees are; small/mid quality names get neglected and persistently mispriced. When two picks are otherwise equal, PREFER the 🔍 one — that's where personal-knowledge edge generates alpha vs the consensus crowd.
+- 👑 CEO CAPITAL ALLOCATOR — every candidate carries a 👑 grade (A+/A/B+/B/C+/C/D) computed from 5Y FCF/share CAGR, share buyback discipline, ROI trend, debt discipline, and reinvestment efficiency over the CEO's tenure (≥3yr required). PREFER A/A+ heavily — long-tenure capital allocators with strong per-share value creation are the closest thing to a structural edge in compounding. Treat 👤 New CEO as neutral. C/D-grade long-tenure CEOs are a yellow flag: only include if there is a forced catalyst (activism, restructuring) that doesn't depend on management.
+- 🎯 HIDDEN GEM PRIORITY — when 3+ specialists nominate a stock that ALSO carries 🎯HiddenGem (cluster insider buying + Street rated Hold/Sell) AND a 👑 ≥A- CEO score → highest-priority CORE pick. This is the strongest possible signal in the system: data quality + management quality + insider conviction + contrarian vs consensus all align.
 - LYNCH-CATEGORY BALANCE (target distribution across final picks):
     * ~40% Fast Growers / Stalwarts  (compounders — the portfolio core)
     * ~30% Asset Plays / Turnarounds (cheap optionality — uncorrelated alpha)
@@ -4314,6 +4800,8 @@ CORE RULES — apply strictly:
 6. PICK 5-8 NAMES. NOT MORE. The judge already gives a longer list. Your value is selectivity — saying "out of these 30 specialist nominations, only THESE have a real Lynch story". Forcing more dilutes the signal.
 
 7. CONTRARIAN ANGLE — explicitly call out, in the `wall_street_blindspot` field, what data-driven Wall Street is MISREADING. Examples: "Sell-side models a sub-pandemic baseline because they don't see how AI tools have made it sticky", "Street treats this as a melting ice cube because the legacy product is shrinking, but the new mobile app is doubling MAUs unmodeled".
+
+8. TIEBREAKER ONLY — 👑 CEO grade and 🎯 Hidden Gem flags appear in the candidate data. Your primary job is the consumer-observable thesis, not capital allocation. But when two candidates have equally strong Lynch stories, prefer the one with 👑 ≥B+ CEO and/or 🎯 Hidden Gem. NEVER substitute these for an actual Lynch story — a great CEO at a B2B name with no consumer surface still gets REJECTED.
 
 YOUR OUTPUT — JSON ONLY, no other text. Schema:
 
@@ -7036,8 +7524,10 @@ def build_quality_compounders(wb, stocks):
     headers = ["Rank", "Ticker", "Company", "Sector", "Price", "Fwd PEG", "PEG", "Fwd P/E", "P/E",
                "IV", "MoS", "ROIC", "ROE", "FCF Yield", "FCF Margin", "Oper Margin", "FCF Conv.", "FCF Consist.",
                "Rev Growth", "Grwth Gap", "Rev Consist.", "Shares Δ", "EPS Growth 5Y",
-               "Piotroski", "52w vs High", "Div Yield", "MktCap ($B)", "Score", "🏦 Insider"]
-    widths = [5, 8, 22, 15, 8, 7, 6, 7, 7, 8, 7, 7, 7, 8, 9, 8, 8, 9, 8, 8, 9, 8, 8, 7, 9, 7, 10, 6, 14]
+               "Piotroski", "52w vs High", "Div Yield",
+               "CEO Score", "FCF/Sh 5Y", "Divergence",
+               "MktCap ($B)", "Score", "🏦 Insider"]
+    widths = [5, 8, 22, 15, 8, 7, 6, 7, 7, 8, 7, 7, 7, 8, 9, 8, 8, 9, 8, 8, 9, 8, 8, 7, 9, 7, 12, 9, 14, 10, 6, 14]
     write_table(ws, qualified[:TOP_N], headers, sr, header_color="B71C1C", widths=widths)
     print(f"  ✅ Quality Compounders tab done — {min(len(qualified), TOP_N)} (from {len(qualified)})")
     return qualified
@@ -7127,8 +7617,10 @@ def build_hold_forever_tab(wb, stocks):
 
     headers = ["Rank", "Ticker", "Company", "Sector", "Familiar", "Under-Cov", "Price", "ROIC", "ROE",
                "FCF Yield", "Gross Mgn", "Oper Mgn", "Rev Consist.", "FCF Consist.",
-               "Rev Growth 5Y", "Shares Δ", "Net Debt/EBITDA", "Piotroski", "MktCap ($B)", "Score"]
-    widths = [5, 8, 24, 14, 8, 9, 8, 7, 7, 9, 9, 9, 11, 11, 12, 8, 14, 9, 11, 7]
+               "Rev Growth 5Y", "Shares Δ", "Net Debt/EBITDA", "Piotroski",
+               "CEO Score", "FCF/Sh 5Y", "Divergence",
+               "MktCap ($B)", "Score"]
+    widths = [5, 8, 24, 14, 8, 9, 8, 7, 7, 9, 9, 9, 11, 11, 12, 8, 14, 9, 12, 9, 14, 11, 7]
     write_table(ws, qualified[:25], headers, sr, header_color="6A1B9A", widths=widths)
     print(f"  ✅ Hold Forever tab done — {min(len(qualified), 25)} (from {len(qualified)} qualifying)")
     return qualified[:25]
@@ -8513,6 +9005,101 @@ function showMacroDetail(el, id) {
                     f'{label}</span>')
         return ""
 
+    # 👑 CEO Capital Allocator badge (Thorndike Outsiders-style score)
+    def _ceo_badge(stock):
+        if not stock:
+            return ""
+        ceo = stock.get("ceoAllocator") or {}
+        grade = ceo.get("grade")
+        tenure = ceo.get("tenure_years")
+        # New CEO (<3yr): show neutral chip
+        if not grade and tenure is not None and tenure < 3.0:
+            name = (ceo.get("ceo_name") or "")[:32]
+            tip = f"New CEO ({tenure:.1f}y) — {name}. Too early to score capital allocation."
+            return ('<span class="badge" style="font-size:.63rem;background:#37474f;'
+                    f'color:#cfd8dc;padding:2px 6px;border-radius:3px" title="{tip}">'
+                    f'👤 New CEO ({tenure:.0f}y)</span>')
+        if not grade:
+            return ""
+        # Color by grade
+        if grade in ("A+", "A"):
+            bg, fg = "#b8860b", "#fff8e1"     # gold
+        elif grade in ("B+", "B"):
+            bg, fg = "#1565c0", "#e3f2fd"     # blue
+        elif grade in ("C+", "C"):
+            bg, fg = "#546e7a", "#eceff1"     # grey
+        else:  # D
+            bg, fg = "#5d4037", "#efebe9"     # dim brown
+        name = (ceo.get("ceo_name") or "")[:30]
+        fcf  = ceo.get("fcf_per_share_cagr")
+        sh   = ceo.get("shares_change_pct")
+        bits = []
+        if fcf is not None: bits.append(f"FCF/sh {fcf*100:+.0f}%/y")
+        if sh  is not None and abs(sh) >= 0.02: bits.append(f"shares {sh*100:+.0f}%")
+        if ceo.get("roic_trend"): bits.append(f"ROI {ceo['roic_trend']}")
+        callouts = " · ".join(bits)
+        tenure_s = f"{tenure:.0f}y" if tenure else "?"
+        tip = f"{name} ({tenure_s}). Score: {ceo.get('score','?')}/100. {callouts}"
+        return ('<span class="badge" style="font-size:.63rem;'
+                f'background:{bg};color:{fg};padding:2px 6px;border-radius:3px;'
+                f'font-weight:700" title="{tip}">'
+                f'👑 {grade} ({tenure_s})</span>')
+
+    # 🎯 Divergence badge (Hidden Gem / Conviction Stack / Quiet Signal)
+    def _divergence_badge(stock):
+        if not stock:
+            return ""
+        d = stock.get("divergence")
+        if d == "hidden_gem":
+            return ('<span class="badge" style="font-size:.63rem;background:#bf360c;'
+                    'color:#fff3e0;padding:2px 6px;border-radius:3px;font-weight:700" '
+                    'title="Insiders are buying significantly while sell-side is rated Hold/Sell — highest-asymmetry signal">'
+                    '🎯 Hidden Gem</span>')
+        if d == "conviction_stack":
+            return ('<span class="badge" style="font-size:.63rem;background:#c62828;'
+                    'color:#ffebee;padding:2px 6px;border-radius:3px;font-weight:700" '
+                    'title="Insiders + sell-side both bullish — conviction stack, both signals agree">'
+                    '🔥 Conviction</span>')
+        if d == "quiet_signal":
+            return ('<span class="badge" style="font-size:.63rem;background:#455a64;'
+                    'color:#cfd8dc;padding:2px 6px;border-radius:3px" '
+                    'title="Modest insider buying with neutral/bearish sell-side rating">'
+                    '👁️ Quiet</span>')
+        return ""
+
+    # Capital Allocation mini-block for expanded cards
+    def _capalloc_block(stock):
+        if not stock:
+            return ""
+        ceo = stock.get("ceoAllocator") or {}
+        rev = stock.get("revPerShare5yCagr")
+        fcf = stock.get("fcfPerShare5yCagr")
+        bv  = stock.get("bvPerShare5yCagr")
+        if not ceo.get("grade") and rev is None and fcf is None and bv is None:
+            return ""
+        rows = []
+        if ceo.get("grade"):
+            _ten = ceo.get("tenure_years")
+            _ten_s = f"{_ten:.0f}y" if _ten else "tenure?"
+            rows.append(f'<div><b style="color:#ffc107">👑 CEO {ceo["grade"]} ({ceo.get("score","?")}/100)</b> '
+                        f'— {ceo.get("ceo_name","")} · {_ten_s}</div>')
+        per_bits = []
+        if rev is not None: per_bits.append(f"Rev/sh: {rev*100:+.0f}%/y")
+        if fcf is not None: per_bits.append(f"FCF/sh: {fcf*100:+.0f}%/y")
+        if bv  is not None: per_bits.append(f"BV/sh:  {bv*100:+.0f}%/y")
+        if per_bits:
+            rows.append(f'<div style="color:#b0bec5;font-size:.66rem;margin-top:2px">'
+                        f'5Y per-share: {" · ".join(per_bits)}</div>')
+        for c in (ceo.get("callouts") or [])[:3]:
+            color = "#ef9a9a" if c.startswith("⚠") else "#a5d6a7"
+            rows.append(f'<div style="color:{color};font-size:.65rem">{c}</div>')
+        return ('<div style="background:#1a1a2488;border-left:2px solid #ffc10755;'
+                'border-radius:3px;padding:5px 8px;margin-top:6px">'
+                '<div style="font-size:.60rem;font-weight:700;color:#ffc107;'
+                'text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">'
+                '👑 Capital Allocation</div>'
+                + "".join(rows) + '</div>')
+
     _sparklines_data = sparklines or {}
 
     def _sparkline_svg(ticker, w=200, h=44):
@@ -8607,6 +9194,20 @@ function showMacroDetail(el, id) {
                 elif c in ("P/E", "P/B", "P/FCF", "EV/EBITDA", "Fwd P/E", "Score", "Rank",
                            "Piotroski", "MktCap ($B)", "Beta", "Net Debt/EBITDA"):
                     cells.append(_cell(_num(v, 1) if isinstance(v, float) else (str(v) if v is not None else "—"), v))
+                elif c == "FCF/Sh 5Y":
+                    cells.append(_cell(_pct(v) if v is not None else "—", v))
+                elif c == "CEO Score":
+                    # Color-coded by grade
+                    grade_color = ""
+                    if v and isinstance(v, str):
+                        if v.startswith(("A+", "A ")): grade_color = "color:#ffc107;font-weight:700"
+                        elif v.startswith("B"):        grade_color = "color:#90caf9"
+                        elif v.startswith("C"):        grade_color = "color:#9e9e9e"
+                        elif v.startswith("D"):        grade_color = "color:#ef9a9a"
+                        elif v.startswith("👤"):        grade_color = "color:#78909c"
+                    cells.append(f'<td style="{grade_color}">{v if v else "—"}</td>')
+                elif c == "Divergence":
+                    cells.append(f"<td>{v if v else '—'}</td>")
                 else:
                     cells.append(f"<td>{v if v is not None else '—'}</td>")
             body_rows.append(f"<tr{alt}>{''.join(cells)}</tr>")
@@ -9212,11 +9813,14 @@ function showMacroDetail(el, id) {
     {lynch_badge}
     {_familiar_badge(s)}
     {_undercovered_badge(s)}
+    {_ceo_badge(s)}
+    {_divergence_badge(s)}
     <span class="xarrow">▼</span>
   </div>
   <div class="xbody" style="display:none">
     {_mm_spark_block}
     {_biz_block}
+    {_capalloc_block(s)}
     <p class="mm-hl">"{hl}"</p>
     <p class="mm-story">{story}</p>
     <div class="mm-meta">
@@ -9332,6 +9936,8 @@ function showMacroDetail(el, id) {
                     _s2   = stocks.get(_tk2, {})
                     _fam_b = _familiar_badge(_s2)
                     _unc_b = _undercovered_badge(_s2)
+                    _ceo_b = _ceo_badge(_s2)
+                    _div_b = _divergence_badge(_s2)
                     _price2 = _s2.get("price")
                     _price_s = f"${_price2:.2f}" if _price2 else "—"
                     _sec2   = (_s2.get("sector") or "")
@@ -9363,7 +9969,7 @@ function showMacroDetail(el, id) {
                         f'<span style="font-weight:700;font-size:.95rem;color:#90caf9">{_tk2}</span>'
                         f'<span style="background:{_bg};color:#fff;border-radius:3px;padding:1px 6px;'
                         f'font-size:.65rem;font-weight:700">{_n2} agents</span>'
-                        f'{_fam_b}{_unc_b}{_lynch2}'
+                        f'{_fam_b}{_unc_b}{_ceo_b}{_div_b}{_lynch2}'
                         f'<span class="xarrow" style="margin-left:auto;font-size:.7rem;color:#546e7a">▼</span>'
                         f'</div>'
                         f'<div style="font-size:.7rem;color:#b0bec5;margin-bottom:2px">{_co2}</div>'
@@ -9437,6 +10043,8 @@ function showMacroDetail(el, id) {
                     _mind = (_ms.get("industry") or "")
                     _mfam = _familiar_badge(_ms)
                     _munc = _undercovered_badge(_ms)
+                    _mceo = _ceo_badge(_ms)
+                    _mdiv = _divergence_badge(_ms)
                     _mlynch = _lynch_badge(_ms.get("lynchCategory",""))
                     _mspark = _sparkline_svg(_mt)
                     _mconv_color = "#26a69a" if _mconv == "HIGH" else "#80cbc4"
@@ -9450,7 +10058,7 @@ function showMacroDetail(el, id) {
                         f'<span class="mm-co">{_mco} · {_msec}</span>'
                         f'<span class="badge" style="background:{_mconv_color};color:#000;font-size:.62rem;'
                         f'padding:1px 6px;border-radius:3px;font-weight:700">{_mconv}</span>'
-                        f'{_mlynch}{_mfam}{_munc}'
+                        f'{_mlynch}{_mfam}{_munc}{_mceo}{_mdiv}'
                         f'<span class="xarrow">▼</span>'
                         f'</div>'
                         # Always-visible thesis line — the unique value of the Mall Manager
@@ -9750,12 +10358,15 @@ function showMacroDetail(el, id) {
     {_lb3}
     {_familiar_badge(s2)}
     {_undercovered_badge(s2)}
+    {_ceo_badge(s2)}
+    {_divergence_badge(s2)}
     <span class="xarrow">▼</span>
   </div>
   {f'<div style="font-size:.72rem;color:#78909c;margin-top:4px;font-style:italic">{key_m[:90]}</div>' if key_m else ''}
   <div class="xbody" style="display:none">
     {_sp_spark_block}
     {_sp_biz}
+    {_capalloc_block(s2)}
     <p class="mm-hl">"{rationale3}"</p>
     {f'<p class="mm-story">{brief}</p>' if brief else ''}
     <div class="mm-meta">{_sp_meta_items}</div>
@@ -10453,7 +11064,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
     "DCF intrinsic value discount ≥5% · Piotroski ≥6 (value-trap gate only) · Altman Z ≥1.5. "
     "Ranked on: MoS + Lynch quality (rev consistency, FCF conversion, EPS growth, buybacks) "
     "+ FCF yield + ROIC + ROE + multi-metric cheapness. Top 50.")}
-{_strategy_table(stalwarts,  STRAT_COLS,                               "stalwart", "🏛 Stalwarts",
+{_strategy_table(stalwarts,  STRAT_COLS + ["CEO Score","FCF/Sh 5Y","Divergence"],    "stalwart", "🏛 Stalwarts",
     "Revenue growth 5–25% · MktCap >$2B · P/E <50 · FCF positive · Piotroski ≥5 · "
     "Rev consistency ≥60% · Excl. Basic Materials. Lynch 'boring but reliable' category.")}
 {_strategy_table(fast_growers, STRAT_COLS + ["Rev Growth 5Y","EPS Growth 5Y"], "fastg",    "🚀 Fast Growers",
@@ -10475,11 +11086,11 @@ Sharpe on alpha series. Click any column header to sort.</p>
 {_strategy_table(asset_plays, STRAT_COLS + ["P/B","Graham NN"],        "asset",    "🏗 Asset Plays",
     "P/B <1 · Hidden tangible asset value (real estate, cash, IP) · FCF positive. "
     "Lynch/Graham: buy $1 of assets for <$1. Best in Financial Services, Real Estate, Industrials.")}
-{_strategy_table(quality_compounders, STRAT_COLS + ["P/FCF","EV/EBITDA"], "qual",  "🏆 Quality Compounders",
+{_strategy_table(quality_compounders, STRAT_COLS + ["P/FCF","EV/EBITDA","CEO Score","FCF/Sh 5Y","Divergence"], "qual",  "🏆 Quality Compounders",
     "ROIC >15% · PEG <2 · FCF positive · Operating margin >20% · Revenue growth >8%. "
     "Buffett category: wonderful companies at fair prices — hold forever, let compounding work. "
     "(absorbs IV Discount + Stalwarts cuts — same compounding thesis, different ranking lenses)")}
-{_strategy_table(hold_forever or [], STRAT_COLS + ["FCF Margin"], "hold",  "💎 Hold Forever — Buy-and-Forget",
+{_strategy_table(hold_forever or [], STRAT_COLS + ["FCF Margin","CEO Score","FCF/Sh 5Y","Divergence"], "hold",  "💎 Hold Forever — Buy-and-Forget",
     "Strict cuts: ROIC >15% · 80%+ rev consistency · 5–25% steady CAGR · moat (gross margin >40% or oper margin >15%) · "
     "no dilution · low debt · Piotroski ≥6. Top 25 names. The user's natural buy-and-hold candidate pool — "
     "scan for 🛒 (Familiar Brand) and 🔍 (Wall St under-coverage) tags; cross-check against personal knowledge before sizing.")}
@@ -11191,6 +11802,14 @@ def main():
     earnings_surp = fetch_earnings_surprises(top_for_enrichment)
     insider_data = fetch_insider_trading(tickers=top_for_enrichment)
 
+    # ── Capital allocator data: CEO tenure + 5Y financials ─────────
+    # Lighter universe: only top 2000 by mktcap (where capital-allocation
+    # analysis matters most — covers all strategy tab universes)
+    capalloc_universe = top_for_enrichment[:2000]
+    bs_5y_data        = fetch_balance_sheet_5y(capalloc_universe)
+    cfs_5y_data       = fetch_cash_flow_5y(capalloc_universe)
+    executives_data   = fetch_key_executives(capalloc_universe)
+
     # Fetch 52-week high/low (not returned by screener on Starter plan; batched via /quote)
     phase_start("52w_ranges", "Fetching 52-week ranges (parallel)")
     w52 = fetch_52w_ranges(top_for_enrichment)
@@ -11353,7 +11972,9 @@ def main():
     # Assemble
     stocks = assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                                  estimates, scores, ratings, growth_data, insider_data,
-                                 balance_sheet, earnings_surp)
+                                 balance_sheet, earnings_surp,
+                                 bs_5y=bs_5y_data, cfs_5y=cfs_5y_data,
+                                 executives=executives_data)
 
     print(f"\n  📊 FMP API calls this run: {_fmp_call_count}")
 
@@ -11471,9 +12092,11 @@ def main():
         "Rank", "Ticker", "Company", "Sector", "Price",
         "Fwd PEG", "PEG", "Fwd P/E", "P/E", "ROIC",
         "ROE", "FCF Yield", "FCF Conv.", "Oper Margin", "Rev Growth", "Rev Consist.", "Grwth Gap",
-        "EPS Growth 5Y", "Piotroski", "52w vs High", "Div Yield", "MktCap ($B)", "Score", "🏦 Insider",
+        "EPS Growth 5Y", "Piotroski", "52w vs High", "Div Yield",
+        "CEO Score", "FCF/Sh 5Y", "Divergence",
+        "MktCap ($B)", "Score", "🏦 Insider",
     ]
-    _st_widths = [5, 8, 22, 15, 8, 7, 6, 7, 7, 8, 7, 8, 8, 8, 9, 9, 8, 11, 7, 9, 7, 10, 6, 14]
+    _st_widths = [5, 8, 22, 15, 8, 7, 6, 7, 7, 8, 7, 8, 8, 8, 9, 9, 8, 11, 7, 9, 7, 12, 9, 14, 10, 6, 14]
 
     stalwarts = build_lynch_tab(wb, stocks, "Stalwarts", "3", _stalwart_filter, _stalwart_score,
                                 "4A148C", "Consistent 5-25% revenue growers, >$2B. Buy on dips.",
