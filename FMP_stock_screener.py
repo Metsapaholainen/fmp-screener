@@ -3158,6 +3158,12 @@ def format_stock_row(s: dict) -> dict:
                       else (f"👤 New ({_c['tenure_years']:.0f}y)"
                             if _c and _c.get("tenure_years") is not None and _c['tenure_years'] < 3.0
                             else ""))(s.get("ceoAllocator")),
+        "_ceo_tooltip": (lambda _c: " | ".join([
+            f"CEO: {_c.get('ceo_name','?')}",
+            f"FCF CAGR: {_c['fcf_per_share_cagr']*100:+.0f}%/y" if _c.get('fcf_per_share_cagr') is not None else "",
+            f"Buybacks: {_c['shares_change_pct']*-100:.0f}% of FCF" if _c.get('shares_change_pct') is not None else "",
+            f"ROI trend: {_c.get('roic_trend','?')}",
+        ] + (_c.get('callouts') or [])))(s.get("ceoAllocator")) if s.get("ceoAllocator") and s["ceoAllocator"].get("grade") else "",
         "FCF/Sh 5Y": s.get("fcfPerShare5yCagr"),
         "Divergence": ({"hidden_gem": "🎯 Hidden Gem",
                         "conviction_stack": "🔥 Conviction",
@@ -9199,7 +9205,18 @@ function showMacroDetail(el, id) {
         desc_html = (f'<p style="background:#1a1a2e;padding:8px 12px;border-radius:4px;'
                      f'font-size:.75rem;color:#9e9e9e;margin-bottom:10px;line-height:1.6">'
                      f'<b style="color:#90caf9">Filter: </b>{description}</p>') if description else ""
-        hdr_html = "".join(f"<th>{c}</th>" for c in cols)
+        _CEO_SCORE_TIP = (
+            "CEO Capital Allocator Score (0-100) — Thorndike Outsiders-style rating: "
+            "FCF growth +40pts | Buyback discipline +20pts (% of FCF returned vs diluted) | "
+            "ROI trend +15pts | Debt discipline +15pts | Reinvestment efficiency +10pts. "
+            "Grades: A+(88+) A(78+) B+(70+) B(60+) C+(50+) C(40+) D(<40). "
+            "Hover individual cells for per-company detail."
+        )
+        hdr_html = "".join(
+            f'<th title="{_CEO_SCORE_TIP}" style="cursor:help;border-bottom:1px dashed #546e7a">{c}</th>'
+            if c == "CEO Score" else f"<th>{c}</th>"
+            for c in cols
+        )
         body_rows = []
         for i, r in enumerate(rows):
             alt = ' class="alt"' if i % 2 == 0 else ''
@@ -9230,7 +9247,6 @@ function showMacroDetail(el, id) {
                 elif c == "FCF/Sh 5Y":
                     cells.append(_cell(_pct(v) if v is not None else "—", v))
                 elif c == "CEO Score":
-                    # Color-coded by grade
                     grade_color = ""
                     if v and isinstance(v, str):
                         if v.startswith(("A+", "A ")): grade_color = "color:#ffc107;font-weight:700"
@@ -9238,7 +9254,9 @@ function showMacroDetail(el, id) {
                         elif v.startswith("C"):        grade_color = "color:#9e9e9e"
                         elif v.startswith("D"):        grade_color = "color:#ef9a9a"
                         elif v.startswith("👤"):        grade_color = "color:#78909c"
-                    cells.append(f'<td style="{grade_color}">{v if v else "—"}</td>')
+                    tip = r.get("_ceo_tooltip", "")
+                    tip_attr = f' title="{tip}" style="{grade_color};cursor:help"' if tip else f' style="{grade_color}"'
+                    cells.append(f'<td{tip_attr}>{v if v else "—"}</td>')
                 elif c == "Divergence":
                     cells.append(f"<td>{v if v else '—'}</td>")
                 else:
