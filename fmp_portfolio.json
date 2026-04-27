@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 21585.989100000006,
+  "cash": 21505.636400000007,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -112,14 +112,14 @@
       "sector": "Technology"
     },
     {
-      "ticker": "NICE",
-      "company": "NICE Ltd.",
-      "shares": 49,
-      "entry_price": 100.35,
-      "entry_date": "2026-04-26",
-      "rationale": "IV Discount/Turnaround replacement (EXEL sale): 13% ROIC, 11.1% FCF yield, PEG 0.19 (lowest in pool), +9% growth, 83% MoS. Portfolio's Turnaround category is OVER-cap (7/3), but NICE's PEG 0.19 and FC",
+      "ticker": "EXLS",
+      "company": "ExlService Holdings",
+      "shares": 164,
+      "entry_price": 30.4,
+      "entry_date": "2026-04-27",
+      "rationale": "Post-NICE sale frees Turnaround slot. EXLS is Stalwart/FastGrower (18% ROIC, 6.3% FCF, PEG 0.64, +14% growth, 50% MoS). Business services with AI-driven margin expansion. Fits Financial Services secto",
       "conviction": "MEDIUM-HIGH",
-      "sell_trigger": "Gross margin declines below 70% or ARR churn accelerates above 5%",
+      "sell_trigger": "Revenue growth falls below 10% YoY for 2 consecutive quarters; ROIC dips below 15%",
       "lynch_category": "Stalwart+FastGrower+Turnaround",
       "sector": "Technology"
     }
@@ -544,7 +544,31 @@
       "return_pct": 0.0,
       "transaction_cost": 5.92,
       "rationale": "IV Discount/Turnaround replacement (EXEL sale): 13% ROIC, 11.1% FCF yield, PEG 0.19 (lowest in pool), +9% growth, 83% MoS. Portfolio's Turnaround category is OVER-cap (7/3), but NICE's PEG 0.19 and FC"
+    },
+    {
+      "date": "2026-04-27",
+      "action": "SELL",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 49,
+      "price": 100.35,
+      "value": 4911.23,
+      "return_pct": 0.0,
+      "transaction_cost": 5.92,
+      "rationale": "Thesis broken by portfolio structure AND category constraints: ROIC 13% barely clears 12% hurdle; FCF 11.1% yield is good but fundamentals (PEG 0.19 driven by low growth +9%) represent a quality trap. More critically: NICE is categorized as Turnaround, and portfolio already has 8 Turnarounds (max 3). This is a phantom position that must clear to rebalance Lynch distribution. Sell to create category capacity for higher-quality FastGrowers/Stalwarts."
+    },
+    {
+      "date": "2026-04-27",
+      "action": "BUY",
+      "ticker": "EXLS",
+      "company": "ExlService Holdings",
+      "shares": 164,
+      "price": 30.4,
+      "value": 4985.6,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "Post-NICE sale frees Turnaround slot. EXLS is Stalwart/FastGrower (18% ROIC, 6.3% FCF, PEG 0.64, +14% growth, 50% MoS). Business services with AI-driven margin expansion. Fits Financial Services secto"
     }
   ],
-  "last_updated": "2026-04-26"
+  "last_updated": "2026-04-27"
 }
