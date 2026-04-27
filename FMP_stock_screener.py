@@ -1832,31 +1832,45 @@ def compute_ceo_allocator_score(s: dict, bs_5y: list, cfs_5y: list,
     if fcf_cagr is not None:
         out["callouts"].append(f"FCF grew {fcf_cagr*100:+.0f}%/y over {span}y")
 
-    # ── Component 2: Buyback/dilution discipline (20 pts) ──
-    # Use netCommonStockIssuance from CF: negative = net buybacks (good), positive = dilution (bad)
-    # Normalise cumulative net issuance against cumulative FCF over the window.
-    total_fcf    = sum(abs(r.get("freeCashFlow") or 0) for r in cfs_window if (r.get("freeCashFlow") or 0) > 0)
-    total_net_si = sum(r.get("netCommonStockIssuance") or r.get("commonStockRepurchased") or 0
-                       for r in cfs_window)
+    # ── Component 2: Shareholder capital return discipline (20 pts) ──
+    # Count BOTH buybacks AND dividends — some great allocators (Chubb, KO, TRV)
+    # prefer dividends over buybacks; penalising only on buybacks is unfair to them.
+    # capital_returned = net buybacks + dividends paid (both in $ from CF statement)
+    total_fcf = sum(abs(r.get("freeCashFlow") or 0) for r in cfs_window if (r.get("freeCashFlow") or 0) > 0)
+    total_net_si  = sum(r.get("netCommonStockIssuance") or r.get("commonStockRepurchased") or 0
+                        for r in cfs_window)
+    total_divs    = sum(abs(r.get("commonDividendsPaid") or r.get("netDividendsPaid") or 0)
+                        for r in cfs_window)
+    # Net buybacks: negative netCommonStockIssuance = money out (good); positive = dilution (bad)
+    net_buybacks = -total_net_si   # positive = returned via buybacks
+    total_returned = net_buybacks + total_divs   # total cash returned to shareholders
+
     sh_pct = None
     bb_pts = 5  # neutral default when data missing
     if total_fcf > 0:
-        # buyback_ratio: what fraction of FCF went to net buybacks (negative = returned capital)
-        buyback_ratio = -total_net_si / total_fcf   # positive = good (returned capital)
-        sh_pct = -buyback_ratio   # preserve sign convention: negative = shareholder-friendly
+        return_ratio = total_returned / total_fcf   # fraction of FCF returned to shareholders
+        # Net dilution penalty: if net stock issuance > 20% of FCF, subtract from score
+        dilution_penalty = max(0, -net_buybacks / total_fcf) if net_buybacks < 0 else 0
+        effective_ratio  = return_ratio - dilution_penalty * 2   # penalise dilution double
+
+        sh_pct = -(net_buybacks / total_fcf)   # negative = net buyback program
         out["shares_change_pct"] = round(sh_pct, 4)
-        if buyback_ratio >= 0.40:
+
+        if effective_ratio >= 0.50:
             bb_pts = 20
-            out["callouts"].append(f"Returned {buyback_ratio*100:.0f}% of FCF via buybacks")
-        elif buyback_ratio >= 0.15:
+            _via = []
+            if net_buybacks > 0:   _via.append(f"buybacks {net_buybacks/total_fcf*100:.0f}%")
+            if total_divs   > 0:   _via.append(f"dividends {total_divs/total_fcf*100:.0f}%")
+            out["callouts"].append(f"Returned {return_ratio*100:.0f}% of FCF ({', '.join(_via)})")
+        elif effective_ratio >= 0.25:
             bb_pts = 14
-        elif buyback_ratio >= 0.0:
+        elif effective_ratio >= 0.05:
             bb_pts = 8
-        elif buyback_ratio >= -0.20:
-            bb_pts = 4   # mild net dilution
+        elif effective_ratio >= -0.10:
+            bb_pts = 4   # minimal return, modest dilution
         else:
-            bb_pts = 0   # heavy dilution (>20% of FCF in net stock issuance)
-            out["callouts"].append(f"⚠ Net stock dilution {abs(buyback_ratio)*100:.0f}% vs FCF over tenure")
+            bb_pts = 0   # heavy net dilution
+            out["callouts"].append(f"⚠ Net dilution: returned only {return_ratio*100:.0f}% of FCF to shareholders")
     else:
         out["shares_change_pct"] = None
 
@@ -3158,12 +3172,12 @@ def format_stock_row(s: dict) -> dict:
                       else (f"👤 New ({_c['tenure_years']:.0f}y)"
                             if _c and _c.get("tenure_years") is not None and _c['tenure_years'] < 3.0
                             else ""))(s.get("ceoAllocator")),
-        "_ceo_tooltip": (lambda _c: " | ".join([
+        "_ceo_tooltip": (lambda _c: " | ".join(filter(None, [
             f"CEO: {_c.get('ceo_name','?')}",
             f"FCF CAGR: {_c['fcf_per_share_cagr']*100:+.0f}%/y" if _c.get('fcf_per_share_cagr') is not None else "",
-            f"Buybacks: {_c['shares_change_pct']*-100:.0f}% of FCF" if _c.get('shares_change_pct') is not None else "",
+            f"Capital returned: {_c['shares_change_pct']*-100:.0f}% of FCF (buybacks+divs)" if _c.get('shares_change_pct') is not None else "",
             f"ROI trend: {_c.get('roic_trend','?')}",
-        ] + (_c.get('callouts') or [])))(s.get("ceoAllocator")) if s.get("ceoAllocator") and s["ceoAllocator"].get("grade") else "",
+        ] + (_c.get('callouts') or []))))(s.get("ceoAllocator")) if s.get("ceoAllocator") and s["ceoAllocator"].get("grade") else "",
         "FCF/Sh 5Y": s.get("fcfPerShare5yCagr"),
         "Divergence": ({"hidden_gem": "🎯 Hidden Gem",
                         "conviction_stack": "🔥 Conviction",
