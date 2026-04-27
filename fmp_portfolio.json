@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 26467.973400000003,
+  "cash": 21493.8552,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -110,6 +110,18 @@
       "sell_trigger": "Revenue declines 2 consecutive quarters OR ROIC falls below 18% OR pipeline setbacks reduce PEG above 1.2",
       "lynch_category": "Stalwart+Turnaround",
       "sector": "Healthcare"
+    },
+    {
+      "ticker": "IT",
+      "company": "Gartner, Inc.",
+      "shares": 33,
+      "entry_price": 150.55,
+      "entry_date": "2026-04-27",
+      "rationale": "IV Discount at PEG 0.26 (lowest in candidate pool). 19% ROIC, 11.1% FCF yield, +4% RG, 64% MoS. Enterprise research franchise with pricing power and high renewal rates. Fills 10th slot without adding ",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "NPS or retention rate deteriorates 2+ points YoY; enterprise customer base shows churn acceleration",
+      "lynch_category": "Turnaround",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -616,6 +628,18 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "IV Discount healthcare play with fortress metrics (30% ROIC, 7.3% FCF yield, PEG 0.64, +7% RG, 81% MoS). Oncology pipeline de-risks through royalty-like revenue base. Replaces DLO (FastGrower) with a "
+    },
+    {
+      "date": "2026-04-27",
+      "action": "BUY",
+      "ticker": "IT",
+      "company": "Gartner, Inc.",
+      "shares": 33,
+      "price": 150.55,
+      "value": 4968.15,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "IV Discount at PEG 0.26 (lowest in candidate pool). 19% ROIC, 11.1% FCF yield, +4% RG, 64% MoS. Enterprise research franchise with pricing power and high renewal rates. Fills 10th slot without adding "
     }
   ],
   "last_updated": "2026-04-27"
