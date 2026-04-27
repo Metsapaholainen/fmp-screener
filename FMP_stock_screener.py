@@ -1647,33 +1647,63 @@ def _extract_ceo(executives: list) -> dict | None:
     {name, since, tenure_years} or None if no CEO found / data invalid.
     FMP's titleSince is often null/0; when missing we return tenure_years=None
     so the caller can still score on available financial data.
+
+    Title quality ranking (higher = better match for company-level CEO):
+      - Co-CEO / CEO of a division / "of [X]" qualifier → low score (divisional)
+      - "Chief Executive Officer" or "Chairman & CEO" without qualifier → high score
     """
     if not executives:
         return None
+
+    def _title_quality(raw_title: str) -> int:
+        t = raw_title.lower()
+        # Must contain a CEO marker
+        if "chief executive officer" not in t and not t.endswith("ceo") \
+           and " ceo" not in t and "ceo " not in t and t != "ceo":
+            return -1
+        score = 10
+        # Divisional / sub-entity CEO: penalise heavily
+        if " of " in t and "chief executive officer of" in t:
+            score -= 8   # "CEO of Commercial & Investment Bank" etc.
+        if t.startswith("co-") or " co-" in t or "co- " in t:
+            score -= 5   # "Co-CEO" / "Co- Chief Executive Officer"
+        # Prefer Chairman+CEO combos (usually the #1 executive)
+        if "chairman" in t:
+            score += 2
+        if "president" in t:
+            score += 1
+        return score
+
     today = datetime.date.today()
-    best = None
-    fallback = None   # CEO found but no usable date
+    candidates = []   # (quality_score, year_or_none, name, tenure_or_none)
+
     for e in executives:
-        title = (e.get("title") or "").lower()
-        if "chief executive officer" not in title and not title.endswith("ceo") \
-           and " ceo" not in title and "ceo " not in title and title != "ceo":
+        raw_title = e.get("title") or ""
+        q = _title_quality(raw_title)
+        if q < 0:
             continue
         name = e.get("name") or ""
+        if not name:
+            continue
         since_raw = e.get("since") or e.get("titleSince") or ""
         try:
             year = int(str(since_raw)[:4]) if since_raw else None
         except (ValueError, TypeError):
             year = None
-        if not year or year < 1950 or year > today.year:
-            # Keep as fallback if no valid date, but still a CEO title match
-            if fallback is None and name:
-                fallback = {"name": name, "since": None, "tenure_years": None}
-            continue
-        tenure = today.year - year + (today.month - 1) / 12.0
-        cand = {"name": name, "since": year, "tenure_years": round(tenure, 1)}
-        if best is None or cand["tenure_years"] > best["tenure_years"]:
-            best = cand
-    return best if best is not None else fallback
+        if year and (year < 1950 or year > today.year):
+            year = None
+        tenure = None
+        if year:
+            tenure = round(today.year - year + (today.month - 1) / 12.0, 1)
+        candidates.append((q, year, name, tenure))
+
+    if not candidates:
+        return None
+
+    # Sort: highest quality first, then longest tenure (known tenure beats unknown)
+    candidates.sort(key=lambda x: (-x[0], -(x[3] or -1)))
+    best = candidates[0]
+    return {"name": best[2], "since": best[1], "tenure_years": best[3]}
 
 
 def compute_per_share_growth_5y(bs_5y: list, cfs_5y: list) -> dict:
@@ -1698,32 +1728,25 @@ def compute_per_share_growth_5y(bs_5y: list, cfs_5y: list) -> dict:
     oldest_bs = bs_5y[-1]
     span = len(bs_5y) - 1  # years between
 
-    # FCF/share — needs cash-flow + shares
+    # FCF 5Y CAGR (absolute — FMP balance sheet 'commonStock' is paid-in capital $, not share count)
     if cfs_5y and len(cfs_5y) >= 2:
         fcf_new = cfs_5y[0].get("freeCashFlow")
         fcf_old = cfs_5y[-1].get("freeCashFlow")
-        sh_new  = newest_bs.get("commonStock") or newest_bs.get("weightedAverageShsOut") \
-                  or cfs_5y[0].get("weightedAverageShsOut") or cfs_5y[0].get("commonStock")
-        sh_old  = oldest_bs.get("commonStock") or oldest_bs.get("weightedAverageShsOut") \
-                  or cfs_5y[-1].get("weightedAverageShsOut") or cfs_5y[-1].get("commonStock")
-        if fcf_new and fcf_old and sh_new and sh_old and sh_new > 0 and sh_old > 0:
-            out["fcfPerShare5yCagr"] = _cagr(fcf_new / sh_new, fcf_old / sh_old, span)
+        if fcf_new and fcf_old and fcf_new > 0 and fcf_old > 0:
+            out["fcfPerShare5yCagr"] = _cagr(fcf_new, fcf_old, span)
 
-    # Book value per share — equity / shares
+    # Book value 5Y CAGR (absolute total equity — meaningful without share count)
     eq_new = newest_bs.get("totalStockholdersEquity") or newest_bs.get("totalEquity")
     eq_old = oldest_bs.get("totalStockholdersEquity") or oldest_bs.get("totalEquity")
-    sh_new = newest_bs.get("commonStock") or newest_bs.get("weightedAverageShsOut")
-    sh_old = oldest_bs.get("commonStock") or oldest_bs.get("weightedAverageShsOut")
-    if eq_new and eq_old and sh_new and sh_old and sh_new > 0 and sh_old > 0:
-        out["bvPerShare5yCagr"] = _cagr(eq_new / sh_new, eq_old / sh_old, span)
+    if eq_new and eq_old and eq_new > 0 and eq_old > 0:
+        out["bvPerShare5yCagr"] = _cagr(eq_new, eq_old, span)
 
-    # Revenue/share — from cash flow income statement is harder; try to use cfs net income proxy
-    # (revenue isn't on cash-flow or balance-sheet directly; we'll try common fields)
+    # Net income 5Y CAGR (proxy for earnings power growth; revenue not on CF/BS)
     if cfs_5y and len(cfs_5y) >= 2:
-        rev_new = cfs_5y[0].get("revenue")
-        rev_old = cfs_5y[-1].get("revenue")
-        if rev_new and rev_old and sh_new and sh_old and sh_new > 0 and sh_old > 0:
-            out["revPerShare5yCagr"] = _cagr(rev_new / sh_new, rev_old / sh_old, span)
+        ni_new = cfs_5y[0].get("netIncome")
+        ni_old = cfs_5y[-1].get("netIncome")
+        if ni_new and ni_old and ni_new > 0 and ni_old > 0:
+            out["revPerShare5yCagr"] = _cagr(ni_new, ni_old, span)
 
     return out
 
@@ -1773,25 +1796,21 @@ def compute_ceo_allocator_score(s: dict, bs_5y: list, cfs_5y: list,
     cfs_window = cfs_5y[:max_years + 1]
     span = max_years
 
-    # ── Component 1: Per-share value creation (40 pts) — FCF/share CAGR ──
+    # ── Component 1: FCF value creation (40 pts) — absolute FCF CAGR ──
+    # Note: FMP balance sheet 'commonStock' is paid-in capital $, not share count,
+    # so we use absolute FCF CAGR as the primary value-creation signal.
     fcf_new = cfs_window[0].get("freeCashFlow")
     fcf_old = cfs_window[-1].get("freeCashFlow")
-    sh_new  = (bs_window[0].get("commonStock") or bs_window[0].get("weightedAverageShsOut") or
-               cfs_window[0].get("weightedAverageShsOut"))
-    sh_old  = (bs_window[-1].get("commonStock") or bs_window[-1].get("weightedAverageShsOut") or
-               cfs_window[-1].get("weightedAverageShsOut"))
     fcf_cagr = None
-    if fcf_new and fcf_old and sh_new and sh_old and sh_new > 0 and sh_old > 0 and span > 0:
-        fcf_per_new = fcf_new / sh_new
-        fcf_per_old = fcf_old / sh_old
-        if fcf_per_new > 0 and fcf_per_old > 0:
+    if fcf_new and fcf_old and span > 0:
+        if fcf_new > 0 and fcf_old > 0:
             try:
-                fcf_cagr = (fcf_per_new / fcf_per_old) ** (1.0 / span) - 1
+                fcf_cagr = (fcf_new / fcf_old) ** (1.0 / span) - 1
             except Exception:
                 fcf_cagr = None
-        elif fcf_per_new > 0 and fcf_per_old <= 0:
-            fcf_cagr = 0.30   # turning positive is good
-        elif fcf_per_new <= 0:
+        elif fcf_new > 0 and fcf_old <= 0:
+            fcf_cagr = 0.30   # turned FCF positive — credit it
+        elif fcf_new <= 0:
             fcf_cagr = -0.10  # negative end state
 
     out["fcf_per_share_cagr"] = round(fcf_cagr, 4) if fcf_cagr is not None else None
@@ -1805,27 +1824,35 @@ def compute_ceo_allocator_score(s: dict, bs_5y: list, cfs_5y: list,
     else:                 psv_pts = 0
 
     if fcf_cagr is not None:
-        out["callouts"].append(f"FCF/share grew {fcf_cagr*100:+.0f}%/y over {span}y")
+        out["callouts"].append(f"FCF grew {fcf_cagr*100:+.0f}%/y over {span}y")
 
-    # ── Component 2: Buyback discipline (20 pts) — share count change ──
+    # ── Component 2: Buyback/dilution discipline (20 pts) ──
+    # Use netCommonStockIssuance from CF: negative = net buybacks (good), positive = dilution (bad)
+    # Normalise cumulative net issuance against cumulative FCF over the window.
+    total_fcf    = sum(abs(r.get("freeCashFlow") or 0) for r in cfs_window if (r.get("freeCashFlow") or 0) > 0)
+    total_net_si = sum(r.get("netCommonStockIssuance") or r.get("commonStockRepurchased") or 0
+                       for r in cfs_window)
     sh_pct = None
-    if sh_new and sh_old and sh_old > 0:
-        sh_pct = (sh_new - sh_old) / sh_old   # negative = buyback
-    out["shares_change_pct"] = round(sh_pct, 4) if sh_pct is not None else None
-
-    if sh_pct is None:
-        bb_pts = 5  # neutral default
+    bb_pts = 5  # neutral default when data missing
+    if total_fcf > 0:
+        # buyback_ratio: what fraction of FCF went to net buybacks (negative = returned capital)
+        buyback_ratio = -total_net_si / total_fcf   # positive = good (returned capital)
+        sh_pct = -buyback_ratio   # preserve sign convention: negative = shareholder-friendly
+        out["shares_change_pct"] = round(sh_pct, 4)
+        if buyback_ratio >= 0.40:
+            bb_pts = 20
+            out["callouts"].append(f"Returned {buyback_ratio*100:.0f}% of FCF via buybacks")
+        elif buyback_ratio >= 0.15:
+            bb_pts = 14
+        elif buyback_ratio >= 0.0:
+            bb_pts = 8
+        elif buyback_ratio >= -0.20:
+            bb_pts = 4   # mild net dilution
+        else:
+            bb_pts = 0   # heavy dilution (>20% of FCF in net stock issuance)
+            out["callouts"].append(f"⚠ Net stock dilution {abs(buyback_ratio)*100:.0f}% vs FCF over tenure")
     else:
-        ann = sh_pct / span if span > 0 else sh_pct
-        if ann <= -0.03:   bb_pts = 20
-        elif ann <= -0.01: bb_pts = 14
-        elif ann <= 0.0:   bb_pts = 8
-        elif ann <= 0.02:  bb_pts = 4   # mild dilution
-        else:              bb_pts = 0   # heavy dilution
-        if ann <= -0.02:
-            out["callouts"].append(f"Reduced shares {abs(sh_pct)*100:.0f}% over tenure")
-        elif ann >= 0.05:
-            out["callouts"].append(f"⚠ Diluted shares {sh_pct*100:+.0f}% over tenure")
+        out["shares_change_pct"] = None
 
     # ── Component 3: ROIC trend (15 pts) — current ROIC vs early-tenure proxy ──
     # Proxy: net income / equity over the window (rough ROE/ROIC approximation since
@@ -9084,12 +9111,12 @@ function showMacroDetail(el, id) {
             rows.append(f'<div><b style="color:#ffc107">👑 CEO {ceo["grade"]} ({ceo.get("score","?")}/100)</b> '
                         f'— {ceo.get("ceo_name","")} · {_ten_s}</div>')
         per_bits = []
-        if rev is not None: per_bits.append(f"Rev/sh: {rev*100:+.0f}%/y")
-        if fcf is not None: per_bits.append(f"FCF/sh: {fcf*100:+.0f}%/y")
-        if bv  is not None: per_bits.append(f"BV/sh:  {bv*100:+.0f}%/y")
+        if rev is not None: per_bits.append(f"NI: {rev*100:+.0f}%/y")
+        if fcf is not None: per_bits.append(f"FCF: {fcf*100:+.0f}%/y")
+        if bv  is not None: per_bits.append(f"Equity: {bv*100:+.0f}%/y")
         if per_bits:
             rows.append(f'<div style="color:#b0bec5;font-size:.66rem;margin-top:2px">'
-                        f'5Y per-share: {" · ".join(per_bits)}</div>')
+                        f'5Y growth: {" · ".join(per_bits)}</div>')
         for c in (ceo.get("callouts") or [])[:3]:
             color = "#ef9a9a" if c.startswith("⚠") else "#a5d6a7"
             rows.append(f'<div style="color:{color};font-size:.65rem">{c}</div>')
