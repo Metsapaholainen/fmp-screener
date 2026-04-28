@@ -4010,9 +4010,11 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         '"rationale":"1-2 sentences citing YOUR framework\'s specific metrics — '
         'e.g. Magic Formula: ROIC X% + EY Y%; SpecialSit: catalyst name + timeline; '
         'InsiderTrack: who bought $X on date; Pabrai: floor $X vs upside $Y = N:1. '
-        'This must reflect YOUR investing lens, not generic text.",'
+        'This must reflect YOUR investing lens, not generic text. '
+        'IMPORTANT: Only cite specific financial figures (percentages, multiples, dollar amounts) '
+        'that appear verbatim in the candidate stock data above — do NOT recall or invent numbers from training knowledge.",'
         '"brief_case":"one sentence — the market-misunderstanding thesis",'
-        '"key_metric":"the single most compelling number","conviction":"HIGH|MEDIUM"}'
+        '"key_metric":"the single most compelling number from the provided data (not from memory)","conviction":"HIGH|MEDIUM"}'
         ',...]}'
     )
 
@@ -4855,6 +4857,8 @@ CORE RULES — apply strictly:
 7. CONTRARIAN ANGLE — explicitly call out, in the `wall_street_blindspot` field, what data-driven Wall Street is MISREADING. Examples: "Sell-side models a sub-pandemic baseline because they don't see how AI tools have made it sticky", "Street treats this as a melting ice cube because the legacy product is shrinking, but the new mobile app is doubling MAUs unmodeled".
 
 8. TIEBREAKER ONLY — 👑 CEO grade and 🎯 Hidden Gem flags appear in the candidate data. Your primary job is the consumer-observable thesis, not capital allocation. But when two candidates have equally strong Lynch stories, prefer the one with 👑 ≥B+ CEO and/or 🎯 Hidden Gem. NEVER substitute these for an actual Lynch story — a great CEO at a B2B name with no consumer surface still gets REJECTED.
+
+9. NO FABRICATED FINANCIALS — if you cite any specific financial figure (e.g. "FCF/share +X%", "BV/share +Y%", "ROIC Z%") in `headline` or `story`, it MUST appear verbatim in the candidate data above. Do NOT recall, estimate, or invent financial percentages from training knowledge — even for well-known companies you know a lot about. Incorrect numbers mislead investors. If the data doesn't show the figure, simply omit it.
 
 YOUR OUTPUT — JSON ONLY, no other text. Schema:
 
@@ -8730,11 +8734,15 @@ section.active { display: block; }
                  border-radius: 4px; font-size: .8rem; font-weight: 700;
                  color: #fff; text-transform: uppercase; }
 .tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.strat-wrap { overflow: auto; max-height: calc(100vh - 175px);
+              -webkit-overflow-scrolling: touch; }
 table { border-collapse: collapse; width: 100%; font-size: .78rem;
         white-space: nowrap; }
 th { background: #1a237e; color: #fff; padding: 6px 8px;
      text-align: left; cursor: pointer; user-select: none; }
 th:hover { background: #283593; }
+.strat-tbl th { position: sticky; top: 0; z-index: 10;
+                box-shadow: 0 2px 0 #0d1117; }
 td { padding: 5px 8px; border-bottom: 1px solid #2a2a2a; }
 tr:hover td { background: #1a1a2e !important; }
 tr.alt td { background: #161622; }
@@ -9280,8 +9288,8 @@ function showMacroDetail(el, id) {
 <section id="{title_id}">
   <div class="section-title">{title_label}</div>
   {desc_html}
-  <div class="tbl-wrap">
-    <table>
+  <div class="strat-wrap">
+    <table class="strat-tbl">
       <thead><tr>{hdr_html}</tr></thead>
       <tbody>{"".join(body_rows)}</tbody>
     </table>
@@ -9765,15 +9773,20 @@ function showMacroDetail(el, id) {
         ) if _sg else ""
 
         _thumb_lines = [
-            ("🔵 Low yields (<3%)",     "Growth / tech outperform"),
-            ("🟢 Normal (3–4%)",        "Balanced — quality wins"),
-            ("🟡 Elevated (4–5%)",      "Value, banks, energy edge"),
-            ("🔴 High yields (>5%)",    "Defensives; compress multiples"),
+            # (dot+range, badge_label, badge_color, description)
+            ("🔵 Low (<3%)",      "GROWTH",    "#1565c0", "Tech, biotech, high-P/E multiples supported"),
+            ("🟢 Normal (3–4%)", "QUALITY",   "#2e7d32", "Compounders & balanced portfolios win"),
+            ("🟡 Elevated (4–5%)","VALUE / FCF","#e65100","Banks, energy, FCF generators, dividend stocks"),
+            ("🔴 High (>5%)",    "DEFENSIVE", "#b71c1c", "Staples, utilities — multiples compress"),
         ]
         _thumb_html = "".join(
-            f'<div style="display:flex;gap:6px;font-size:.66rem;color:#b0bec5;margin-bottom:3px">'
-            f'<span>{lv}</span><span style="color:#546e7a">→</span><span>{rv}</span></div>'
-            for lv, rv in _thumb_lines
+            f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'
+            f'<span style="font-size:.64rem;color:#b0bec5;white-space:nowrap">{dot}</span>'
+            f'<span style="font-size:.58rem;font-weight:700;color:#fff;background:{bc};'
+            f'border-radius:3px;padding:1px 5px;white-space:nowrap;letter-spacing:.04em">{lbl}</span>'
+            f'<span style="font-size:.62rem;color:#78909c;line-height:1.35">{desc}</span>'
+            f'</div>'
+            for dot, lbl, bc, desc in _thumb_lines
         )
 
         _regime_bar = (
@@ -9793,7 +9806,7 @@ function showMacroDetail(el, id) {
             # Col 2: sector guidance
             + _sector_block +
             # Col 3: rule of thumb cheat-sheet
-            f'<div style="flex:1;min-width:170px;border-left:1px solid #ffffff11;padding-left:14px">'
+            f'<div style="flex:1;min-width:200px;border-left:1px solid #ffffff11;padding-left:14px">'
             f'<div style="font-size:.60rem;font-weight:700;color:#78909c;text-transform:uppercase;'
             f'letter-spacing:.07em;margin-bottom:6px">Simple rule of thumb</div>'
             f'{_thumb_html}'
