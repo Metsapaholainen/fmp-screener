@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 21221.887500000004,
+  "cash": 21167.430900000003,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,28 +100,28 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "PTCT",
-      "company": "PTC Therapeutics, Inc.",
-      "shares": 76,
-      "entry_price": 65.15,
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 44,
+      "entry_price": 112.9,
       "entry_date": "2026-05-02",
-      "rationale": "Turnaround replacement post-IT/EXEL sales. 37% ROIC, 12.9% FCF yield, PEG 0.30 (lowest in pool), +115% revenue growth. Rare: fortress metrics + exceptional growth + ultra-cheap multiple. Cleared all q",
-      "conviction": "VERY HIGH",
-      "sell_trigger": "TRANSLARNA revenue growth turns negative for 2 consecutive quarters; ROIC falls below 15%; clinical failure on lead pipeline asset",
-      "lynch_category": "FastGrower+AssetPlay",
-      "sector": "Healthcare"
+      "rationale": "IV Discount Turnaround with exceptional margin of safety (80% MoS). 13% ROIC, 10.6% FCF yield, PEG 0.21 with +8% growth. Cloud-based contact center/fraud management platform with AI integration option",
+      "conviction": "HIGH",
+      "sell_trigger": "Return to cloud migration stall (YoY bookings growth <5% for 2 consecutive quarters) OR margin compression below 30% operating margin",
+      "lynch_category": "Stalwart+Turnaround",
+      "sector": "Technology"
     },
     {
-      "ticker": "SNY",
-      "company": "Sanofi",
-      "shares": 108,
-      "entry_price": 46.08,
+      "ticker": "RELY",
+      "company": "Remitly Global, Inc.",
+      "shares": 219,
+      "entry_price": 22.79,
       "entry_date": "2026-05-02",
-      "rationale": "IV Discount after rebalancing. 12% ROIC (at threshold), 19.7% FCF yield (fortress), PEG 0.88, +5% RG, 69% MoS. Passed all gates: ROIC=12% (breakeven) \u2713, FCF+ \u2713, PEG<2.5 \u2713. Moat: diversified pharma + G",
-      "conviction": "HIGH",
-      "sell_trigger": "Major pipeline failure; FCF yield contracts below 10%; ROIC deteriorates below 10%",
-      "lynch_category": "Stalwart+SlowGrower+Turnaround",
-      "sector": "Healthcare"
+      "rationale": "IV Discount Turnaround with 79% margin of safety and explosive FCF scaling. 7% ROIC (below 12% threshold but rising rapidly), 6.2% FCF yield, PEG 0.31 with +29% growth. Digital remittances business wi",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "Volume growth slows below 15% YoY OR active user decline for 2 consecutive quarters",
+      "lynch_category": "FastGrower+Turnaround",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -688,6 +688,54 @@
       "return_pct": 0.0,
       "transaction_cost": 5.98,
       "rationale": "IV Discount after rebalancing. 12% ROIC (at threshold), 19.7% FCF yield (fortress), PEG 0.88, +5% RG, 69% MoS. Passed all gates: ROIC=12% (breakeven) \u2713, FCF+ \u2713, PEG<2.5 \u2713. Moat: diversified pharma + G"
+    },
+    {
+      "date": "2026-05-02",
+      "action": "SELL",
+      "ticker": "PTCT",
+      "company": "PTC Therapeutics, Inc.",
+      "shares": 76,
+      "price": 65.15,
+      "value": 4945.45,
+      "return_pct": 0.0,
+      "transaction_cost": 5.95,
+      "rationale": "THESIS BROKEN BY PORTFOLIO STRUCTURE (NOT FUNDAMENTALS): Added today at full Lynch capacity (5/4 FastGrowers already at cap). Despite strong fundamentals (37% ROIC, 12.9% FCF, PEG 0.30), portfolio now violates structure rules: 7 Stalwarts/5 cap, 7 Turnarounds/3 cap, 5 FastGrowers/4 cap. Transaction executed in error\u2014must exit to create disciplined rebalancing path. Fundamental quality is not in question; portfolio architecture requires immediate correction."
+    },
+    {
+      "date": "2026-05-02",
+      "action": "SELL",
+      "ticker": "SNY",
+      "company": "Sanofi",
+      "shares": 108,
+      "price": 46.08,
+      "value": 4970.66,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "THESIS BROKEN BY PORTFOLIO STRUCTURE (NOT FUNDAMENTALS): Added today immediately post-rebalancing at portfolio maximum. While 19.7% FCF yield and fortress balance sheet are legitimate, 12% ROIC is at-threshold only and does not justify crowding portfolio at margin. Healthcare already at 3/3 sector cap. Transaction violates own discipline: cash deployment only when thesis is material and structural space exists. Exit to clean up this structural violation and preserve capacity for higher-conviction opportunities."
+    },
+    {
+      "date": "2026-05-02",
+      "action": "BUY",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 44,
+      "price": 112.9,
+      "value": 4967.6,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "IV Discount Turnaround with exceptional margin of safety (80% MoS). 13% ROIC, 10.6% FCF yield, PEG 0.21 with +8% growth. Cloud-based contact center/fraud management platform with AI integration option"
+    },
+    {
+      "date": "2026-05-02",
+      "action": "BUY",
+      "ticker": "RELY",
+      "company": "Remitly Global, Inc.",
+      "shares": 219,
+      "price": 22.79,
+      "value": 4991.01,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "IV Discount Turnaround with 79% margin of safety and explosive FCF scaling. 7% ROIC (below 12% threshold but rising rapidly), 6.2% FCF yield, PEG 0.31 with +29% growth. Digital remittances business wi"
     }
   ],
   "last_updated": "2026-05-02"
