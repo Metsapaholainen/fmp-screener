@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 21091.4233,
+  "cash": 25794.6682,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -50,18 +50,6 @@
       "sell_trigger": "Key partner (J&J DARZALEX subcutaneous) loses market share to competing formulations, royalty rates renegotiated materially downward, or ROIC falls be",
       "lynch_category": "FastGrower+Turnaround",
       "sector": "Healthcare"
-    },
-    {
-      "ticker": "HRB",
-      "company": "H&R Block, Inc.",
-      "shares": 310,
-      "entry_price": 32.16,
-      "entry_date": "2026-04-08",
-      "rationale": "30% ROIC, 12.6% FCF yield, PEG of 0.31, and 75% MoS \u2014 one of the most compelling value/quality combinations in the screen. Dominant tax preparation franchise with ~20M clients annually, pricing power,",
-      "conviction": "HIGH",
-      "sell_trigger": "IRS free filing program materially expands to include complex returns (threatening DIY segment), or FCF yield drops below 7%, or ROIC falls below 22%",
-      "lynch_category": "SlowGrower+Turnaround",
-      "sector": "Consumer Cyclical"
     },
     {
       "ticker": "CQP",
@@ -121,6 +109,18 @@
       "conviction": "HIGH",
       "sell_trigger": "Cross-border payment volumes decline YoY or market share in Brazil/Mexico deteriorates materially",
       "lynch_category": "FastGrower+Turnaround",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 44,
+      "entry_price": 112.9,
+      "entry_date": "2026-05-03",
+      "rationale": "IV Discount Turnaround: 13% ROIC (marginal but acceptable), 10.6% FCF yield (best-in-class), PEG 0.21 (exceptional), 80% MoS. Software platform consolidating market; margin recovery trajectory intact.",
+      "conviction": "HIGH",
+      "sell_trigger": "FCF yield falls below 6% or revenue declines 2 consecutive quarters",
+      "lynch_category": "Stalwart+Turnaround",
       "sector": "Technology"
     }
   ],
@@ -832,6 +832,30 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "FastGrower: 29% ROIC, 10.1% FCF yield, PEG 0.90, +47% growth, 84% MoS. FinTech payments infrastructure in emerging markets with structural secular tailwinds. Superior to any remaining Turnaround. Reba"
+    },
+    {
+      "date": "2026-05-03",
+      "action": "SELL",
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 310,
+      "price": 31.25,
+      "value": 9676.81,
+      "return_pct": -2.83,
+      "transaction_cost": 10.69,
+      "rationale": "Thesis BROKEN by PORTFOLIO STRUCTURE: HRB is classified as IV Discount (Stalwart/SlowGrower hybrid), and portfolio is 2/5 Stalwarts overcap. HRB is the lowest-conviction Stalwart: +4% RG is cyclical, PEG 0.30 reflects tax-season seasonality not durable growth. Fundamentals intact (30% ROIC, 13.2% FCF yield) but must rebalance. Proceeds redeploy into higher-growth category."
+    },
+    {
+      "date": "2026-05-03",
+      "action": "BUY",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 44,
+      "price": 112.9,
+      "value": 4967.6,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "IV Discount Turnaround: 13% ROIC (marginal but acceptable), 10.6% FCF yield (best-in-class), PEG 0.21 (exceptional), 80% MoS. Software platform consolidating market; margin recovery trajectory intact."
     }
   ],
   "last_updated": "2026-05-03"
