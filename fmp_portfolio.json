@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 21191.0412,
+  "cash": 21091.4233,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,28 +100,28 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "IT",
-      "company": "Gartner, Inc.",
-      "shares": 34,
-      "entry_price": 146.4,
-      "entry_date": "2026-05-02",
-      "rationale": "IV Discount with fortress metrics: 19% ROIC, 11.9% FCF yield, PEG 0.25 (lowest in pool), 65% MoS. Sold earlier today due to Tech sector cap \u2014 that constraint has now been partially relieved by selling",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 138,
+      "entry_price": 36.2,
+      "entry_date": "2026-05-03",
+      "rationale": "Stalwart+FastGrower: 21% ROIC, 8.2% FCF yield, PEG 0.42 (exceptional), +17% growth. Low capex platform software with durable BPM moat. Valuation is compressed despite fundamentals; fills open slot pos",
       "conviction": "HIGH",
-      "sell_trigger": "Research utilization decline (bookings growth < 5% YoY for 2 consecutive quarters) OR PEG expansion to >1.0",
-      "lynch_category": "Turnaround",
+      "sell_trigger": "PEG rises above 1.5 or revenue growth stalls below +10% for 2 consecutive quarters",
+      "lynch_category": "Stalwart+FastGrower",
       "sector": "Technology"
     },
     {
-      "ticker": "BAH",
-      "company": "Booz Allen Hamilton",
-      "shares": 63,
-      "entry_price": 78.31,
-      "entry_date": "2026-05-02",
-      "rationale": "IV Discount Turnaround with exceptional risk/reward: 18% ROIC, 9.9% FCF yield, 85% MoS, PEG 1.08. US federal government contractor with secular tailwind from defense spending cycles. Low Turnaround co",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 363,
+      "entry_price": 13.75,
+      "entry_date": "2026-05-03",
+      "rationale": "FastGrower: 29% ROIC, 10.1% FCF yield, PEG 0.90, +47% growth, 84% MoS. FinTech payments infrastructure in emerging markets with structural secular tailwinds. Superior to any remaining Turnaround. Reba",
       "conviction": "HIGH",
-      "sell_trigger": "Government contract cancellations or federal budget cuts reducing DoD spending projections by >10%",
-      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
-      "sector": "Industrials"
+      "sell_trigger": "Cross-border payment volumes decline YoY or market share in Brazil/Mexico deteriorates materially",
+      "lynch_category": "FastGrower+Turnaround",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -784,7 +784,55 @@
       "return_pct": 0.0,
       "transaction_cost": 5.93,
       "rationale": "IV Discount Turnaround with exceptional risk/reward: 18% ROIC, 9.9% FCF yield, 85% MoS, PEG 1.08. US federal government contractor with secular tailwind from defense spending cycles. Low Turnaround co"
+    },
+    {
+      "date": "2026-05-03",
+      "action": "SELL",
+      "ticker": "IT",
+      "company": "Gartner, Inc.",
+      "shares": 34,
+      "price": 146.4,
+      "value": 4971.62,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, not fundamentals: IT is classified as Stalwart (7/10 at cap). Held only 1 day; portfolio now has 8 Turnarounds (max 3), 7 Stalwarts (max 5), 5 FastGrowers (max 4) \u2014 IT must be sold to make room. Metrics (19% ROIC, 11.9% FCF, PEG 0.25) are solid but portfolio compliance mandates action."
+    },
+    {
+      "date": "2026-05-03",
+      "action": "SELL",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 63,
+      "price": 78.31,
+      "value": 4927.6,
+      "return_pct": 0.0,
+      "transaction_cost": 5.93,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, not fundamentals: BAH is Turnaround (8/10 at cap, max 3). Held only 1 day. Portfolio has critical overweight in Turnarounds. Metrics (18% ROIC, 9.9% FCF, PEG 1.08) are acceptable but structural imbalance forces liquidation to comply with Lynch category caps."
+    },
+    {
+      "date": "2026-05-03",
+      "action": "BUY",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 138,
+      "price": 36.2,
+      "value": 4995.6,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "Stalwart+FastGrower: 21% ROIC, 8.2% FCF yield, PEG 0.42 (exceptional), +17% growth. Low capex platform software with durable BPM moat. Valuation is compressed despite fundamentals; fills open slot pos"
+    },
+    {
+      "date": "2026-05-03",
+      "action": "BUY",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 363,
+      "price": 13.75,
+      "value": 4991.25,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "FastGrower: 29% ROIC, 10.1% FCF yield, PEG 0.90, +47% growth, 84% MoS. FinTech payments infrastructure in emerging markets with structural secular tailwinds. Superior to any remaining Turnaround. Reba"
     }
   ],
-  "last_updated": "2026-05-02"
+  "last_updated": "2026-05-03"
 }

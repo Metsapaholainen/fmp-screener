@@ -1297,3 +1297,53 @@ date,strategy,ticker,entry_price,company
 2026-05-02,Off-the-Radar,API,3.75,"Agora, Inc."
 2026-05-02,Off-the-Radar,LAW,4.66,"CS Disco, Inc."
 2026-05-02,Off-the-Radar,WEST,5.9,"Westrock Coffee Company, LLC"
+2026-05-03,IV Discount,TDW,87.85,Tidewater Inc.
+2026-05-03,IV Discount,TRV,304.72,"The Travelers Companies, Inc."
+2026-05-03,IV Discount,HRB,31.25,"H&R Block, Inc."
+2026-05-03,IV Discount,NICE,112.9,NICE Ltd.
+2026-05-03,IV Discount,QLYS,88.53,"Qualys, Inc."
+2026-05-03,Quality Compounders,ADBE,250.71,Adobe Inc.
+2026-05-03,Quality Compounders,QLYS,88.53,"Qualys, Inc."
+2026-05-03,Quality Compounders,FIX,1868.23,"Comfort Systems USA, Inc."
+2026-05-03,Quality Compounders,APPF,173.1,"AppFolio, Inc."
+2026-05-03,Quality Compounders,MEDP,417.54,"Medpace Holdings, Inc."
+2026-05-03,Stalwarts,ADBE,250.71,Adobe Inc.
+2026-05-03,Stalwarts,QLYS,88.53,"Qualys, Inc."
+2026-05-03,Stalwarts,LRCX,256.72,Lam Research Corporation
+2026-05-03,Stalwarts,GNTX,22.75,Gentex Corporation
+2026-05-03,Stalwarts,HIG,135.81,The Hartford Financial Service
+2026-05-03,Fast Growers,PTCT,65.15,"PTC Therapeutics, Inc."
+2026-05-03,Fast Growers,DLO,13.75,DLocal Limited
+2026-05-03,Fast Growers,RDDT,166.48,"Reddit, Inc."
+2026-05-03,Fast Growers,BKNG,169.63,Booking Holdings Inc.
+2026-05-03,Fast Growers,ALNY,296.11,"Alnylam Pharmaceuticals, Inc."
+2026-05-03,Turnarounds,MNDY,72.74,monday.com Ltd.
+2026-05-03,Turnarounds,CURB,27.49,Curbline Properties Corp.
+2026-05-03,Turnarounds,CI,282.9,Cigna Corporation
+2026-05-03,Turnarounds,BAH,78.31,Booz Allen Hamilton Holding Co
+2026-05-03,Turnarounds,PATH,10.67,UiPath Inc.
+2026-05-03,Slow Growers,NTES,117.98,"NetEase, Inc."
+2026-05-03,Slow Growers,MPLX,56.61,MPLX Lp
+2026-05-03,Slow Growers,GNTX,22.75,Gentex Corporation
+2026-05-03,Slow Growers,ABEV,2.9,Ambev S.A.
+2026-05-03,Slow Growers,PPC,31.88,Pilgrim's Pride Corporation
+2026-05-03,Cyclicals,MHK,99.93,"Mohawk Industries, Inc."
+2026-05-03,Cyclicals,UFPI,85.18,"UFP Industries, Inc."
+2026-05-03,Cyclicals,RHI,27.02,Robert Half International Inc.
+2026-05-03,Cyclicals,KMX,38.53,"CarMax, Inc."
+2026-05-03,Cyclicals,AIG,78.77,"American International Group, "
+2026-05-03,Asset Plays,GNW,8.81,"Genworth Financial, Inc."
+2026-05-03,Asset Plays,FCF,18.46,First Commonwealth Financial C
+2026-05-03,Asset Plays,DMRA,25.36,"Galecto, Inc."
+2026-05-03,Asset Plays,PRTC,18.14,PureTech Health plc
+2026-05-03,Asset Plays,FCRS,10.23,FutureCrest Acquisition Corp.
+2026-05-03,Lynch 10-Baggers,DCBO,20.67,Docebo Inc.
+2026-05-03,Lynch 10-Baggers,ANIP,80.39,"ANI Pharmaceuticals, Inc."
+2026-05-03,Lynch 10-Baggers,OPRA,18.53,Opera Limited
+2026-05-03,Lynch 10-Baggers,PSIX,70.5,"Power Solutions International,"
+2026-05-03,Lynch 10-Baggers,AFYA,13.89,Afya Limited
+2026-05-03,Off-the-Radar,API,3.75,"Agora, Inc."
+2026-05-03,Off-the-Radar,USNA,19.35,"USANA Health Sciences, Inc."
+2026-05-03,Off-the-Radar,DIN,26.94,"Dine Brands Global, Inc."
+2026-05-03,Off-the-Radar,LAW,4.66,"CS Disco, Inc."
+2026-05-03,Off-the-Radar,IPX,33.46,IperionX Limited
