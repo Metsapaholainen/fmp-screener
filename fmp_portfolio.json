@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 35791.7003,
+  "cash": 25803.914399999998,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -98,6 +98,30 @@
       "sell_trigger": "Revenue growth turns negative for 2 consecutive quarters OR government contract losses exceed 15% of annual revenue",
       "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
       "sector": "Industrials"
+    },
+    {
+      "ticker": "PYPL",
+      "company": "PayPal Holdings, Inc.",
+      "shares": 99,
+      "entry_price": 50.44,
+      "entry_date": "2026-05-03",
+      "rationale": "ROIC 15%, PEG 0.62 (excellent), FCF yield 12.3%, +4% growth with 52% MoS. Turnaround thesis: fintech recovery as rates stabilize; PayPal's merchant relationships and checkout dominance remain defensib",
+      "conviction": "MEDIUM",
+      "sell_trigger": "FCF turns negative for 2 consecutive quarters; merchant transaction volume decline >5% YoY; competitive loss of major partner",
+      "lynch_category": "Turnaround",
+      "sector": "Financial Services"
+    },
+    {
+      "ticker": "GNTX",
+      "company": "Gentex Corporation",
+      "shares": 219,
+      "entry_price": 22.75,
+      "entry_date": "2026-05-03",
+      "rationale": "ROIC 16%, PEG 0.78, FCF yield 9.3%, +10% growth with 45% MoS. Auto-dimming mirror OEM with secular tailwinds (connected vehicles, EV adoption). Stalwart profile provides downside protection. However\u2014d",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "OEM automotive shipments decline >10% YoY; lose major customer contract; ROIC falls below 12%",
+      "lynch_category": "Stalwart+SlowGrower+Cyclical",
+      "sector": "Consumer Cyclical"
     }
   ],
   "transactions": [
@@ -880,6 +904,30 @@
       "return_pct": 0.0,
       "transaction_cost": 5.93,
       "rationale": "IV Discount Turnaround with fortress fundamentals: 18% ROIC, 9.9% FCF yield, PEG 1.08, +12% growth, 85% MoS. Government defense contractor with secular tailwind. Portfolio now at Turnaround cap (6 aft"
+    },
+    {
+      "date": "2026-05-03",
+      "action": "BUY",
+      "ticker": "PYPL",
+      "company": "PayPal Holdings, Inc.",
+      "shares": 99,
+      "price": 50.44,
+      "value": 4993.56,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "ROIC 15%, PEG 0.62 (excellent), FCF yield 12.3%, +4% growth with 52% MoS. Turnaround thesis: fintech recovery as rates stabilize; PayPal's merchant relationships and checkout dominance remain defensib"
+    },
+    {
+      "date": "2026-05-03",
+      "action": "BUY",
+      "ticker": "GNTX",
+      "company": "Gentex Corporation",
+      "shares": 219,
+      "price": 22.75,
+      "value": 4982.25,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "ROIC 16%, PEG 0.78, FCF yield 9.3%, +10% growth with 45% MoS. Auto-dimming mirror OEM with secular tailwinds (connected vehicles, EV adoption). Stalwart profile provides downside protection. However\u2014d"
     }
   ],
   "last_updated": "2026-05-03"
