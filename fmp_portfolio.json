@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 25794.6682,
+  "cash": 30756.300600000002,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -109,18 +109,6 @@
       "conviction": "HIGH",
       "sell_trigger": "Cross-border payment volumes decline YoY or market share in Brazil/Mexico deteriorates materially",
       "lynch_category": "FastGrower+Turnaround",
-      "sector": "Technology"
-    },
-    {
-      "ticker": "NICE",
-      "company": "NICE Ltd.",
-      "shares": 44,
-      "entry_price": 112.9,
-      "entry_date": "2026-05-03",
-      "rationale": "IV Discount Turnaround: 13% ROIC (marginal but acceptable), 10.6% FCF yield (best-in-class), PEG 0.21 (exceptional), 80% MoS. Software platform consolidating market; margin recovery trajectory intact.",
-      "conviction": "HIGH",
-      "sell_trigger": "FCF yield falls below 6% or revenue declines 2 consecutive quarters",
-      "lynch_category": "Stalwart+Turnaround",
       "sector": "Technology"
     }
   ],
@@ -856,6 +844,18 @@
       "return_pct": 0.0,
       "transaction_cost": 5.97,
       "rationale": "IV Discount Turnaround: 13% ROIC (marginal but acceptable), 10.6% FCF yield (best-in-class), PEG 0.21 (exceptional), 80% MoS. Software platform consolidating market; margin recovery trajectory intact."
+    },
+    {
+      "date": "2026-05-03",
+      "action": "SELL",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 44,
+      "price": 112.9,
+      "value": 4961.63,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, not fundamentals. NICE (13% ROIC, 10.6% FCF, PEG 0.21) was just repurchased today but portfolio has structural over-allocation: Turnaround category is at 7 holdings (max 3), Technology is at 5 (hard cap). To rebalance, must exit one Turnaround and one Technology. NICE's 13% ROIC is marginal vs. peers (QLYS 28%, ADBE 37%, PEGA 21%); exits lowest-quality Turnaround in portfolio. Sell to free slot and reduce Turnaround overage."
     }
   ],
   "last_updated": "2026-05-03"
