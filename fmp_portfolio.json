@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 30756.300600000002,
+  "cash": 35791.7003,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -88,28 +88,16 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "PEGA",
-      "company": "Pegasystems Inc.",
-      "shares": 138,
-      "entry_price": 36.2,
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 63,
+      "entry_price": 78.31,
       "entry_date": "2026-05-03",
-      "rationale": "Stalwart+FastGrower: 21% ROIC, 8.2% FCF yield, PEG 0.42 (exceptional), +17% growth. Low capex platform software with durable BPM moat. Valuation is compressed despite fundamentals; fills open slot pos",
+      "rationale": "IV Discount Turnaround with fortress fundamentals: 18% ROIC, 9.9% FCF yield, PEG 1.08, +12% growth, 85% MoS. Government defense contractor with secular tailwind. Portfolio now at Turnaround cap (6 aft",
       "conviction": "HIGH",
-      "sell_trigger": "PEG rises above 1.5 or revenue growth stalls below +10% for 2 consecutive quarters",
-      "lynch_category": "Stalwart+FastGrower",
-      "sector": "Technology"
-    },
-    {
-      "ticker": "DLO",
-      "company": "DLocal Limited",
-      "shares": 363,
-      "entry_price": 13.75,
-      "entry_date": "2026-05-03",
-      "rationale": "FastGrower: 29% ROIC, 10.1% FCF yield, PEG 0.90, +47% growth, 84% MoS. FinTech payments infrastructure in emerging markets with structural secular tailwinds. Superior to any remaining Turnaround. Reba",
-      "conviction": "HIGH",
-      "sell_trigger": "Cross-border payment volumes decline YoY or market share in Brazil/Mexico deteriorates materially",
-      "lynch_category": "FastGrower+Turnaround",
-      "sector": "Technology"
+      "sell_trigger": "Revenue growth turns negative for 2 consecutive quarters OR government contract losses exceed 15% of annual revenue",
+      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
+      "sector": "Industrials"
     }
   ],
   "transactions": [
@@ -856,6 +844,42 @@
       "return_pct": 0.0,
       "transaction_cost": 5.97,
       "rationale": "Thesis broken by PORTFOLIO STRUCTURE, not fundamentals. NICE (13% ROIC, 10.6% FCF, PEG 0.21) was just repurchased today but portfolio has structural over-allocation: Turnaround category is at 7 holdings (max 3), Technology is at 5 (hard cap). To rebalance, must exit one Turnaround and one Technology. NICE's 13% ROIC is marginal vs. peers (QLYS 28%, ADBE 37%, PEGA 21%); exits lowest-quality Turnaround in portfolio. Sell to free slot and reduce Turnaround overage."
+    },
+    {
+      "date": "2026-05-03",
+      "action": "SELL",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 138,
+      "price": 36.2,
+      "value": 4989.6,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, not fundamentals. Portfolio currently holds 6 FastGrowers (cap 4) and 7 Stalwarts (cap 5). PEGA is dual-classified Stalwart+FastGrower and was just purchased at $36.20 today (0 days held). Must trim category overload. While PEGA metrics are excellent (21% ROIC, 8.2% FCF, PEG 0.42, +17% growth), it is the marginal addition pushing category counts above caps. Sell at market to rebalance."
+    },
+    {
+      "date": "2026-05-03",
+      "action": "SELL",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 363,
+      "price": 13.75,
+      "value": 4985.26,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, not fundamentals. DLO is classified FastGrower and was just purchased at $13.75 today (0 days held). Portfolio holds 6 FastGrowers (cap 4)\u2014this is the most recent, lowest-conviction add. While DLO has solid metrics (29% ROIC, 10.1% FCF, PEG 0.90, +47% growth, 84% MoS), it must be sold to restore Lynch discipline. Sell at market."
+    },
+    {
+      "date": "2026-05-03",
+      "action": "BUY",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 63,
+      "price": 78.31,
+      "value": 4933.53,
+      "return_pct": 0.0,
+      "transaction_cost": 5.93,
+      "rationale": "IV Discount Turnaround with fortress fundamentals: 18% ROIC, 9.9% FCF yield, PEG 1.08, +12% growth, 85% MoS. Government defense contractor with secular tailwind. Portfolio now at Turnaround cap (6 aft"
     }
   ],
   "last_updated": "2026-05-03"
