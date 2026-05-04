@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 25803.914399999998,
+  "cash": 25739.1568,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -88,40 +88,40 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "BAH",
-      "company": "Booz Allen Hamilton",
-      "shares": 63,
-      "entry_price": 78.31,
-      "entry_date": "2026-05-03",
-      "rationale": "IV Discount Turnaround with fortress fundamentals: 18% ROIC, 9.9% FCF yield, PEG 1.08, +12% growth, 85% MoS. Government defense contractor with secular tailwind. Portfolio now at Turnaround cap (6 aft",
+      "ticker": "PTCT",
+      "company": "PTC Therapeutics, Inc.",
+      "shares": 76,
+      "entry_price": 65.15,
+      "entry_date": "2026-05-04",
+      "rationale": "FastGrower: 37% ROIC, 12.9% FCF yield, PEG 0.30 (exceptional), +115% growth. Secular biotech compounder with rare combination of capital efficiency and high growth. Fills Healthcare/FastGrower gap. He",
+      "conviction": "VERY_HIGH",
+      "sell_trigger": "Pipeline stalls OR ROIC falls below 15% due to failed trial OR FCF turns negative",
+      "lynch_category": "FastGrower+AssetPlay",
+      "sector": "Healthcare"
+    },
+    {
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 363,
+      "entry_price": 13.75,
+      "entry_date": "2026-05-04",
+      "rationale": "FastGrower: 29% ROIC, 10.1% FCF yield, PEG 0.90, +47% growth, 84% MoS. Latin American fintech with fortress metrics and secular tailwinds. Fills Consumer Cyclical/Emerging Markets exposure. Held 0d.",
+      "conviction": "VERY_HIGH",
+      "sell_trigger": "ROIC falls below 20% OR growth decelerates below +20% for 2 consecutive quarters",
+      "lynch_category": "FastGrower+Turnaround",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 138,
+      "entry_price": 36.2,
+      "entry_date": "2026-05-04",
+      "rationale": "Stalwart/FastGrower: 21% ROIC, 8.2% FCF yield, PEG 0.42 (exceptional), +17% growth. Software-as-a-service with strong unit economics and enterprise stickiness. Fills Technology sector (currently 2/4).",
       "conviction": "HIGH",
-      "sell_trigger": "Revenue growth turns negative for 2 consecutive quarters OR government contract losses exceed 15% of annual revenue",
-      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
-      "sector": "Industrials"
-    },
-    {
-      "ticker": "PYPL",
-      "company": "PayPal Holdings, Inc.",
-      "shares": 99,
-      "entry_price": 50.44,
-      "entry_date": "2026-05-03",
-      "rationale": "ROIC 15%, PEG 0.62 (excellent), FCF yield 12.3%, +4% growth with 52% MoS. Turnaround thesis: fintech recovery as rates stabilize; PayPal's merchant relationships and checkout dominance remain defensib",
-      "conviction": "MEDIUM",
-      "sell_trigger": "FCF turns negative for 2 consecutive quarters; merchant transaction volume decline >5% YoY; competitive loss of major partner",
-      "lynch_category": "Turnaround",
-      "sector": "Financial Services"
-    },
-    {
-      "ticker": "GNTX",
-      "company": "Gentex Corporation",
-      "shares": 219,
-      "entry_price": 22.75,
-      "entry_date": "2026-05-03",
-      "rationale": "ROIC 16%, PEG 0.78, FCF yield 9.3%, +10% growth with 45% MoS. Auto-dimming mirror OEM with secular tailwinds (connected vehicles, EV adoption). Stalwart profile provides downside protection. However\u2014d",
-      "conviction": "MEDIUM-HIGH",
-      "sell_trigger": "OEM automotive shipments decline >10% YoY; lose major customer contract; ROIC falls below 12%",
-      "lynch_category": "Stalwart+SlowGrower+Cyclical",
-      "sector": "Consumer Cyclical"
+      "sell_trigger": "Churn accelerates OR ROIC falls below 15% OR contract values decline",
+      "lynch_category": "Stalwart+FastGrower",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -928,6 +928,78 @@
       "return_pct": 0.0,
       "transaction_cost": 5.98,
       "rationale": "ROIC 16%, PEG 0.78, FCF yield 9.3%, +10% growth with 45% MoS. Auto-dimming mirror OEM with secular tailwinds (connected vehicles, EV adoption). Stalwart profile provides downside protection. However\u2014d"
+    },
+    {
+      "date": "2026-05-04",
+      "action": "SELL",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 63,
+      "price": 78.31,
+      "value": 4927.6,
+      "return_pct": 0.0,
+      "transaction_cost": 5.93,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, not fundamentals. BAH is classified as IV Discount Turnaround (currently 7 Turnarounds, cap=3). While fundamentals are solid (18% ROIC, 9.9% FCF yield, PEG 1.08, 85% MoS), portfolio must cut 4 Turnarounds to comply with Lynch rules. BAH held 1d with zero gain; it is the lowest-conviction recent addition and lowest-ROIC Turnaround (vs. NICE 13%, PYPL 15%). Selling to clear Turnaround cap and redeploy to underrepresented sectors."
+    },
+    {
+      "date": "2026-05-04",
+      "action": "SELL",
+      "ticker": "PYPL",
+      "company": "PayPal Holdings, Inc.",
+      "shares": 99,
+      "price": 50.44,
+      "value": 4987.57,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, not fundamentals. PYPL is classified as IV Discount Turnaround (currently 7 Turnarounds, cap=3). Fundamentals acceptable (15% ROIC, 12.3% FCF yield, PEG 0.62, 52% MoS), but portfolio is 4 Turnarounds over cap. PYPL held 1d with flat entry; lower ROIC (15%) vs. alternatives like NICE (13%, but earlier entry) and BAH (18%). Selling to unlock portfolio structure flexibility for higher-conviction opportunities."
+    },
+    {
+      "date": "2026-05-04",
+      "action": "SELL",
+      "ticker": "GNTX",
+      "company": "Gentex Corporation",
+      "shares": 219,
+      "price": 22.75,
+      "value": 4976.27,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, not fundamentals. GNTX is classified as Stalwart/SlowGrower hybrid; with 8 Stalwarts (cap=5), portfolio is 3 Stalwarts over cap. Fundamentals are solid (16% ROIC, 9.3% FCF yield, PEG 0.78, +10% growth, 45% MoS), but it is the lowest-ROIC Stalwart, lowest-growth Stalwart, and lowest-conviction 1d recent add (flat entry). Selling to comply with Lynch category caps and rebalance into Industrials/Cyclicals/underrepresented sectors."
+    },
+    {
+      "date": "2026-05-04",
+      "action": "BUY",
+      "ticker": "PTCT",
+      "company": "PTC Therapeutics, Inc.",
+      "shares": 76,
+      "price": 65.15,
+      "value": 4951.4,
+      "return_pct": 0.0,
+      "transaction_cost": 5.95,
+      "rationale": "FastGrower: 37% ROIC, 12.9% FCF yield, PEG 0.30 (exceptional), +115% growth. Secular biotech compounder with rare combination of capital efficiency and high growth. Fills Healthcare/FastGrower gap. He"
+    },
+    {
+      "date": "2026-05-04",
+      "action": "BUY",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 363,
+      "price": 13.75,
+      "value": 4991.25,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "FastGrower: 29% ROIC, 10.1% FCF yield, PEG 0.90, +47% growth, 84% MoS. Latin American fintech with fortress metrics and secular tailwinds. Fills Consumer Cyclical/Emerging Markets exposure. Held 0d."
+    },
+    {
+      "date": "2026-05-04",
+      "action": "BUY",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 138,
+      "price": 36.2,
+      "value": 4995.6,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "Stalwart/FastGrower: 21% ROIC, 8.2% FCF yield, PEG 0.42 (exceptional), +17% growth. Software-as-a-service with strong unit economics and enterprise stickiness. Fills Technology sector (currently 2/4)."
     }
   ],
   "last_updated": "2026-05-04"
