@@ -32,7 +32,7 @@ Usage:
   python stockscreener_fmp.py
 """
 
-import os, sys, json, time, datetime, csv, math, pickle, subprocess
+import os, sys, json, time, datetime, csv, math, pickle, subprocess, re
 from collections import defaultdict
 
 # ── Windows UTF-8 fix: force stdout/stderr to UTF-8 so emojis don't crash on redirect ──
@@ -88,6 +88,33 @@ CACHE_FILE = "fmp_screener_cache.json"
 CACHE_DAYS = 1
 PICKS_LOG    = "fmp_picks_log.csv"
 AI_PICKS_LOG = "fmp_ai_picks_log.csv"
+SECTOR_OVERRIDES_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sector_overrides.json")
+ESTIMATES_SNAPSHOT_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "estimates_snapshots.json")
+
+_SECTOR_OVERRIDES_CACHE = None
+# Active macro regime — set once per run by main() after fetch_macro_indicators().
+# Drives per-tab scoring multipliers so growth/quality/value weights shift with market conditions.
+_MACRO_REGIME = "neutral"   # 'risk_on' | 'neutral' | 'risk_off'
+
+def _load_sector_overrides() -> dict:
+    """Load manual sector/industry overrides for FMP misclassifications.
+    Returns {ticker: {sector, industry, reason}}. Cached after first load."""
+    global _SECTOR_OVERRIDES_CACHE
+    if _SECTOR_OVERRIDES_CACHE is not None:
+        return _SECTOR_OVERRIDES_CACHE
+    try:
+        if os.path.exists(SECTOR_OVERRIDES_FILE):
+            with open(SECTOR_OVERRIDES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+            # Strip the leading _comment / metadata keys
+            _SECTOR_OVERRIDES_CACHE = {k: v for k, v in data.items()
+                                       if not k.startswith("_") and isinstance(v, dict)}
+        else:
+            _SECTOR_OVERRIDES_CACHE = {}
+    except Exception as e:
+        print(f"  ⚠️ Failed to load sector_overrides.json: {e}")
+        _SECTOR_OVERRIDES_CACHE = {}
+    return _SECTOR_OVERRIDES_CACHE
 
 # B6: Version stamp on every pick row — bump when prompts or scoring logic changes
 # so backtest / attribution can group pre/post change comparisons correctly.
@@ -942,6 +969,106 @@ def fetch_macro_indicators() -> dict:
     return macro
 
 
+def _save_estimate_snapshot(estimates_data: dict) -> None:
+    """Persist today's FY1 EPS consensus estimates to a monthly snapshot file.
+
+    File format: {date_str: {ticker: fy1_eps_avg}}
+    Each run writes today's snapshot if not already present.
+    Old snapshots beyond 180 days are pruned to keep the file small.
+    """
+    if not estimates_data:
+        return
+    today_str = datetime.date.today().isoformat()
+    try:
+        existing: dict = {}
+        if os.path.exists(ESTIMATES_SNAPSHOT_FILE):
+            with open(ESTIMATES_SNAPSHOT_FILE, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        if today_str in existing:
+            return   # already snapshotted today
+        # Build today's snapshot: {ticker: fy1_eps_avg}
+        snap = {}
+        for t, est_list in estimates_data.items():
+            if not isinstance(est_list, list) or not est_list:
+                continue
+            fy1 = est_list[0]   # most recent / nearest forward estimate
+            eps = fy1.get("epsAvg") or fy1.get("estimatedEpsAvg")
+            if eps is not None and isinstance(eps, (int, float)):
+                snap[t] = round(float(eps), 4)
+        existing[today_str] = snap
+        # Prune snapshots older than 180 days
+        cutoff = (datetime.date.today() - datetime.timedelta(days=180)).isoformat()
+        existing = {d: v for d, v in existing.items() if d >= cutoff}
+        with open(ESTIMATES_SNAPSHOT_FILE, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=2)
+        print(f"  📷 Estimate snapshot saved: {today_str} ({len(snap)} tickers)")
+    except Exception as e:
+        print(f"  ⚠️ estimate snapshot save failed: {e}")
+
+
+def _compute_estimate_revisions(estimates_data: dict, lookback_days: int = 30) -> dict:
+    """Compute FY1 EPS revision momentum vs the snapshot ~`lookback_days` days ago.
+
+    Returns {ticker: revision_pct} where positive = upward revision.
+    Only tickers with a valid prior snapshot and non-zero prior EPS are included.
+    """
+    if not os.path.exists(ESTIMATES_SNAPSHOT_FILE):
+        return {}
+    try:
+        with open(ESTIMATES_SNAPSHOT_FILE, "r", encoding="utf-8") as f:
+            all_snaps = json.load(f)
+    except Exception:
+        return {}
+
+    today = datetime.date.today()
+    # Find the snapshot closest to (but at least) lookback_days ago
+    target_date = today - datetime.timedelta(days=lookback_days)
+    candidates = [(d, v) for d, v in all_snaps.items()
+                  if d <= target_date.isoformat()]
+    if not candidates:
+        return {}   # no old enough snapshot yet
+    ref_date, ref_snap = sorted(candidates, key=lambda x: x[0])[-1]  # most recent old enough
+
+    revisions = {}
+    for t, est_list in estimates_data.items():
+        if not isinstance(est_list, list) or not est_list:
+            continue
+        current_eps_raw = est_list[0].get("epsAvg") or est_list[0].get("estimatedEpsAvg")
+        if current_eps_raw is None:
+            continue
+        current_eps = float(current_eps_raw)
+        prior_eps = ref_snap.get(t)
+        if prior_eps is None or abs(prior_eps) < 0.01:
+            continue   # avoid division by near-zero or missing
+        revisions[t] = round((current_eps - prior_eps) / abs(prior_eps), 4)
+    return revisions
+
+
+def _macro_regime(macro: dict) -> str:
+    """Classify current macro environment into one of three scoring regimes.
+
+    Returns: 'risk_on' | 'neutral' | 'risk_off'
+
+    Logic:
+      risk_on  — yield curve positive (>+50bps) AND VIX calm (<18)
+                 → unprofitable growth gets full weight; defensives penalized less
+      risk_off — yield curve inverted (<0) OR VIX elevated (>25)
+                 → unprofitable growth penalized; quality/defensives boosted
+      neutral  — everything else
+    """
+    vc  = macro.get("yield_curve")  # 10Y-2Y spread in %
+    vix = macro.get("vix")
+    if vc is None and vix is None:
+        return "neutral"
+    if vix is not None and vix > 25:
+        return "risk_off"
+    if vc is not None and vc < 0:
+        return "risk_off"
+    if vc is not None and vc > 0.50 and (vix is None or vix < 18):
+        return "risk_on"
+    return "neutral"
+
+
 def fetch_market_intelligence() -> dict:
     """Fetch live market intelligence for agents that benefit from real-world context.
 
@@ -1046,6 +1173,149 @@ def fetch_market_intelligence() -> dict:
     return result
 
 
+def fetch_recent_spinoffs(days_back: int = 90, pages: int = 20) -> list:
+    """Detect recent corporate spin-offs from FMP stock news headlines.
+
+    Returns list of {ticker, company, date, headline, link} dicts (last `days_back` days).
+    24-hour cache + persistent event accumulator (events from past runs preserved).
+
+    Greenblatt edge (You Can Be a Stock Market Genius): newly-spun companies
+    are systematically mispriced because parent shareholders dump them
+    indiscriminately. Optimal entry window is the first 60-90 days post-spin.
+
+    Design: FMP's news endpoints don't support broad date queries — we fetch
+    `pages` pages of latest news (~1-2 days of headlines) and merge new
+    discoveries into a 90-day rolling list cached on disk. Daily runs catch
+    new announcements within 24h; cache holds prior discoveries until they
+    age out of the 90-day window.
+    """
+    global _fmp_call_count
+    cache_key = "spinoffs_alert"
+    cached = _cache.get(cache_key, {})
+    accumulated = cached.get("events", []) if isinstance(cached, dict) else []
+    cache_age_h = None
+    if isinstance(cached, dict) and cached.get("_ts"):
+        try:
+            cache_age_h = (time.time() - cached["_ts"]) / 3600
+        except Exception:
+            cache_age_h = None
+    # Skip live fetch if cache <24h old (still age out events past 90d below)
+    if cache_age_h is not None and cache_age_h < 24:
+        cutoff_iso = (datetime.date.today() - datetime.timedelta(days=days_back)).isoformat()
+        live_events = [e for e in accumulated if e.get("date", "") >= cutoff_iso]
+        print(f"  📦 Using cached spin-off alerts ({len(live_events)} active events, "
+              f"cache age {cache_age_h:.1f}h)")
+        return live_events
+
+    print(f"  🔔 Scanning {pages} pages of news for spin-off announcements...")
+    if not FMP_KEY:
+        return accumulated
+
+    # Strict title-keyword regex — captures press-release announcement phrasings
+    title_kw = re.compile(
+        r"\b(spin[\s\-]?off|spinoff|spin[\s\-]?out|spinout|demerger|"
+        r"to\s+separate\s+(?:its\s+)?(?:industrial|aerospace|business|division|unit|segment)|"
+        r"separating\s+(?:its\s+)?(?:business|division|unit|segment)|"
+        r"complete[ds]?\s+(?:the\s+)?separation|"
+        r"completes?\s+spin|"
+        r"begin[s]?\s+trading\s+(?:as\s+a\s+separate|on\s+a\s+when[\s\-]?issued)|"
+        r"separation\s+(?:and\s+)?distribution\s+agreement|"
+        r"tax[\s\-]?free\s+distribution|"
+        r"(?:announce[ds]?|complete[ds]?|plan[s]?\s+to)\s+(?:the\s+)?spin)\b",
+        re.IGNORECASE)
+    # Body fallback for confirmation (e.g. "to spin off its X division")
+    body_kw = re.compile(
+        r"\b(spin[\s\-]?off\s+of|spinoff\s+of|spin[\s\-]?out\s+of|spinout\s+of|"
+        r"distribution\s+of\s+(?:common\s+)?shares\s+of|"
+        r"tax[\s\-]?free\s+distribution\s+of|"
+        r"separate\s+(?:from|into\s+two|into\s+independent))\b",
+        re.IGNORECASE)
+    # Noise filter — these contexts use "spin" but aren't real spin-offs
+    noise_kw = re.compile(
+        r"\b(no\s+longer\s+(?:planning|plan)\s+to\s+spin|"
+        r"abandons?\s+spin|cancel(?:s|led)?\s+spin|"
+        r"reject(?:s|ed)?\s+spin|consider(?:s|ed|ing)?\s+(?:a\s+)?spin|"
+        r"hidden\s+(?:ai\s+)?spinoff|"
+        r"weigh(?:s|ed|ing)\s+(?:a\s+)?spin|"
+        r"spin[\s\-]?off\s+(?:fund|etf|portfolio))\b",
+        re.IGNORECASE)
+
+    cutoff = datetime.date.today() - datetime.timedelta(days=days_back)
+    raw_items = []
+    for page in range(pages):
+        try:
+            r = requests.get(
+                f"{FMP_BASE}/news/stock-latest?page={page}&limit=250&apikey={FMP_KEY}",
+                timeout=30)
+            _fmp_call_count += 1
+            if r.status_code != 200:
+                break
+            d = r.json()
+            if not isinstance(d, list) or not d:
+                break
+            raw_items.extend(d)
+            # Stop if we've gone past the cutoff date
+            oldest = (d[-1].get("publishedDate") or "")[:10]
+            if oldest and oldest < cutoff.isoformat():
+                break
+        except Exception as e:
+            print(f"  ⚠️ Spin-off scan error: {str(e)[:60]}")
+            break
+
+    # Build set of tickers already in accumulated cache (avoid re-adding stale events)
+    seen_tickers = {e.get("ticker") for e in accumulated}
+    new_events = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        date_raw = (item.get("publishedDate") or "")
+        try:
+            f_date = datetime.date.fromisoformat(str(date_raw)[:10])
+        except Exception:
+            continue
+        if f_date < cutoff:
+            continue
+        title = str(item.get("title") or "")
+        text  = str(item.get("text") or "")[:600]
+        # Reject noise contexts even if they contain "spin"
+        if noise_kw.search(title + " " + text):
+            continue
+        title_hit = bool(title_kw.search(title))
+        body_hit  = (("spin" in title.lower() or "separation" in title.lower())
+                     and bool(body_kw.search(text)))
+        if not (title_hit or body_hit):
+            continue
+        ticker = str(item.get("symbol") or "").upper()
+        if not ticker or ticker in seen_tickers:
+            continue
+        seen_tickers.add(ticker)
+        new_events.append({
+            "ticker":   ticker,
+            "company":  "",
+            "date":     str(date_raw)[:10],
+            "headline": title[:160],
+            "link":     str(item.get("url") or ""),
+        })
+
+    # Merge: existing accumulated + new discoveries, then age out >90 days
+    merged = accumulated + new_events
+    cutoff_iso = cutoff.isoformat()
+    merged = [e for e in merged if e.get("date", "") >= cutoff_iso]
+    # Dedupe by ticker, prefer newest date per ticker
+    by_ticker = {}
+    for e in merged:
+        t = e.get("ticker")
+        if t and (t not in by_ticker or e.get("date", "") > by_ticker[t].get("date", "")):
+            by_ticker[t] = e
+    merged = list(by_ticker.values())
+    merged.sort(key=lambda e: e["date"], reverse=True)
+
+    _cache[cache_key] = {"events": merged, "_ts": time.time()}
+    print(f"  ✅ Spin-off events: {len(merged)} active in last {days_back}d "
+          f"(+{len(new_events)} new this run, scanned {len(raw_items)} headlines)")
+    return merged
+
+
 def fetch_special_sit_news(tickers: list) -> str:
     """Fetch company-specific news for the top Special Situation candidates.
 
@@ -1117,6 +1387,248 @@ def fetch_special_sit_news(tickers: list) -> str:
 
     except Exception:
         return ""
+
+
+def fetch_going_concern_flags(pages: int = 20) -> set:
+    """Scan recent SEC 8-K and 10-K filings for going-concern, audit risk, AND four
+    catalyst signal types: buyback announcements, restructuring, CEO appointments,
+    and M&A deal announcements. Single 8-K pass — no extra API calls beyond what
+    the going-concern scan already does.
+
+    Returns a set of tickers where RED-FLAG language was detected (going concern etc.).
+    Also stores 4 separate cache entries (each 7-day TTL aligned to this scan):
+      - "buyback_announcements"        → get_buyback_announcement_tickers()
+      - "restructuring_announcements"  → get_restructuring_tickers()        (Catalyst Stack)
+      - "ceo_appointments"             → get_ceo_appointment_tickers()      (Catalyst Stack)
+      - "manda_announcements"          → get_manda_announcement_tickers()   (Catalyst Stack)
+
+    Cache TTL: 7 days.
+    """
+    global _fmp_call_count
+    cache_key = "going_concern_flags"
+    cached = _cache.get(cache_key)
+    if cached and isinstance(cached, dict) and cached.get("_ts"):
+        age_days = (time.time() - cached["_ts"]) / 86400
+        if age_days < 7:
+            flagged = set(cached.get("flagged", []))
+            print(f"  📦 Using cached going-concern flags ({len(flagged)} tickers, "
+                  f"age {age_days:.1f}d)")
+            return flagged
+
+    print(f"  🔍 Scanning SEC filings for going-concern / buyback / catalyst keywords...")
+    if not FMP_KEY:
+        return set()
+
+    # Red-flag regex — matches exact audit / risk language from 8-K/10-K filings
+    _risk_re = re.compile(
+        r"\b(going[\s\-]concern|substantial\s+doubt|material\s+weakness|"
+        r"restat(?:ed?|ing|ement)|auditor[\s\-]?change|change(?:d|s)?\s+(?:in|its|of)\s+auditor|"
+        r"ineffective\s+internal\s+control|deficiency\s+in\s+internal\s+control|"
+        r"chapter\s+11\b|filed\s+for\s+bankruptcy|insolvency\s+risk|"
+        r"default\s+on\s+(?:its\s+)?(?:debt|credit|loan|note))\b",
+        re.IGNORECASE)
+
+    # Tier 3.2: buyback announcement regex — forward-looking capital return signals
+    # These filings indicate programs that aren't yet visible in the financial statements.
+    _buyback_re = re.compile(
+        r"\b(repurchase\s+program|share\s+repurchase|buyback\s+authoriz|"
+        r"stock\s+repurchase\s+plan|accelerated\s+share\s+repurchase|"
+        r"increased?\s+(?:share\s+)?repurchase|tender\s+offer|dutch\s+auction|"
+        r"self[\s\-]tender|open[\s\-]market\s+repurchase)\b",
+        re.IGNORECASE)
+
+    # Catalyst Stack — 3 new patterns (zero extra API calls; same loop as buyback scan)
+    # Restructuring / reorganization signals — operating reset
+    _restructuring_re = re.compile(
+        r"\b(restructur|reorganiz|workforce\s+reduc|layoffs?|"
+        r"plant\s+clos|facility\s+shut|divest|spin[\s\-]?off|"
+        r"cost[\s\-]?cut\s+program|strategic\s+review|operational\s+review)\b",
+        re.IGNORECASE)
+    # CEO appointment signals — leadership change (paired with ceoAllocator.tenure_years)
+    _ceo_appoint_re = re.compile(
+        r"\b(appoints?\s+(?:new\s+)?(?:ceo|chief\s+executive)|"
+        r"names?\s+(?:new\s+)?(?:ceo|chief\s+executive)|"
+        r"ceo\s+(?:succession|appointment|transition)|"
+        r"new\s+chief\s+executive)\b",
+        re.IGNORECASE)
+    # M&A deal announcements — signals capital reallocation in progress
+    # Excludes "customer acquisition" (marketing) and "asset acquisition" (small bolt-ons)
+    _manda_re = re.compile(
+        r"\b(definitive\s+agreement|agreement\s+to\s+acquire|"
+        r"merger\s+agreement|acquisition\s+of|to\s+combine\s+with|"
+        r"tender\s+offer\s+for|stock\s+purchase\s+agreement)\b",
+        re.IGNORECASE)
+    # Negative regex — exclude "customer acquisition cost", "data acquisition", etc.
+    _manda_excl_re = re.compile(
+        r"\b(customer\s+acquisition|data\s+acquisition|asset\s+acquisition\s+cost|"
+        r"client\s+acquisition|land\s+acquisition)\b",
+        re.IGNORECASE)
+
+    flagged: set            = set()
+    buyback_announced: set  = set()
+    restructuring: set      = set()
+    ceo_appointments: set   = set()
+    manda_announced: set    = set()
+    # Diagnostic samples (debug-only — first 5 matched titles per pattern, for sanity check)
+    _samples = {"restructuring": [], "ceo_appoint": [], "manda": []}
+
+    endpoints_to_try = ["sec-filings-latest", "sec-filings", "8k-latest"]
+    for ep in endpoints_to_try:
+        success = False
+        for page in range(pages):
+            try:
+                r = requests.get(f"{FMP_BASE}/{ep}",
+                                 params={"page": page, "limit": 200, "apikey": FMP_KEY},
+                                 timeout=15)
+                _fmp_call_count += 1
+                if r.status_code == 404:
+                    break   # endpoint not available — try next
+                if r.status_code != 200:
+                    break
+                data = r.json()
+                if not isinstance(data, list):
+                    break
+                if not data:
+                    break   # no more pages
+                success = True
+                for filing in data:
+                    ticker = (filing.get("symbol") or filing.get("ticker") or "").strip().upper()
+                    title  = (filing.get("title") or filing.get("description") or "").strip()
+                    if not ticker or not title:
+                        continue
+                    if _risk_re.search(title):
+                        flagged.add(ticker)
+                    if _buyback_re.search(title):
+                        buyback_announced.add(ticker)
+                    if _restructuring_re.search(title):
+                        restructuring.add(ticker)
+                        if len(_samples["restructuring"]) < 5:
+                            _samples["restructuring"].append(f"{ticker}: {title[:90]}")
+                    if _ceo_appoint_re.search(title):
+                        ceo_appointments.add(ticker)
+                        if len(_samples["ceo_appoint"]) < 5:
+                            _samples["ceo_appoint"].append(f"{ticker}: {title[:90]}")
+                    # M&A: positive match AND no excluded phrase
+                    if _manda_re.search(title) and not _manda_excl_re.search(title):
+                        manda_announced.add(ticker)
+                        if len(_samples["manda"]) < 5:
+                            _samples["manda"].append(f"{ticker}: {title[:90]}")
+                time.sleep(0.15)
+            except Exception:
+                break
+        if success:
+            break   # used this endpoint successfully — don't try others
+
+    # ── Supplemental: scan news headlines for catalyst patterns ──────────────
+    # The SEC filings endpoints may not be available on all FMP plan tiers.
+    # The news/stock-latest endpoint is universally available and carries the same
+    # signal for CEO appointments, M&A announcements, and restructuring news.
+    # Only runs when the SEC scan yielded nothing (avoids double-counting).
+    if not (restructuring or ceo_appointments or manda_announced or buyback_announced):
+        _news_pages = 30    # 30 × 250 = 7 500 recent headlines (~3–4 months of US coverage)
+        _news_found = 0
+        for _np in range(_news_pages):
+            try:
+                _nr = requests.get(
+                    f"{FMP_BASE}/news/stock-latest",
+                    params={"page": _np, "limit": 250, "apikey": FMP_KEY},
+                    timeout=30)
+                _fmp_call_count += 1
+                if _nr.status_code != 200:
+                    break
+                _narticles = _nr.json()
+                if not isinstance(_narticles, list) or not _narticles:
+                    break
+                _news_found += len(_narticles)
+                for _art in _narticles:
+                    _nticker = ((_art.get("symbol") or _art.get("ticker") or "")).strip().upper()
+                    _ntitle  = (_art.get("title") or "").strip()
+                    if not _nticker or not _ntitle:
+                        continue
+                    if _buyback_re.search(_ntitle):
+                        buyback_announced.add(_nticker)
+                    if _restructuring_re.search(_ntitle):
+                        restructuring.add(_nticker)
+                        if len(_samples["restructuring"]) < 5:
+                            _samples["restructuring"].append(f"{_nticker}: {_ntitle[:90]}")
+                    if _ceo_appoint_re.search(_ntitle):
+                        ceo_appointments.add(_nticker)
+                        if len(_samples["ceo_appoint"]) < 5:
+                            _samples["ceo_appoint"].append(f"{_nticker}: {_ntitle[:90]}")
+                    if _manda_re.search(_ntitle) and not _manda_excl_re.search(_ntitle):
+                        manda_announced.add(_nticker)
+                        if len(_samples["manda"]) < 5:
+                            _samples["manda"].append(f"{_nticker}: {_ntitle[:90]}")
+                time.sleep(0.15)
+            except Exception:
+                break
+        if _news_found:
+            print(f"  📰 News catalyst scan: {_news_found} headlines → "
+                  f"buybacks={len(buyback_announced)}, restructuring={len(restructuring)}, "
+                  f"CEO={len(ceo_appointments)}, M&A={len(manda_announced)}")
+
+    _cache[cache_key] = {"flagged": list(flagged), "_ts": time.time()}
+    # Buyback (Tier 3.2) and 3 Catalyst-Stack caches — all 7-day TTL aligned to this scan
+    _now = time.time()
+    _cache["buyback_announcements"]       = {"tickers": list(buyback_announced), "_ts": _now}
+    _cache["restructuring_announcements"] = {"tickers": list(restructuring),     "_ts": _now}
+    _cache["ceo_appointments"]            = {"tickers": list(ceo_appointments),  "_ts": _now}
+    _cache["manda_announcements"]         = {"tickers": list(manda_announced),   "_ts": _now}
+
+    if flagged:
+        print(f"  ⚠️  Going-concern flags found: {len(flagged)} tickers — {', '.join(sorted(flagged)[:10])}"
+              + (" ..." if len(flagged) > 10 else ""))
+    else:
+        print(f"  ✅ Going-concern scan done — no flags detected (or endpoint unavailable)")
+    if buyback_announced:
+        print(f"  🔔 Buyback announcements detected: {len(buyback_announced)} tickers — "
+              + ", ".join(sorted(buyback_announced)[:8]) + (" ..." if len(buyback_announced) > 8 else ""))
+    if restructuring:
+        print(f"  🏗️  Restructuring announcements: {len(restructuring)} tickers — "
+              + ", ".join(sorted(restructuring)[:6]) + (" ..." if len(restructuring) > 6 else ""))
+        for s in _samples["restructuring"][:3]:
+            print(f"     ↳ {s}")
+    if ceo_appointments:
+        print(f"  👔 CEO appointments: {len(ceo_appointments)} tickers — "
+              + ", ".join(sorted(ceo_appointments)[:6]) + (" ..." if len(ceo_appointments) > 6 else ""))
+        for s in _samples["ceo_appoint"][:3]:
+            print(f"     ↳ {s}")
+    if manda_announced:
+        print(f"  🎯 M&A deal announcements: {len(manda_announced)} tickers — "
+              + ", ".join(sorted(manda_announced)[:6]) + (" ..." if len(manda_announced) > 6 else ""))
+        for s in _samples["manda"][:3]:
+            print(f"     ↳ {s}")
+    return flagged
+
+
+def _get_catalyst_cache_set(cache_key: str) -> set:
+    """Generic accessor for catalyst cache buckets populated by fetch_going_concern_flags()."""
+    cached = _cache.get(cache_key)
+    if cached and isinstance(cached, dict):
+        age_days = (time.time() - cached.get("_ts", 0)) / 86400
+        if age_days < 7:
+            return set(cached.get("tickers", []))
+    return set()
+
+
+def get_buyback_announcement_tickers() -> set:
+    """Tickers with a recent buyback-related 8-K from the going-concern scan cache."""
+    return _get_catalyst_cache_set("buyback_announcements")
+
+
+def get_restructuring_tickers() -> set:
+    """Catalyst Stack: tickers with recent restructuring/reorganization 8-K filings."""
+    return _get_catalyst_cache_set("restructuring_announcements")
+
+
+def get_ceo_appointment_tickers() -> set:
+    """Catalyst Stack: tickers with recent CEO-appointment 8-K filings."""
+    return _get_catalyst_cache_set("ceo_appointments")
+
+
+def get_manda_announcement_tickers() -> set:
+    """Catalyst Stack: tickers with recent M&A deal-announcement 8-K filings."""
+    return _get_catalyst_cache_set("manda_announcements")
 
 
 def fmp_get(endpoint: str, params: dict = None) -> dict | list | None:
@@ -1564,11 +2076,14 @@ def fetch_balance_sheet_5y(tickers: list) -> dict:
     return results
 
 
-def fetch_cash_flow_5y(tickers: list) -> dict:
-    """6Y annual cash-flow statements — capex, FCF, repurchases, dividends, M&A spend."""
-    cache_key = "cash_flow_5y"
+def fetch_cash_flow_5y(tickers: list, cache_key: str = "cash_flow_5y") -> dict:
+    """6Y annual cash-flow statements — capex, FCF, repurchases, dividends, M&A spend.
+
+    cache_key can be overridden (e.g. "cash_flow_5y_sc") for small-cap supplemental
+    enrichment without polluting the main large-cap cache.
+    """
     if _cache.get(cache_key):
-        print(f"  📦 Using cached 5Y cash flows ({len(_cache[cache_key])} stocks)")
+        print(f"  📦 Using cached 5Y cash flows [{cache_key}] ({len(_cache[cache_key])} stocks)")
         return _cache[cache_key]
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1600,6 +2115,48 @@ def fetch_cash_flow_5y(tickers: list) -> dict:
 
     _cache[cache_key] = results
     print(f"  ✅ 5Y cash flows loaded: {len(results)} stocks")
+    return results
+
+
+def fetch_cash_flow_ttm(tickers: list) -> dict:
+    """Last 4 quarterly cash-flow statements — fresh TTM buyback + SBC signals.
+    Fresher than annual data by up to ~9 months; cached separately (7-day TTL
+    so intra-week runs stay current without hitting the API every time)."""
+    cache_key = "cash_flow_ttm"
+    cached = _cache.get(cache_key)
+    if cached:
+        print(f"  📦 Using cached quarterly CFS for TTM buybacks ({len(cached)} stocks)")
+        return cached
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    print(f"\n  📊 Fetching quarterly CFS (TTM buybacks + split detection)...")
+    results = {}
+    _lock = threading.Lock()
+    _throttle = threading.Semaphore(4)
+
+    def _f(t):
+        with _throttle:
+            data = fmp_get("cash-flow-statement",
+                           {"symbol": t, "period": "quarter", "limit": "4"})
+            time.sleep(0.2)
+            if data and isinstance(data, list) and len(data) >= 1:
+                return t, data
+            return t, None
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futs = {pool.submit(_f, t): t for t in tickers}
+        done = 0
+        for fut in as_completed(futs):
+            t, data = fut.result()
+            if data:
+                with _lock: results[t] = data
+            done += 1
+            if done % 200 == 0:
+                print(f"    [{done}/{len(tickers)}] quarterly CFS fetched...")
+
+    _cache[cache_key] = results
+    print(f"  ✅ Quarterly CFS loaded: {len(results)} stocks (TTM buyback signals)")
     return results
 
 
@@ -1833,46 +2390,63 @@ def compute_ceo_allocator_score(s: dict, bs_5y: list, cfs_5y: list,
         out["callouts"].append(f"FCF grew {fcf_cagr*100:+.0f}%/y over {span}y")
 
     # ── Component 2: Shareholder capital return discipline (20 pts) ──
-    # Count BOTH buybacks AND dividends — some great allocators (Chubb, KO, TRV)
-    # prefer dividends over buybacks; penalising only on buybacks is unfair to them.
-    # capital_returned = net buybacks + dividends paid (both in $ from CF statement)
-    total_fcf = sum(abs(r.get("freeCashFlow") or 0) for r in cfs_window if (r.get("freeCashFlow") or 0) > 0)
-    total_net_si  = sum(r.get("netCommonStockIssuance") or r.get("commonStockRepurchased") or 0
-                        for r in cfs_window)
-    total_divs    = sum(abs(r.get("commonDividendsPaid") or r.get("netDividendsPaid") or 0)
-                        for r in cfs_window)
-    # Net buybacks: negative netCommonStockIssuance = money out (good); positive = dilution (bad)
-    net_buybacks = -total_net_si   # positive = returned via buybacks
-    total_returned = net_buybacks + total_divs   # total cash returned to shareholders
+    # SBC-aware computation (Tier 1.3): the OLD logic used `netCommonStockIssuance` which
+    # nets buybacks against employee SBC issuance — so a tech co spending $10B on buybacks +
+    # $10B on SBC looked neutral when it's actually a wash. The NEW logic uses GROSS buybacks
+    # minus SBC explicitly, surfacing the true shareholder yield after dilution.
+    # FCF denominator fix: also requires ≥3 positive-FCF years and uses signed sum (not abs)
+    # to avoid the bug where lumpy FCF inflated the return ratio.
+    pos_fcf_yrs = [r.get("freeCashFlow") for r in cfs_window if (r.get("freeCashFlow") or 0) > 0]
+    total_fcf   = sum(pos_fcf_yrs) if pos_fcf_yrs else 0
+
+    gross_bb     = sum(abs(r.get("commonStockRepurchased")    or 0) for r in cfs_window)
+    sbc_total    = sum(abs(r.get("stockBasedCompensation")    or 0) for r in cfs_window)
+    total_divs   = sum(abs(r.get("commonDividendsPaid") or r.get("netDividendsPaid") or 0)
+                       for r in cfs_window)
+    # True net shareholder return: gross buybacks minus SBC (cosmetic buybacks) plus dividends
+    net_buybacks   = gross_bb - sbc_total              # can be negative (cosmetic-buyback case)
+    total_returned = net_buybacks + total_divs         # all cash actually returned
+
+    out["gross_buybacks_total"] = gross_bb
+    out["sbc_total"]            = sbc_total
+    out["dividends_total"]      = total_divs
 
     sh_pct = None
-    bb_pts = 5  # neutral default when data missing
-    if total_fcf > 0:
-        return_ratio = total_returned / total_fcf   # fraction of FCF returned to shareholders
-        # Net dilution penalty: if net stock issuance > 20% of FCF, subtract from score
+    bb_pts = 5  # neutral default when data missing or insufficient FCF history
+    if total_fcf > 0 and len(pos_fcf_yrs) >= 3:
+        return_ratio = total_returned / total_fcf
+        # Dilution penalty: if SBC swamps buybacks, double-penalise
         dilution_penalty = max(0, -net_buybacks / total_fcf) if net_buybacks < 0 else 0
-        effective_ratio  = return_ratio - dilution_penalty * 2   # penalise dilution double
+        effective_ratio  = return_ratio - dilution_penalty * 2
 
-        sh_pct = -(net_buybacks / total_fcf)   # negative = net buyback program
+        sh_pct = net_buybacks / total_fcf  # positive = real net return; negative = SBC wash
         out["shares_change_pct"] = round(sh_pct, 4)
 
         if effective_ratio >= 0.50:
             bb_pts = 20
             _via = []
-            if net_buybacks > 0:   _via.append(f"buybacks {net_buybacks/total_fcf*100:.0f}%")
-            if total_divs   > 0:   _via.append(f"dividends {total_divs/total_fcf*100:.0f}%")
-            out["callouts"].append(f"Returned {return_ratio*100:.0f}% of FCF ({', '.join(_via)})")
+            if gross_bb > 0:
+                _via.append(f"gross buybacks {gross_bb/total_fcf*100:.0f}% of FCF")
+            if sbc_total > 0:
+                _via.append(f"SBC offset {sbc_total/total_fcf*100:.0f}%")
+            if total_divs > 0:
+                _via.append(f"dividends {total_divs/total_fcf*100:.0f}%")
+            out["callouts"].append(f"Net returned {return_ratio*100:.0f}% of FCF ({', '.join(_via)})")
         elif effective_ratio >= 0.25:
             bb_pts = 14
         elif effective_ratio >= 0.05:
             bb_pts = 8
         elif effective_ratio >= -0.10:
-            bb_pts = 4   # minimal return, modest dilution
+            bb_pts = 4   # minimal net return — buybacks barely outpace SBC
         else:
-            bb_pts = 0   # heavy net dilution
-            out["callouts"].append(f"⚠ Net dilution: returned only {return_ratio*100:.0f}% of FCF to shareholders")
+            bb_pts = 0   # SBC swamps buybacks → cosmetic returns / net dilution
+            out["callouts"].append(
+                f"⚠ Cosmetic buybacks: SBC ${sbc_total/1e9:.1f}B vs buybacks ${gross_bb/1e9:.1f}B → net returned only {return_ratio*100:.0f}% of FCF"
+            )
     else:
         out["shares_change_pct"] = None
+        if total_fcf > 0 and len(pos_fcf_yrs) < 3:
+            out["callouts"].append("Buyback discipline: insufficient positive-FCF history (<3 yrs) to score")
 
     # ── Component 3: ROIC trend (15 pts) — current ROIC vs early-tenure proxy ──
     # Proxy: net income / equity over the window (rough ROE/ROIC approximation since
@@ -1930,6 +2504,21 @@ def compute_ceo_allocator_score(s: dict, bs_5y: list, cfs_5y: list,
         elif roic_trend == "falling" and cx_intensity > 0.15: rei_pts = 1
         else:                                                 rei_pts = 5
 
+    # ── Tier 3.1: Buyback consistency (Thorndike "serial returner" test) ──
+    # Count years in the window where NET buybacks were positive (gross buybacks > SBC).
+    # Thorndike's key insight: sustained, disciplined buybacks beat one-time mega-repurchases.
+    # Note: we don't penalise zero-buyback years for dividend-payers (they use a different return vehicle).
+    _bb_consistent_yrs = sum(
+        1 for r in cfs_window
+        if abs(r.get("commonStockRepurchased") or 0) > abs(r.get("stockBasedCompensation") or 0)
+    )
+    out["buybackConsistency"] = _bb_consistent_yrs   # raw count (0-5 or 0-span)
+    n_yrs_scored = len(cfs_window) - 1  # window length minus the oldest base year
+    if _bb_consistent_yrs >= n_yrs_scored and n_yrs_scored >= 3:
+        out["callouts"].append(f"🏆 Serial returner: net buybacks exceeded SBC in all {_bb_consistent_yrs}/{n_yrs_scored} scored years")
+    elif _bb_consistent_yrs == 0 and gross_bb > 0:
+        out["callouts"].append(f"⚠ SBC wiped buybacks every year: 0/{n_yrs_scored} years of net positive buybacks")
+
     score = psv_pts + bb_pts + rt_pts + dt_pts + rei_pts
     score = max(0, min(100, int(score)))
 
@@ -1968,6 +2557,209 @@ def classify_divergence(s: dict) -> str | None:
     if insider_any and bearish_or_neutral and val >= 50_000:
         return "quiet_signal"
     return None
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Custom Discounted Cash Flow (DCF) — transparent cross-check vs FMP
+# ─────────────────────────────────────────────────────────────────────
+# FMP's DCF is a black box; this module gives us a 2-stage DCF + reverse-DCF
+# whose every assumption is visible (WACC, growth fade, terminal). Designed to
+# run alongside FMP's MoS — display + AI-context only, no filter changes.
+#
+# Inputs (all already cached):
+#   - 5Y FCF series (cfs_5y) → FCF base via 3Y average
+#   - Analyst forward growth (epsGrowth5y / revGrowth5y) → Stage-1 growth
+#   - Beta (from /profile) + 10Y Treasury (FRED dgs10) → CAPM WACC
+#   - Balance sheet (totalDebt, cash, ST investments) → equity bridge
+#
+# Sector skip: Financial Services + Real Estate (FCF DCF doesn't apply).
+# Returns None on insufficient data — never raises.
+
+def compute_wacc(beta, macro: dict, sector: str | None = None):
+    """CAPM-based equity-only WACC. Returns decimal (e.g. 0.095) or None.
+    WACC = Rf + β × ERP. Sector floor for Tech/Healthcare. 7-18% sanity bounds.
+    """
+    if beta is None or macro is None:
+        return None
+    rf = macro.get("dgs10")  # 10Y Treasury yield (FRED stores as percent: 4.36)
+    if rf is None:
+        return None
+    try:
+        beta = float(beta)
+        rf = float(rf)
+    except (TypeError, ValueError):
+        return None
+    # Normalize: if FRED returns 4.36 (percent), convert to 0.0436 (decimal)
+    if rf > 1.0:
+        rf = rf / 100.0
+    erp = 0.055  # Damodaran 2025 implied equity risk premium ≈ 5.5%
+    wacc = rf + beta * erp
+    # Quality-sector floor: low-beta moat names should not discount below ~9%
+    # (Buffett-style; avoids unrealistic IVs for JNJ-like β=0.4 quality compounders)
+    if sector in ("Technology", "Healthcare"):
+        wacc = max(wacc, 0.09)
+    # Sanity bounds — anything outside 7-18% is a model artefact
+    return round(max(0.07, min(0.18, wacc)), 4)
+
+
+# Sectors where FCF DCF doesn't apply cleanly — skip and mark N/A.
+# Banks/insurers: book value & ROE matter more (residual income model).
+# REITs: AFFO multiples are standard, not FCF.
+_DCF_SKIP_SECTORS = ("Financial Services", "Real Estate")
+
+
+def _dcf_pv(fcf_base: float, g1: float, wacc: float,
+            g_terminal: float = 0.025, years: int = 10) -> float:
+    """Project FCF over `years` with linear fade g1→g_terminal,
+    add Gordon terminal value, return enterprise PV (firm value pre-debt).
+
+    10-year explicit period: gives high-growth compounders (AAPL, MSFT)
+    realistic credit for sustained growth before the terminal kicks in.
+    """
+    pv = 0.0
+    fcf = fcf_base
+    for yr in range(1, years + 1):
+        # Linear fade from g1 (year 1) to g_terminal (year `years`)
+        if years > 1:
+            g_yr = g1 + (g_terminal - g1) * (yr - 1) / (years - 1)
+        else:
+            g_yr = g1
+        fcf *= (1 + g_yr)
+        pv += fcf / (1 + wacc) ** yr
+    # Gordon terminal value at end of explicit period
+    tv = fcf * (1 + g_terminal) / (wacc - g_terminal)
+    pv += tv / (1 + wacc) ** years
+    return pv
+
+
+def _dcf_iv_per_share(stock: dict, balance_sheet: dict, fcf_base: float,
+                      g1: float, wacc: float, g_terminal: float = 0.025):
+    """Helper: PV → equity value → per-share IV. Returns float or None."""
+    pv = _dcf_pv(fcf_base, g1, wacc, g_terminal)
+    bs = balance_sheet or {}
+    net_debt = ((bs.get("totalDebt") or 0)
+                - (bs.get("cashAndCashEquivalents") or bs.get("cash") or 0)
+                - (bs.get("shortTermInvestments") or 0))
+    equity_value = pv - net_debt
+    price = stock.get("price")
+    mc = stock.get("mktCap")
+    if not price or price <= 0 or not mc or mc <= 0:
+        return None
+    shares = mc / price  # most reliable share count (vs bs.commonStock which is par value)
+    if shares <= 0:
+        return None
+    return equity_value / shares
+
+
+def compute_custom_dcf(stock: dict, cfs_5y: list, balance_sheet: dict,
+                       macro: dict) -> dict | None:
+    """Two-stage DCF (5Y explicit fade + Gordon terminal).
+    Returns {iv, mosCustom, fcfBase (in $B), growthAssumed, wacc} or None.
+    """
+    sec = (stock.get("sector") or "")
+    if sec in _DCF_SKIP_SECTORS:
+        return None
+    if not cfs_5y or len(cfs_5y) < 2:
+        return None
+
+    # FCF base — 3Y average from most-recent annuals (smooths working-capital noise)
+    fcf_recent = []
+    for y in cfs_5y[:3]:
+        f = y.get("freeCashFlow") if isinstance(y, dict) else None
+        if f is not None:
+            fcf_recent.append(f)
+    if len(fcf_recent) < 2:
+        return None
+    # 3Y average must be positive — allows one bad year for cyclicals (e.g. F EV losses).
+    # If average is negative, business doesn't generate cash → DCF is meaningless.
+    fcf_base = sum(fcf_recent) / len(fcf_recent)
+    if fcf_base <= 0:
+        return None
+
+    # Stage-1 growth: prefer EPS estimate (forward-looking), fall back to revenue
+    g1 = (stock.get("epsGrowth5y") or stock.get("revGrowth5y")
+          or stock.get("growth_5y") or 0.05)
+    try:
+        g1 = float(g1)
+    except (TypeError, ValueError):
+        g1 = 0.05
+    g1 = max(0.0, min(0.25, g1))  # cap at 25% — anything higher is implausible
+    g_terminal = 0.025
+
+    wacc = compute_wacc(stock.get("beta"), macro, sec)
+    if wacc is None or wacc <= g_terminal:
+        return None
+
+    iv_per_share = _dcf_iv_per_share(stock, balance_sheet, fcf_base, g1, wacc, g_terminal)
+    if iv_per_share is None:
+        return None
+    price = stock.get("price")
+    # Sanity bounds: 0.2× to 5× price catches model artefacts both ways
+    if iv_per_share <= 0 or price <= 0:
+        return None
+    if iv_per_share > price * 5 or iv_per_share < price * 0.2:
+        return None
+
+    mos = (iv_per_share - price) / iv_per_share
+    return {
+        "iv":            round(iv_per_share, 2),
+        "mosCustom":     round(mos, 4),
+        "fcfBase":       round(fcf_base / 1e9, 2),  # $B
+        "growthAssumed": round(g1, 4),
+        "wacc":          wacc,
+    }
+
+
+def compute_implied_growth(stock: dict, cfs_5y: list, balance_sheet: dict,
+                           macro: dict) -> float | None:
+    """Reverse-DCF: solve for stage-1 growth that makes IV ≈ price.
+    Returns implied 5Y growth as decimal (e.g. 0.18 = 18%/y) or None.
+
+    Damodaran-style sanity check: 'this company needs X%/y growth to justify
+    today's price.' More intuitive than absolute IV.
+    """
+    sec = (stock.get("sector") or "")
+    if sec in _DCF_SKIP_SECTORS:
+        return None
+    if not cfs_5y or len(cfs_5y) < 2:
+        return None
+    fcf_recent = [y.get("freeCashFlow") for y in cfs_5y[:3]
+                  if isinstance(y, dict) and y.get("freeCashFlow") is not None]
+    if len(fcf_recent) < 2:
+        return None
+    fcf_base = sum(fcf_recent) / len(fcf_recent)
+    if fcf_base <= 0:
+        return None
+    g_terminal = 0.025
+    wacc = compute_wacc(stock.get("beta"), macro, sec)
+    if wacc is None or wacc <= g_terminal:
+        return None
+    price = stock.get("price")
+    if not price or price <= 0:
+        return None
+
+    # Binary search g1 ∈ [-0.05, 0.40] for ~30 iterations until iv ≈ price
+    lo, hi = -0.05, 0.40
+    target = price
+    for _ in range(35):
+        mid = (lo + hi) / 2
+        iv = _dcf_iv_per_share(stock, balance_sheet, fcf_base, mid, wacc, g_terminal)
+        if iv is None:
+            return None
+        if iv > target:
+            hi = mid
+        else:
+            lo = mid
+        if abs(iv - target) / target < 0.005:  # within 0.5%
+            return round(mid, 4)
+    # If we didn't converge cleanly, return best estimate (clipped to range)
+    final = round((lo + hi) / 2, 4)
+    # If we hit the upper rail, the price implies growth >40%/y — return cap
+    if final >= 0.395:
+        return 0.40
+    if final <= -0.045:
+        return -0.05
+    return final
 
 
 def fetch_earnings_surprises(tickers: list) -> dict:
@@ -2413,13 +3205,28 @@ def _first(*args):
 def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                         estimates, scores, ratings, growth_data, insider_data,
                         balance_sheet=None, earnings_surp=None,
-                        bs_5y=None, cfs_5y=None, executives=None) -> dict:
+                        bs_5y=None, cfs_5y=None, cfs_ttm=None, executives=None,
+                        macro=None, going_concern_tickers: set = None,
+                        est_revisions: dict = None) -> dict:
     """Merge all FMP data sources into a single dict per stock."""
     print("\n  🔧 Assembling unified stock data...")
+    sector_overrides = _load_sector_overrides()
+    # Tier 3.2: retrieve buyback announcement tickers from going-concern scan cache (no extra API call)
+    _buyback_announced_tickers = get_buyback_announcement_tickers()
+    # Catalyst Stack: 3 additional 8-K signal sets (populated by same 8-K scan, no extra API calls)
+    _restructuring_tickers     = get_restructuring_tickers()
+    _ceo_appointment_tickers   = get_ceo_appointment_tickers()
+    _manda_announcement_tickers = get_manda_announcement_tickers()
+    if sector_overrides:
+        print(f"  📑 Sector overrides loaded: {len(sector_overrides)} tickers")
 
 
-    # Build insider lookup: {ticker: {count, total_value, latest_date}}
-    insider_lookup = defaultdict(lambda: {"count": 0, "totalValue": 0, "latestDate": ""})
+    # Build insider lookup: {ticker: {count, total_value, latest_date, last30dBuys, prior60dBuys, last30dValue}}
+    _ins_today   = datetime.date.today()
+    _cutoff_30d  = (_ins_today - datetime.timedelta(days=30)).isoformat()
+    _cutoff_90d  = (_ins_today - datetime.timedelta(days=90)).isoformat()
+    insider_lookup = defaultdict(lambda: {"count": 0, "totalValue": 0, "latestDate": "",
+                                          "last30dBuys": 0, "prior60dBuys": 0, "last30dValue": 0})
     for trade in insider_data:
         t = trade.get("symbol", "")
         val = abs(trade.get("securitiesTransacted", 0) * (trade.get("price", 0) or 0))
@@ -2428,6 +3235,12 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
         d = trade.get("transactionDate", "")
         if d > insider_lookup[t]["latestDate"]:
             insider_lookup[t]["latestDate"] = d
+        # Time-bucketed velocity — used for burst detection
+        if d >= _cutoff_30d:
+            insider_lookup[t]["last30dBuys"]  += 1
+            insider_lookup[t]["last30dValue"] += val
+        elif d >= _cutoff_90d:
+            insider_lookup[t]["prior60dBuys"] += 1
 
     stocks = {}
     for t, u in universe.items():
@@ -2542,6 +3355,10 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
         if iv and iv > 0 and price > 0:
             mos = round((iv - price) / iv, 4)
 
+        # P/B — computed early so net-cash and tangible-book sanity checks can use it
+        _pb_raw = _first(rtm.get("priceToBookRatioTTM"))
+        pb_val = (_pb_raw if (_pb_raw is not None and 0.02 <= _pb_raw <= 200) else None)
+
         # ── Net cash per share (from balance sheet) ────────────────────────
         # Net cash = cash + short-term investments - total debt
         # Positive net cash = company has more cash than debt (asset play signal)
@@ -2565,8 +3382,12 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             _net_cash = _cash + _st_inv - _total_debt
             if _shares and _shares > 0:
                 _ncps = _net_cash / _shares
-                # Sanity: if net cash per share is unreasonably large (>10× price), discard
-                if price > 0 and abs(_ncps) <= price * 10:
+                # Sanity: net cash per share cannot exceed book value (price/pb).
+                # If P/B is available, cap at (price/pb)*1.5; else fall back to 3×price.
+                # This catches balance-sheet fields returned in local currency (CNY) for foreign ADRs.
+                _ncps_cap = ((price / pb_val) * 1.5
+                             if (pb_val is not None and pb_val > 0) else price * 3.0)
+                if price > 0 and abs(_ncps) <= _ncps_cap:
                     net_cash_per_share = round(_ncps, 2)
                     if price > 0:
                         net_cash_ratio = round(_ncps / price, 4)
@@ -2598,15 +3419,19 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
 
         # ── Per-share data corruption check ────────────────────────────────
         # FMP occasionally stores total company figures as per-share values for certain tickers
-        # (e.g. MCHB: bookValuePerShare=$129,595 at price=$14 — bank total assets stored as per-share)
+        # (e.g. MCHB: bookValuePerShare=$129,595 at price=$14 — bank total assets stored as per-share;
+        #  FCNCN: bookValuePerShare=$1,798 at price=$24 — Class A data used for Class B shares;
+        #  FCF: bookValuePerShare≈$123 at price=$18 — actual P/B is 1.21 not 0.15, ~8x inflation;
+        #  DMRA/PRTC: bookValuePerShare ~7x price — impossible given their cash positions/market caps)
+        # Threshold: bookValuePerShare > price * 6 (implying P/B < 0.167) is almost never legitimate
+        # for a US $50M+ listed stock. Lowered from 50x to 6x on 2026-05-05 to catch moderate
+        # corruptions that slip under the old threshold but still indicate FMP data errors.
         # When detected, nullify all ratios derived from book/equity so they don't corrupt rankings.
         _bv_ps = _first(rtm.get("bookValuePerShareTTM"))
-        _per_share_corrupt = (_bv_ps is not None and price > 0 and _bv_ps > price * 100)
+        _per_share_corrupt = (_bv_ps is not None and price > 0 and _bv_ps > price * 6)
 
         # ── Per-metric bounds checks ────────────────────────────────────────
-        # P/B > 200 is not screening-useful (negative book or data error); < 0 is invalid
-        _pb_raw = _first(rtm.get("priceToBookRatioTTM"))
-        pb_val = (_pb_raw if (_pb_raw is not None and 0 < _pb_raw <= 200) else None)
+        # pb_val was computed early (before net-cash section) so sanity cross-checks could use it.
 
         # ROE/ROA/ROIC: values > ±500% are almost always FMP errors (tiny denominator)
         # Round to 4 decimal places (e.g. 0.1523 → 0.1523 = 15.23%) to avoid spurious precision
@@ -2643,6 +3468,13 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
         # Tangible book: if > 50× price it is certainly a data error
         _tb_raw = _first(rtm.get("tangibleBookValuePerShareTTM"))
         tb_val = (_tb_raw if (_tb_raw is None or price <= 0 or abs(_tb_raw) <= price * 50) else None)
+        # Cross-check: tangible book must not exceed P/B-implied book value by >1.5×.
+        # FMP returns tangibleBookValuePerShareTTM in local currency (CNY, INR) for foreign ADRs,
+        # while priceToBookRatioTTM is correctly computed in USD. When tb > (price/pb)*1.5, it is
+        # almost certainly a local-currency value, not USD — nullify to avoid false Asset Play signals.
+        if (tb_val is not None and tb_val > 0 and pb_val is not None and pb_val > 0
+                and price > 0 and tb_val > (price / pb_val) * 1.5):
+            tb_val = None
 
         # D/E: values above 100 are either negative-equity artifacts or data errors
         _de_raw = _first(rtm.get("debtToEquityRatioTTM"))
@@ -2653,9 +3485,10 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             pb_val = roe_val = roa_val = roic_val = tb_val = None
 
         # ── Capital Allocator: CEO score + 5Y per-share CAGRs ──────────
-        _bs5  = (bs_5y or {}).get(t) if bs_5y else None
-        _cfs5 = (cfs_5y or {}).get(t) if cfs_5y else None
-        _exec = (executives or {}).get(t) if executives else None
+        _bs5     = (bs_5y  or {}).get(t) if bs_5y  else None
+        _cfs5    = (cfs_5y or {}).get(t) if cfs_5y else None
+        _cfs_ttm = (cfs_ttm or {}).get(t) if cfs_ttm else None
+        _exec    = (executives or {}).get(t) if executives else None
         ceo_alloc_obj = None
         per_share_cagrs = {"revPerShare5yCagr": None, "fcfPerShare5yCagr": None,
                            "bvPerShare5yCagr": None}
@@ -2671,11 +3504,96 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             except Exception:
                 pass
 
+        # ── Buyback reliability metrics (Tier 1.2 + Tier 2) ───────────────────
+        # GROSS buybacks (absolute $ spent on repurchases) — NEVER netted against issuance.
+        # SBC = stock-based compensation = the dollar value of equity given to employees.
+        # Net buyback yield = (gross buybacks − SBC) / mktCap → REAL shareholder yield after dilution.
+        # Why this matters: a tech co spending $10B on buybacks AND $10B on SBC is a wash, not a buyback.
+        # 5Y averages used to smooth lumpy quarter-to-quarter execution.
+        gross_buybacks_5y_avg = None
+        sbc_5y_avg            = None
+        gross_buyback_yield   = None
+        net_buyback_yield     = None
+        if _cfs5 and len(_cfs5) >= 2 and mktCap and mktCap > 0:
+            _bb_window = _cfs5[:5]
+            _n_yrs = len(_bb_window)
+            # FMP convention: commonStockRepurchased is typically NEGATIVE (cash outflow).
+            # SBC is positive (non-cash expense added back). Take abs() to be safe across conventions.
+            _gross_bb_total = sum(abs(r.get("commonStockRepurchased") or 0) for r in _bb_window)
+            _sbc_total      = sum(abs(r.get("stockBasedCompensation")  or 0) for r in _bb_window)
+            if _n_yrs > 0:
+                gross_buybacks_5y_avg = round(_gross_bb_total / _n_yrs, 0)
+                sbc_5y_avg            = round(_sbc_total      / _n_yrs, 0)
+                gross_buyback_yield   = round(gross_buybacks_5y_avg / mktCap, 4)
+                net_buyback_yield     = round((gross_buybacks_5y_avg - sbc_5y_avg) / mktCap, 4)
+
+        # Tier 2.1 — TTM buyback yield from last 4 quarterly CFS (fresher by ~9 months vs annual)
+        buyback_yield_ttm = None
+        if _cfs_ttm and len(_cfs_ttm) >= 1 and mktCap and mktCap > 0:
+            _n_q = len(_cfs_ttm)
+            _scale = 4.0 / _n_q  # annualize the partial-year sum
+            _q_gross_bb = sum(abs(r.get("commonStockRepurchased") or 0) for r in _cfs_ttm) * _scale
+            _q_sbc      = sum(abs(r.get("stockBasedCompensation")  or 0) for r in _cfs_ttm) * _scale
+            buyback_yield_ttm = round((_q_gross_bb - _q_sbc) / mktCap, 4)
+
+        # Tier 2.2 — sharesGrowth fallback from cfs5 sequential share counts (when FMP field is missing)
+        # Also neutralizes split-year distortions: a 2-for-1 split looks like +100% dilution without this.
+        _sg_fmp = _first(
+            (lambda v: v if v is not None and abs(v) < 0.5 else None)(
+                _first(gr.get("weightedAverageSharesGrowth"), gr.get("weightedAverageSharesDilutedGrowth"))
+            )
+        )
+        _shares_growth_fallback = None
+        if _sg_fmp is None and _cfs5 and len(_cfs5) >= 2:
+            _sh_new = (_cfs5[0].get("weightedAverageShsOut") or
+                       _cfs5[0].get("weightedAverageSharesOutstanding"))
+            _sh_old = (_cfs5[1].get("weightedAverageShsOut") or
+                       _cfs5[1].get("weightedAverageSharesOutstanding"))
+            if _sh_new and _sh_old and _sh_old > 0:
+                _sh_ratio = _sh_new / _sh_old
+                # Neutralize common split ratios: 2-for-1 (~2.0x), 3-for-2 (~1.5x),
+                # 3-for-1 (~3.0x), reverse-splits (0.5x, 0.33x) — any ~integer multiple
+                _is_split = any(abs(_sh_ratio - r) < 0.12 for r in [0.25, 0.33, 0.5, 1.5, 2.0, 3.0, 4.0])
+                _shares_growth_fallback = 0.0 if _is_split else round(_sh_ratio - 1.0, 4)
+        # The definitive sharesGrowth value used downstream (used in cross-check below too)
+        _shares_growth_final = _sg_fmp if _sg_fmp is not None else _shares_growth_fallback
+
+        # Tier 2.3 — cross-source agreement check
+        # Compare share-count-implied yield vs direct-dollar yield.
+        # A −sharesGrowth% shrink in shares ≈ net return yield (buybacks net of all issuance).
+        # If they disagree by >50% of the larger value → data is unreliable, downweight in scoring.
+        buyback_data_quality = "ok"
+        if (gross_buyback_yield is not None and gross_buyback_yield > 0.001
+                and _shares_growth_final is not None):
+            _implied_yield_from_shares = -_shares_growth_final  # −shrink% ≈ net yield
+            _denominator = max(abs(gross_buyback_yield), abs(_implied_yield_from_shares), 1e-6)
+            _disagreement = abs(gross_buyback_yield - _implied_yield_from_shares) / _denominator
+            if _disagreement > 0.50:
+                buyback_data_quality = "low"
+
+        # ── Catalyst Stack: M&A intensity from cfs_5y ──────────────────────────────
+        # Total acquisition spend over last 5 years / current mktCap = M&A intensity ratio.
+        # FMP `acquisitionsNet` is typically negative (cash outflow); abs() to be safe.
+        # Flags companies that have been actively reallocating capital via M&A.
+        # Used by Catalyst Stack tab as one of 4 catalyst categories.
+        acquisitions_5y_total = None
+        acq_intensity         = None
+        if _cfs5 and len(_cfs5) >= 2 and mktCap and mktCap > 0:
+            _acq_total = sum(abs(r.get("acquisitionsNet") or 0) for r in _cfs5[:5])
+            acquisitions_5y_total = round(_acq_total, 0)
+            acq_intensity         = round(_acq_total / mktCap, 4)
+
+        # Apply manual sector/industry overrides (FMP misclassifies BTC miners etc. as Financial Services)
+        _ovr = sector_overrides.get(t)
+        _sector_final   = (_ovr.get("sector")   if _ovr else None) or u.get("sector", "Unknown")
+        _industry_final = (_ovr.get("industry") if _ovr else None) or u.get("industry", "")
+
         stocks[t] = {
             "ticker": t,
             "name": u.get("name", ""),
-            "sector": u.get("sector", "Unknown"),
-            "industry": u.get("industry", ""),
+            "sector": _sector_final,
+            "industry": _industry_final,
+            "sectorOverridden": bool(_ovr),
             "exchange": u.get("exchange", ""),
             "price": price,
             "mktCap": mktCap,
@@ -2748,9 +3666,16 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                     _first(gr_yr4.get("revenueGrowth"), gr_yr4.get("revGrowth")),
                 ] if v is not None]))(),
             # Share dilution: YoY change in weighted avg shares (negative = buybacks = good)
-            "sharesGrowth": (lambda _sg: round(_sg, 4) if _sg is not None and abs(_sg) < 0.5 else None)(
-                _first(gr.get("weightedAverageSharesGrowth"), gr.get("weightedAverageSharesDilutedGrowth"))
-            ),
+            # Tier 2.2: uses pre-computed _shares_growth_final which includes split-neutralized
+            # fallback from cfs5 when FMP's field is missing (~5-10% more non-null coverage)
+            "sharesGrowth": _shares_growth_final,
+            # Buyback reliability metrics (Tier 1.2 + Tier 2) — gross/net yield, TTM freshness, data quality
+            "grossBuybacks5yAvg":  gross_buybacks_5y_avg,
+            "sbc5yAvg":            sbc_5y_avg,
+            "grossBuybackYield":   gross_buyback_yield,
+            "netBuybackYield":     net_buyback_yield,
+            "buybackYieldTTM":     buyback_yield_ttm,    # Tier 2.1: annualised from last 4 quarters
+            "buybackDataQuality":  buyback_data_quality, # Tier 2.3: "ok"|"low" (cross-source check)
             # FCF Margin = FCF Yield × P/S ≈ FCF / Revenue (how much of each revenue dollar becomes FCF)
             # Formula: FCF/Revenue = (FCF/MktCap) × (MktCap/Revenue) = fcfYield × P/S
             # Negative margins are now preserved — a -15% FCF margin means burning 15c per $1 revenue.
@@ -2810,6 +3735,25 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             "insiderBuys": ins.get("count", 0),
             "insiderValue": ins.get("totalValue", 0),
             "insiderDate": ins.get("latestDate", ""),
+            # Velocity fields — last 30d vs prior 60d for burst detection
+            "last30dBuys":  ins.get("last30dBuys", 0),
+            "last30dValue": ins.get("last30dValue", 0),
+            "prior60dBuys": ins.get("prior60dBuys", 0),
+            "insiderBurst": (ins.get("last30dBuys", 0) >= 3 and ins.get("prior60dBuys", 0) == 0),
+            # Going-concern / audit risk flag (Tier 3.7) — set from SEC filing keyword scan
+            "goingConcernRisk": (t in going_concern_tickers) if going_concern_tickers else False,
+            # Tier 3.2: recent buyback announcement from 8-K scan (forward-looking capital return signal)
+            # True = company filed a buyback-related 8-K recently; visible before financials show it
+            "recentBuybackAnnouncement": (t in _buyback_announced_tickers),
+            # Catalyst Stack: 3 additional 8-K-derived signals (zero extra API cost — same scan loop)
+            "recentRestructuring":     (t in _restructuring_tickers),
+            "recentCeoAppointment":    (t in _ceo_appointment_tickers),
+            "recentMandaAnnouncement": (t in _manda_announcement_tickers),
+            # Catalyst Stack: 5y M&A intensity = sum(abs(acquisitionsNet)) / mktCap
+            "acquisitions5yTotal": acquisitions_5y_total,
+            "acqIntensity":        acq_intensity,
+            # Earnings estimate revision momentum (Tier 3.8) — % change in FY1 EPS vs 30d ago
+            "estRevision30d": (est_revisions or {}).get(t),
             "beta": prof.get("beta") or u.get("beta"),
             # ── New enrichment fields ──────────────────────────────────────
             # EV/EBITDA — better than P/E for cyclicals + capital-intensive sectors
@@ -2830,7 +3774,12 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             ),
             # Graham Net-Net per share — Benjamin Graham's cheapest possible valuation
             # (current assets - ALL liabilities) / shares; positive = buying below net working capital
-            "grahamNetNet": _first(km.get("grahamNetNetTTM")),
+            # Cross-check: gnn cannot exceed book value (price/pb); if it does, FMP returned local currency.
+            "grahamNetNet": (lambda _g: (
+                _g if (_g is None or pb_val is None or pb_val <= 0 or price <= 0
+                       or _g <= (price / pb_val) * 1.5)
+                else None
+            ))(_first(km.get("grahamNetNetTTM"))),
             # Net Debt/EBITDA — leverage quality metric (negative = net cash position)
             "netDebtEbitda": _first(km.get("netDebtToEBITDATTM")),
             # Net cash per share (computed from balance sheet above)
@@ -2855,6 +3804,10 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             "revPerShare5yCagr": per_share_cagrs.get("revPerShare5yCagr"),
             "fcfPerShare5yCagr": per_share_cagrs.get("fcfPerShare5yCagr"),
             "bvPerShare5yCagr":  per_share_cagrs.get("bvPerShare5yCagr"),
+            # Tier 3.1: buyback consistency — #years in window where gross buybacks > SBC
+            # (0 = serial diluter, max_window = serial returner 🏆)
+            "buybackConsistency": (ceo_alloc_obj.get("buybackConsistency")
+                                   if ceo_alloc_obj else None),
         }
         # ── A2: Explicit Lynch category — computed after all other fields ──
         # Self-contained classifier; safe to call even when fields are None.
@@ -2874,6 +3827,31 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             stocks[t]["divergence"] = classify_divergence(stocks[t])
         except Exception:
             stocks[t]["divergence"] = None
+
+        # ── Custom DCF: 2-stage transparent cross-check vs FMP's DCF ───────
+        # Display + AI-context only. Skips Financial Services + Real Estate.
+        # Returns None on insufficient data (no exception bubbles up).
+        try:
+            _custom_dcf = compute_custom_dcf(stocks[t], _cfs5 or [], bs, macro)
+        except Exception:
+            _custom_dcf = None
+        try:
+            _impl_g = compute_implied_growth(stocks[t], _cfs5 or [], bs, macro)
+        except Exception:
+            _impl_g = None
+        if _custom_dcf:
+            stocks[t]["ivCustom"]      = _custom_dcf.get("iv")
+            stocks[t]["mosCustom"]     = _custom_dcf.get("mosCustom")
+            stocks[t]["waccCustom"]    = _custom_dcf.get("wacc")
+            stocks[t]["growthAssumed"] = _custom_dcf.get("growthAssumed")
+            stocks[t]["fcfBaseB"]      = _custom_dcf.get("fcfBase")
+        else:
+            stocks[t]["ivCustom"]      = None
+            stocks[t]["mosCustom"]     = None
+            stocks[t]["waccCustom"]    = None
+            stocks[t]["growthAssumed"] = None
+            stocks[t]["fcfBaseB"]      = None
+        stocks[t]["impliedGrowth"] = _impl_g
 
         # ── Sprint 3 A2: Analyst count + Under-Covered tag ──────────────────
         # FMP analyst-estimates payload includes numAnalystsRevenue/numAnalystsEps per
@@ -2904,6 +3882,57 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             stocks[t]["underCovered"] = False
 
     print(f"  ✅ Assembled {len(stocks)} stocks with full data")
+
+    # ── Sector-relative percentile annotation ──────────────────────────────────
+    # For each sector: rank each stock's valuation vs its sector peers.
+    # Percentile 0 = cheapest in sector, 100 = most expensive.
+    # Metrics: pe, evEbitda, pFcf → lower = cheaper; fcfYield → higher = cheaper (inverted).
+    # Tier 3.3: also include netBuybackYield in sector percentile (higher = better; rare in tech)
+    _sector_vals: dict = defaultdict(lambda: {"pe": [], "evEbitda": [], "pFcf": [],
+                                               "fcfYield": [], "netBuybackYield": []})
+    for _t, _s in stocks.items():
+        _sec = _s.get("sector") or "Unknown"
+        for _m in ("pe", "evEbitda", "pFcf"):
+            _v = _s.get(_m)
+            if _v is not None and 0 < _v < 1000:
+                _sector_vals[_sec][_m].append((_v, _t))
+        _v = _s.get("fcfYield")
+        if _v is not None and -0.5 < _v < 1.0:
+            _sector_vals[_sec]["fcfYield"].append((_v, _t))
+        _v = _s.get("netBuybackYield")
+        if _v is not None and -0.5 < _v < 0.5:
+            _sector_vals[_sec]["netBuybackYield"].append((_v, _t))
+
+    # Build {ticker: {metric: percentile}} — requires ≥5 sector peers to be meaningful
+    # Both fcfYield and netBuybackYield: higher = better (investor-friendly) = rank 0 = pctile 0
+    _high_is_better = {"fcfYield", "netBuybackYield"}
+    _pctile_lookup: dict = defaultdict(dict)
+    for _sec, _mdict in _sector_vals.items():
+        for _m, _pairs in _mdict.items():
+            if len(_pairs) < 5:
+                continue
+            if _m in _high_is_better:
+                _sorted = sorted(_pairs, key=lambda x: -x[0])   # higher = more attractive = rank 0
+            else:
+                _sorted = sorted(_pairs, key=lambda x: x[0])     # lower multiple = cheaper = rank 0
+            _n = len(_sorted)
+            for _rank, (_v, _t) in enumerate(_sorted):
+                _pctile_lookup[_t][_m] = round(_rank / max(_n - 1, 1) * 100, 1)
+
+    # Annotate stocks; cheap_flags = # metrics where stock is in bottom 25th pctile of sector
+    for _t in stocks:
+        _p = _pctile_lookup.get(_t, {})
+        stocks[_t]["pe_sector_pctile"]            = _p.get("pe")
+        stocks[_t]["evEbitda_sector_pctile"]      = _p.get("evEbitda")
+        stocks[_t]["pFcf_sector_pctile"]          = _p.get("pFcf")
+        stocks[_t]["fcfYield_sector_pctile"]      = _p.get("fcfYield")
+        stocks[_t]["netBuybackYield_sector_pctile"] = _p.get("netBuybackYield")  # Tier 3.3
+        stocks[_t]["sectorCheapCount"] = sum(
+            1 for _k in ("pe_sector_pctile", "evEbitda_sector_pctile",
+                         "pFcf_sector_pctile", "fcfYield_sector_pctile")
+            if stocks[_t].get(_k) is not None and stocks[_t][_k] <= 25
+        )
+
     return stocks
 
 
@@ -3149,6 +4178,40 @@ def format_stock_row(s: dict) -> dict:
         "Net D/E": s.get("netDebtEbitda"),   # net debt / EBITDA; displayed in Turnarounds
         "Rev Consist.": s.get("revConsistency"),
         "Shares Δ": s.get("sharesGrowth"),
+        "Net Buyback Yld": s.get("netBuybackYield"),     # (gross buybacks − SBC) / mktCap — real yield
+        "Gross Buyback Yld": s.get("grossBuybackYield"), # gross buybacks / mktCap — headline yield
+        "Buyback Yld TTM": s.get("buybackYieldTTM"),   # Tier 2.1: annualised from last 4 quarters
+        "BB Data Qual": s.get("buybackDataQuality"),   # Tier 2.3: "ok"|"low"
+        # Tier 3.1: count of years in the CEO window where gross buybacks > SBC (0-5)
+        "BB Consistency": (lambda _c: (
+            f"🏆 {_c}/5" if _c == 5 else
+            f"✅ {_c}/5" if _c >= 3 else
+            f"⚠️ {_c}/5" if _c >= 1 else
+            f"❌ 0/5"
+        ) if _c is not None else "")(s.get("buybackConsistency")),
+        # Tier 3.2: 🔔 badge when company recently filed buyback-related 8-K (forward signal)
+        "BB Announced": "🔔 Recent" if s.get("recentBuybackAnnouncement") else "",
+        # Tier 3.3: sector-relative net buyback yield percentile (0=best returner in sector)
+        "BB Yld Pctile": s.get("netBuybackYield_sector_pctile"),
+        # Catalyst Stack fields
+        "Catalyst Stack": " · ".join(filter(None, [
+            "🆕 New CEO" if (s.get("ceoAllocator") or {}).get("tenure_years") is not None
+                            and s["ceoAllocator"]["tenure_years"] < 2.5 else "",
+            "👔 CEO 8-K" if s.get("recentCeoAppointment") else "",
+            "🔔 Buyback" if s.get("recentBuybackAnnouncement") else "",
+            "🎯 M&A"     if s.get("recentMandaAnnouncement") else "",
+            "🏗️ Restruct" if s.get("recentRestructuring") else "",
+            "🔥 Insider" if s.get("insiderBurst") else "",
+            "📈 Rev Accel" if (s.get("revGrowth") and s.get("revGrowthPrev") and
+                               s["revGrowth"] > s["revGrowthPrev"] + 0.03) else "",
+        ])),
+        "Catalyst Score": s.get("catalystScore"),
+        "Acq 5y/MC":     s.get("acqIntensity"),
+        "CEO Tenure":    (lambda _c: (
+            f"{_c['tenure_years']:.1f}y 🆕" if _c.get("tenure_years") is not None
+            and _c["tenure_years"] < 2.5 else
+            f"{_c['tenure_years']:.1f}y" if _c.get("tenure_years") is not None else ""
+        ))(s.get("ceoAllocator") or {}),
         "FCF Conv.": s.get("fcfConversion"),
         "FCF Margin": s.get("fcfMargin"),
         "FCF Consist.": s.get("fcfGrowthConsistency"),
@@ -3172,16 +4235,42 @@ def format_stock_row(s: dict) -> dict:
                       else (f"👤 New ({_c['tenure_years']:.0f}y)"
                             if _c and _c.get("tenure_years") is not None and _c['tenure_years'] < 3.0
                             else ""))(s.get("ceoAllocator")),
-        "_ceo_tooltip": (lambda _c: " | ".join(filter(None, [
+        "_ceo_tooltip": (lambda _c, _s: " | ".join(filter(None, [
             f"CEO: {_c.get('ceo_name','?')}",
             f"FCF CAGR: {_c['fcf_per_share_cagr']*100:+.0f}%/y" if _c.get('fcf_per_share_cagr') is not None else "",
-            f"Capital returned: {_c['shares_change_pct']*-100:.0f}% of FCF (buybacks+divs)" if _c.get('shares_change_pct') is not None else "",
+            # Buyback breakdown (Tier 1.4) — gross vs SBC vs net, exposes cosmetic-buyback cases
+            (lambda _gb, _sbc, _div: (
+                f"Buybacks: gross ${_gb/1e9:.1f}B/5y vs SBC ${_sbc/1e9:.1f}B/5y → NET ${(_gb-_sbc)/1e9:+.1f}B"
+                + (f" | Dividends ${_div/1e9:.1f}B/5y" if _div and _div > 0 else "")
+            ) if (_gb is not None and _sbc is not None) else "")(
+                _c.get('gross_buybacks_total'), _c.get('sbc_total'), _c.get('dividends_total')),
+            # Tier 2.1: TTM yield alongside 5Y annual — shows whether program is accelerating/slowing
+            (lambda _net5y, _ttm: (
+                f"Net buyback yield: {_net5y*100:+.1f}%/y (5Y avg)"
+                + (f" | TTM: {_ttm*100:+.1f}%/y" if _ttm is not None else "")
+            ) if _net5y is not None else "")(
+                _s.get('netBuybackYield'), _s.get('buybackYieldTTM')),
+            # Tier 2.3: data-quality warning when share-count method and $ method disagree >50%
+            ("⚠️ Data quality: LOW (share-count vs $ amount disagree >50% — use with caution)"
+             if _s.get('buybackDataQuality') == "low" else ""),
             f"ROI trend: {_c.get('roic_trend','?')}",
-        ] + (_c.get('callouts') or []))))(s.get("ceoAllocator")) if s.get("ceoAllocator") and s["ceoAllocator"].get("grade") else "",
+        ] + (_c.get('callouts') or []))))(s.get("ceoAllocator"), s) if s.get("ceoAllocator") and s["ceoAllocator"].get("grade") else "",
         "FCF/Sh 5Y": s.get("fcfPerShare5yCagr"),
         "Divergence": ({"hidden_gem": "🎯 Hidden Gem",
                         "conviction_stack": "🔥 Conviction",
                         "quiet_signal": "👁️ Quiet"}.get(s.get("divergence"), "")),
+        # ── Custom DCF cross-check (display-only; alongside FMP MoS) ─────────
+        "IV (Custom)":      s.get("ivCustom"),
+        "MoS (Custom)":     s.get("mosCustom"),
+        "Implied 5Y Growth": s.get("impliedGrowth"),
+        "_dcf_tooltip": (lambda _i, _w, _g, _f, _ig: " | ".join(filter(None, [
+            f"Custom IV: ${_i:.2f}" if _i is not None else "",
+            f"WACC: {_w*100:.1f}%" if _w is not None else "",
+            f"Growth assumed: {_g*100:.1f}%/y" if _g is not None else "",
+            f"FCF base: ${_f}B" if _f is not None else "",
+            f"Implied 5Y growth: {_ig*100:.0f}%/y" if _ig is not None else "",
+        ])))(s.get("ivCustom"), s.get("waccCustom"), s.get("growthAssumed"),
+             s.get("fcfBaseB"), s.get("impliedGrowth")),
     }
 
 
@@ -3312,8 +4401,10 @@ def build_iv_discount(wb, stocks):
         if br and br >= 0.875: score += 5
         elif br and br >= 0.75: score += 3
 
+        # Macro regime: IV Discount is a value/quality screen — benefits in risk-off
+        _iv_mult = {"risk_on": 0.90, "neutral": 1.00, "risk_off": 1.15}.get(_MACRO_REGIME, 1.0)
         row = format_stock_row(s)
-        row["Score"] = round(score, 1)
+        row["Score"] = round(score * _iv_mult, 1)
         qualified.append(row)
 
     qualified.sort(key=lambda x: -x["Score"])
@@ -3331,11 +4422,12 @@ def build_iv_discount(wb, stocks):
 
     headers = [
         "Rank", "Ticker", "Company", "Sector", "Price", "IV", "MoS",
+        "IV (Custom)", "MoS (Custom)", "Implied 5Y Growth",
         "P/E", "EV/EBITDA", "PEG", "P/B", "FCF Yield", "ROIC", "ROE", "D/E",
         "Beat Rate", "Rev Consist.", "FCF Conv.", "EPS Growth 5Y",
         "MktCap ($B)", "Score", "🏦 Insider",
     ]
-    widths = [5, 8, 22, 15, 8, 8, 7, 7, 9, 6, 6, 8, 7, 7, 7, 8, 9, 8, 9, 10, 6, 14]
+    widths = [5, 8, 22, 15, 8, 8, 7, 9, 10, 11, 7, 9, 6, 6, 8, 7, 7, 7, 8, 9, 8, 9, 10, 6, 14]
     write_table(ws, qualified[:TOP_N], headers, sr, header_color="1A237E", widths=widths)
     print(f"  ✅ IV Discount tab done — {min(len(qualified), TOP_N)} stocks (from {len(qualified)} qualifying)")
 
@@ -3352,11 +4444,27 @@ def build_lynch_tab(wb, stocks, category_name, tab_number, filter_fn, sort_key,
                     color, description, custom_headers=None, custom_widths=None):
     """Generic Lynch category tab builder. Pass custom_headers/custom_widths to override defaults."""
     print(f"\n📊 Building Tab {tab_number}: {category_name}...")
+
+    # ── Macro regime multipliers (Tier 2.6) ──────────────────────────────────
+    # risk_off rewards quality/defensives; risk_on rewards growth.
+    _REGIME_MULTS = {
+        # category_name: (risk_on, neutral, risk_off)
+        "Stalwarts":    (0.85, 1.00, 1.20),
+        "Slow Growers": (0.85, 1.00, 1.20),  # defensives/dividends
+        "Fast Growers": (1.00, 0.85, 0.65),  # growth suffers in risk-off
+        "Cyclicals":    (1.00, 1.00, 0.85),  # cyclicals muted in risk-off
+        "Turnarounds":  (1.00, 1.00, 0.90),
+        "Asset Plays":  (0.90, 1.00, 1.15),  # value / hard-asset names hold better
+    }
+    _mults = _REGIME_MULTS.get(category_name, (1.0, 1.0, 1.0))
+    _regime_mult = {"risk_on": _mults[0], "neutral": _mults[1],
+                    "risk_off": _mults[2]}.get(_MACRO_REGIME, 1.0)
+
     qualified = []
     for t, s in stocks.items():
         if filter_fn(s):
             row = format_stock_row(s)
-            row["Score"] = round(sort_key(s), 1)
+            row["Score"] = round(sort_key(s) * _regime_mult, 1)
             qualified.append(row)
 
     qualified.sort(key=lambda x: -x["Score"])
@@ -3443,7 +4551,8 @@ def _repair_truncated_json(text: str) -> dict:
 
 def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
                          market_intel: dict = None,
-                         agent_perf: dict = None) -> dict:  # B1/B4: per-agent attribution
+                         agent_perf: dict = None,
+                         neutral_judge: bool = False) -> dict:  # B1/B4: per-agent attribution
     """Multi-agent AI stock analysis: 5 specialist agents (parallel) + 1 judge.
     - Quality Growth: sustained compounders with ROIC leadership
     - Special Situation: event-driven, misunderstood, inflection-point plays
@@ -3456,7 +4565,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         print("  ⏭️ No ANTHROPIC_KEY — skipping AI overview")
         return {}
 
-    print("\n  🤖 Running multi-agent AI analysis (11 specialists + judge)...")
+    print("\n  🤖 Running multi-agent AI analysis (12 specialists + judge)...")
 
     # ── Step 1: Cross-strategy meta-ranking ────────────────────────────────
     # A stock appearing in multiple strategies is cross-validated — stronger signal.
@@ -3750,6 +4859,28 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         elif _div == "quiet_signal":
             parts.append("👁️QuietInsiderSignal")
 
+        # ── Custom DCF cross-check (transparent vs FMP black-box DCF) ─────
+        # When FMP MoS and Custom MoS disagree heavily, that gap is itself a signal.
+        # When they agree (both deeply positive), highest-conviction undervaluation.
+        _iv_c   = s.get("ivCustom")
+        _mos_c  = s.get("mosCustom")
+        _wacc_c = s.get("waccCustom")
+        _g_a    = s.get("growthAssumed")
+        _ig     = s.get("impliedGrowth")
+        if _iv_c is not None and _mos_c is not None:
+            _bits_dcf = [f"💰CustomIV=${_iv_c:.0f}", f"MoS={_mos_c*100:+.0f}%"]
+            if _wacc_c is not None: _bits_dcf.append(f"WACC={_wacc_c*100:.1f}%")
+            if _g_a is not None:    _bits_dcf.append(f"g={_g_a*100:.0f}%")
+            parts.append("(" + ",".join(_bits_dcf) + ")")
+        if _ig is not None:
+            # Cap or floor markers signal that the model "ran out of room" to fit price
+            if _ig >= 0.395:
+                parts.append("⚠Implied5Yg≥40%/y(price implies extreme growth)")
+            elif _ig <= -0.045:
+                parts.append("⚠Implied5Yg≤-5%/y(price implies decline)")
+            else:
+                parts.append(f"Implied5Yg={_ig*100:.0f}%/y")
+
         return "  " + " | ".join(parts)
 
     candidate_lines = [fmt_stock(m) for m in top_stocks]
@@ -3969,6 +5100,46 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         return (has_ins + (_sv(m,"roic") or 0)*25 + (_rv(m,"MoS") or 0)*20
                 + max(_sv(m,"fcfYield") or 0, 0)*15 + (_rv(m,"Piotroski") or 0)*2.0)
 
+    # Off-the-Radar — rank by institutional blindspot signals (size tier + base-building + insider)
+    # Specifically designed for the IREN/Nokia profile: pre-discovery, narrative pivot in progress.
+    # Uses size tier (not analystCount) as primary blindspot proxy — FMP returns 0 for ~90% of small caps.
+    def _sc_off_radar(m):
+        mc_b = _sv(m, "mktCapB") or 50
+        mc   = mc_b * 1e9
+        # Size tier: smaller = more structurally invisible to institutions
+        if   mc < 350e6:   sz = 32
+        elif mc < 600e6:   sz = 26
+        elif mc < 1_000e6: sz = 20
+        elif mc < 1_500e6: sz = 14
+        elif mc < 2_000e6: sz = 9
+        else:              sz = 4
+        # Confirmed analyst count as a penalty on the blindspot score
+        ac = _sv(m, "analystCount")
+        cov_adj = -min((ac or 0) * 4, 20)
+        # 52w position: base-building is the sweet spot
+        pvs  = _sv(m, "priceVs52H")
+        if pvs is None:                  base = -5   # unknown = mild penalty
+        elif 0.50 <= pvs <= 0.75:        base = 20   # deep base — best pre-discovery setup
+        elif 0.38 <= pvs <= 0.85:        base = 10   # wider base zone
+        elif pvs > 0.88:                 base = -15  # near highs — re-rating already underway
+        elif pvs > 0.82:                 base = -8   # fading blindspot
+        else:                            base = 0
+        # Insider conviction
+        n_buys = _sv(m, "insiderBuys") or 0
+        ins    = 28 if n_buys >= 5 else 20 if n_buys >= 3 else 8 if n_buys >= 1 else 0
+        # Insider burst (Tier 2.5): concentrated buying in last 30d = urgency signal
+        burst = 15 if _sv(m, "insiderBurst") else 0
+        # Revenue acceleration = narrative shift in progress
+        rg   = _rv(m, "Rev Growth") or 0
+        rgp  = _rv(m, "Rev Gr Prev") or 0
+        accel = 12 if (rg > 0 and rgp and rg > rgp * 1.20) else 0
+        # Hidden gem flag
+        gem  = 10 if _sv(m, "divergence") == "hidden_gem" else 0
+        # Estimate revision momentum (Tier 3.8)
+        er = _sv(m, "estRevision30d")
+        rev_bonus = 12 if (er and er > 0.10) else 7 if (er and er > 0.05) else 0
+        return sz + cov_adj + base + ins + burst + accel + gem + rev_bonus
+
     # Pre-build all per-agent blocks (done once, before parallel launch)
     _pool_quality_growth   = _agent_pool(_sc_quality_growth)
     _pool_special_sit      = _agent_pool(_sc_special_sit)
@@ -3980,6 +5151,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
     _pool_howard_marks     = _agent_pool(_sc_howard_marks)
     _pool_burry            = _agent_pool(_sc_burry)
     _pool_insider          = _agent_pool(_sc_insider)
+    _pool_off_radar        = _agent_pool(_sc_off_radar)
 
     # ── Special Situation: extract top-15 tickers and fetch company-specific news ──
     _ss_top_tickers = [
@@ -4030,6 +5202,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         "AI-Pabrai":          "Pabrai",
         "AI-HowardMarks":     "HowardMarks",
         "AI-Burry":           "Burry",           "AI-InsiderTrack":    "InsiderTrack",
+        "AI-OffRadar":        "OffRadar",
     }
     _perf_lines = {}   # agent_short_name → one-liner string
     if agent_perf:
@@ -4104,6 +5277,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
             "AI-Pabrai":          "Pabrai",
             "AI-HowardMarks":     "HowardMarks",
             "AI-Burry":           "Burry",            "AI-InsiderTrack":    "InsiderTrack",
+            "AI-OffRadar":        "OffRadar",
         }
         _leaderboard_rows = []
         for src, label in _JUDGE_AGENT_LABELS.items():
@@ -4461,6 +5635,63 @@ Pick your TOP 7 stocks with the strongest insider/smart money signals. For each:
 In `rationale`: state who bought (CEO/CFO/Director/10%+ holder), the dollar amount and approximate date, whether it's cluster (multiple insiders) or single buyer, and one fundamental data point confirming the signal. Format: "[Role] $X (~date) — [cluster/single]. Confirmation: [data point]."
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
+        (
+            "OffRadar",
+            "🛰️ Off-the-Radar",
+            f"""You are a pre-discovery institutional arbitrageur. Today is {datetime.date.today()}.{_perf_header("OffRadar")}
+YOUR SINGLE MANDATE: find stocks that are structurally invisible to institutions — and will be re-rated once the blindspot closes.
+
+This is NOT about finding cheap stocks. This is about finding stocks where the MARKET STRUCTURE prevents institutions from owning them — and identifying the moment that changes.
+
+THE INSTITUTIONAL BLINDSPOT THESIS (your entire framework):
+Large funds ($1B+) cannot buy positions in stocks under $2B without moving the price. They need 20+ hours of analyst coverage to justify owning a name. They cannot hold through dead-money phases without facing redemptions. These structural constraints create a permanent class of mis-priced opportunities — stocks that are fundamentally sound but institutionally uninvestable.
+
+WHAT YOU ARE LOOKING FOR — the IREN/Nokia profile:
+1. SIZE BLINDSPOT: $200M–$3B market cap. Too small for funds to buy without market impact. No analyst on the Street has an initiation report yet (0–5 analysts = deepest blindspot).
+2. NARRATIVE PIVOT IN PROGRESS: the market still prices this as what it WAS (struggling telco, commodity miner, legacy industrial) — not what it is BECOMING (AI infrastructure, HPC colocation, value-added services). The pivot is verifiable in recent data but not yet reflected in sell-side models.
+3. BASE-BUILDING: 52W position 50–85% — the stock has stopped falling, is consolidating, but has NOT been re-rated yet. This is the pre-discovery window.
+4. INSIDER CONVICTION: executives buying their own stock with personal cash while the Street is ignoring it = the most reliable signal that insiders see a specific value-creating event ahead.
+5. QUALITY ANCHOR: at least one sign that this is NOT a value trap — positive FCF, net cash, revenue consistency, or a familiar brand that real consumers use.
+
+KEY SIGNALS IN THE DATA (tagged explicitly for you):
+- 🔍UnderCovered: ≤5 analyst estimates — institutional blindspot confirmed
+- 🎯HiddenGem: insider cluster buying + sell-side rated Hold/Sell = the asymmetry setup
+- 52wPos: look for 0.50–0.85 (base-building zone, pre-re-rating)
+- InsiderBuys/InsiderValue: cluster (3+ buyers) > single purchase — consensus from within
+- RevGrowth > RevGrowthPrev (accelerating): narrative pivot showing up in numbers
+
+WHAT YOU MUST REJECT:
+- Stocks already above 52W pos 0.90 — the re-rating has already happened; you're late
+- Pure fundamental plays with obvious financial cheapness and heavy coverage — that's what every other agent does; you are specifically NOT that
+- Stocks where the "pivot" story is a press release with no financial confirmation — the pivot must have at least one data point (FCF turning positive, revenue accelerating, margin expansion beginning)
+- Story stocks with dilution > 10%/year — share issuance destroys the per-share value creation thesis
+
+PHILOSOPHY:
+The retail edge over institutions is NOT information — it's STRUCTURE. Institutions literally cannot own these names in meaningful size. You can. The edge exists because of their constraint, not your intelligence. Find the names that will be rerated when a fund eventually initiates coverage, when a catalyst closes the institutional access gap, or when the narrative pivot becomes undeniable in the numbers.
+The best pick is: "boring company in a changing business, 2 analysts, insiders buying, consolidating at the 65th percentile of its 52W range, and one signal of the pivot showing in the last two quarters."
+""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by institutional blindspot signals: coverage gap + base-building + insider conviction — your lens):
+Note: 🔍UnderCovered = ≤5 sell-side analysts. 🎯HiddenGem = insiders buying + Street bearish. 52wPos shows where price sits in its 52W range.
+{_pool_off_radar}
+
+HARD RULES — DISQUALIFY IMMEDIATELY:
+- Market cap > $5B = DISQUALIFIED. At that size, institutions already own it. The blindspot is closed.
+- 52wPos > 0.92 = DISQUALIFIED. Already re-rated. You missed the window.
+- Analyst count > 8 (if shown) = DISQUALIFIED. Not a blindspot if 8+ analysts already cover it.
+- ADV < $500K/day = DISQUALIFIED. Illiquid names can't be exited when the thesis plays out.
+- Dilution > +12%/yr = DISQUALIFIED. Share count growth this fast kills per-share value regardless of the pivot.
+- Altman-Z < 1.5 (distress zone) = DISQUALIFIED. Revenue growth means nothing if the company can't survive long enough for the re-rating. Going concern risk destroys the blindspot thesis.
+- Financial Services or Real Estate = DISQUALIFIED. These sectors use different metrics; the institutional blindspot thesis doesn't apply in the same way.
+- Operating margin < -100% with no FCF = DISQUALIFIED. Cash-burning shells are not pre-discovery opportunities — they are capital destruction events with a story.
+
+Pick your TOP 7 pre-discovery setups. Return fewer if the bar isn't met.
+For each pick, answer THREE questions:
+1. WHY is this institutionally invisible right now? (size? zero coverage? sector stigma? recent spinoff?)
+2. WHAT is the narrative pivot that is beginning but not yet priced? (Business model shift? Industry re-rating? A specific catalyst closing the institutional access gap?)
+3. WHERE is the quality anchor proving this is not a value trap? (positive FCF? net cash? insider cluster? revenue consistency?)
+In `rationale`: cite analyst count, 52W position %, insider buying data, and the specific evidence of the pivot from the provided candidate data (do NOT recall or invent numbers from training knowledge).
+Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
+        ),
     ]
 
     from concurrent.futures import ThreadPoolExecutor, as_completed as _as_completed
@@ -4530,14 +5761,15 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
     )
 
     # ── Step 7: Judge agent — final synthesis ───────────────────────────────
+    _neutral_note = (" IMPORTANT: You are running in NEUTRAL mode — ignore all macro/rate/VIX conditions. Pick purely on business quality, valuation fundamentals, and specialist consensus. Do NOT reference interest rates, yield curves, inflation, or macro regime in your reasoning." if neutral_judge else "")
     judge_system = f"""You are the Master Manager — a chief investment officer and final decision-maker who synthesises recommendations from eleven specialist analysts into a single, high-conviction portfolio list for an investor whose edge is personal knowledge of companies they directly use as a consumer or workplace user.
-Today is {datetime.date.today()}.
+Today is {datetime.date.today()}.{_neutral_note}
 Your eleven specialists are: Quality Growth (compounders), Special Situation, Capital Appreciation, Emerging Growth, 10-Bagger Hunter, Lynch Buy What You Know, Disruptive Innovation, Pabrai Asymmetric Bet, Marks Second-Level, Burry Deep Value, Insider & Smart Money.
 
 YOUR INVESTMENT PHILOSOPHY:
 - Quality first: ROIC > 15% sustained is the clearest indicator of durable competitive advantage; it is the CORE decision variable — check ROIC before anything else
 - Valuation discipline: PEG < 1.5 is the entry gate, but ALSO check P/FCF < 25 and EV/EBITDA < 15 for non-hypergrowth stocks; a cheap-looking PEG with no FCF is a warning sign, not a buy signal
-- In elevated rate environments (10Y yield > 4%): require FCF yield > 4% or an explicit growth-justified premium — any business must earn its risk premium over Treasuries
+- {"Macro-neutral mode: pick on business quality and valuation alone — rate environment is intentionally excluded." if neutral_judge else "In elevated rate environments (10Y yield > 4%): require FCF yield > 4% or an explicit growth-justified premium — any business must earn its risk premium over Treasuries"}
 - A great business at a fair price beats a fair business at a great price every time (Buffett), but an average business at a "cheap" price destroys capital (value trap)
 - Catalyst discipline: prefer picks where a specific, identifiable event in 1-6 months can unlock value — "cheap" without a catalyst is a portfolio deadweight
 - Size neutrality: a $100B compounder at PEG 0.8 and 35% ROIC beats a $1B name at PEG 0.8 with 15% ROIC; size is irrelevant to quality
@@ -4564,11 +5796,11 @@ QUALITY STANDARD — hard filter before including any pick:
 - Survivability: would this business remain competitively relevant through a recession AND an aggressive well-funded new entrant simultaneously?
 - For 10-Bagger candidates: gross margin > 30% + positive operating income replaces FCF as the quality gate — but dilution < 5%/yr is non-negotiable
 
-YOUR ROLE: Synthesise the eleven specialist reports into a final 5-20 pick list diversified across lenses (quality + special situations + appreciation + emerging growth + small-cap + deep value + contrarian + insider signals). Prioritise consensus names rigorously. Include at least one pick from each specialist lens where quality meets the bar. Never pad the list — 8 genuine picks beat 20 forced ones.{_judge_track_block}"""
+YOUR ROLE: Synthesise the twelve specialist reports into a final 5-20 pick list diversified across lenses (quality + special situations + appreciation + emerging growth + small-cap + deep value + contrarian + insider signals + pre-discovery blindspots). Prioritise consensus names rigorously. Include at least one pick from each specialist lens where quality meets the bar. Never pad the list — 8 genuine picks beat 20 forced ones.{_judge_track_block}"""
 
     # ── Build macro context block for judge (from live FRED data) ──────────
     macro_block = ""
-    if macro:
+    if macro and not neutral_judge:
         mc = macro
         macro_block = f"""
 LIVE MACRO INDICATORS (FRED data as of {mc.get('as_of', 'recent')}):
@@ -4583,7 +5815,7 @@ Use these REAL numbers to anchor your macro_context, market_outlook, and crash_r
 YIELD CURVE INVERTED (<0) historically precedes recession 6-18 months out. VIX>25 = genuine fear.
 Rates ELEVATED (>4%) compress growth multiples — prefer quality cash generators over pure-growth names."""
 
-    judge_user = f"""ELEVEN SPECIALIST REPORTS:
+    judge_user = f"""TWELVE SPECIALIST REPORTS:
 {specialist_block}
 
 {consensus_block}
@@ -4595,7 +5827,7 @@ SECTOR VALUATIONS (cheapest → most expensive by PEG):
 {sector_block}
 {macro_block}
 YOUR TASK:
-1. Assess the macro environment using the LIVE indicators above (rates, yield curve, VIX, CPI, unemployment) — what does the market misunderstand, and which environments favour which strategy lenses?
+1. {"Assess specialist consensus and business quality — you are in NEUTRAL mode, so skip all macro/rate commentary and focus purely on which businesses have the strongest fundamentals and valuation." if neutral_judge else "Assess the macro environment using the LIVE indicators above (rates, yield curve, VIX, CPI, unemployment) — what does the market misunderstand, and which environments favour which strategy lenses?"}
 2. Select 5-20 of the BEST investments — quality over quantity. Do NOT fill slots.
    If only 5-6 stocks truly meet the quality bar, output just those — the Master Manager never forces picks.
    Only include a pick if you would genuinely allocate real capital to it today at this price.
@@ -4749,7 +5981,8 @@ Urgency guide: ACT NOW=catalyst imminent + entry compelling today; WITHIN WEEKS=
 def call_mall_manager(judge_result: dict, stocks: dict,
                       macro: dict = None, market_intel: dict = None,
                       fast_growers: list = None,
-                      quality_compounders: list = None) -> dict:
+                      quality_compounders: list = None,
+                      off_the_radar: list = None) -> dict:
     """🛍️ Mall Manager — Peter Lynch "shopping mall" rationaliser.
 
     Takes the existing judge's picks + all 11 specialists' picks (already in
@@ -4789,9 +6022,15 @@ def call_mall_manager(judge_result: dict, stocks: dict,
         t = (row.get("Ticker") or row.get("ticker") or "").upper()
         if t and t not in seen:
             candidate_tickers.append(t); seen.add(t)
+    # 4. Off-the-Radar Compounders (pre-discovery setups — IREN/Nokia profile,
+    #    often consumer-observable Familiar Brands the Street has missed)
+    for row in (off_the_radar or []):
+        t = (row.get("Ticker") or row.get("ticker") or "").upper()
+        if t and t not in seen:
+            candidate_tickers.append(t); seen.add(t)
 
-    # Cap at 150 (specialists ~65 + fast growers 50 + quality compounders 50)
-    candidate_tickers = candidate_tickers[:150]
+    # Cap at 200 (specialists ~65 + fast growers 50 + quality 50 + off-radar 50)
+    candidate_tickers = candidate_tickers[:200]
     if not candidate_tickers:
         print("  ⚠️ Mall Manager: no candidates to evaluate")
         return {}
@@ -5615,7 +6854,7 @@ def build_overview_tab(ws, stocks, iv_rows, stalwarts, fast_growers, turnarounds
                        slow_growers, cyclicals, asset_plays, quality_compounders,
                        fmp_call_count, ai=None, portfolio=None,
                        portfolio_nav=None, portfolio_ret=None, portfolio_spy_ret=None,
-                       macro=None, ten_baggers=None):
+                       macro=None, ten_baggers=None, off_the_radar=None):
     """Build the Overview tab: AI analysis at top, strategy tables below."""
     ws.sheet_view.showGridLines = False
     today = datetime.date.today()
@@ -6091,15 +7330,16 @@ def build_overview_tab(ws, stocks, iv_rows, stalwarts, fast_growers, turnarounds
     r = _hdr(r, "  STRATEGY PICKS SUMMARY", "263238", font_size=10, height=22)
 
     tab_configs = [
-        ("💎 IV Discount",      iv_rows,           "1A237E"),
-        ("🏆 Quality Comp.",    quality_compounders,"7B1FA2"),
-        ("🏛 Stalwarts",        stalwarts,          "4A148C"),
-        ("🚀 Fast Growers",     fast_growers,       "1B5E20"),
-        ("🔧 Turnarounds",      turnarounds,        "B71C1C"),
-        ("💰 Slow Growers",     slow_growers,       "455A64"),
-        ("🔄 Cyclicals",        cyclicals,          "E65100"),
-        ("🏗 Asset Plays",      asset_plays,        "0D47A1"),
-        ("🎯 10-Baggers",       ten_baggers or [],  "BF360D"),
+        ("💎 IV Discount",      iv_rows,               "1A237E"),
+        ("🏆 Quality Comp.",    quality_compounders,   "7B1FA2"),
+        ("🏛 Stalwarts",        stalwarts,             "4A148C"),
+        ("🚀 Fast Growers",     fast_growers,          "1B5E20"),
+        ("🔧 Turnarounds",      turnarounds,           "B71C1C"),
+        ("💰 Slow Growers",     slow_growers,          "455A64"),
+        ("🔄 Cyclicals",        cyclicals,             "E65100"),
+        ("🏗 Asset Plays",      asset_plays,           "0D47A1"),
+        ("🎯 10-Baggers",       ten_baggers or [],     "BF360D"),
+        ("🛰️ Off-the-Radar",   off_the_radar or [],   "00695C"),
     ]
     sum_hdrs = ["Strategy", "# Qualifying", "Top 3 Tickers", "Top Pick", "PEG", "MoS", "Piotroski"]
     r = _col_hdrs(r, sum_hdrs, "37474F")
@@ -6181,6 +7421,59 @@ def build_overview_tab(ws, stocks, iv_rows, stalwarts, fast_growers, turnarounds
         r += 1  # gap between strategies
 
     ws.freeze_panes = "A3"
+
+
+_PICK_STREAKS_CACHE = None
+def _compute_pick_streaks() -> dict:
+    """Compute per-(strategy, ticker) consecutive-run streak from PICKS_LOG.
+
+    Streak = number of most-recent consecutive run-dates (per strategy) on
+    which this ticker appeared. A ticker that has been picked every run for
+    8 consecutive runs has streak=8; one that appeared today only has streak=1;
+    one that appeared today and 3 runs ago (with a gap) has streak=1.
+
+    Returns: {strategy_name: {ticker: streak_int}}.
+    Cached after first call (within this process)."""
+    global _PICK_STREAKS_CACHE
+    if _PICK_STREAKS_CACHE is not None:
+        return _PICK_STREAKS_CACHE
+    out = defaultdict(dict)
+    if not os.path.exists(PICKS_LOG):
+        _PICK_STREAKS_CACHE = dict(out)
+        return _PICK_STREAKS_CACHE
+    # strategy -> ordered set of run dates (desc), strategy -> {date -> set(tickers)}
+    strat_dates    = defaultdict(set)
+    strat_by_date  = defaultdict(lambda: defaultdict(set))
+    try:
+        with open(PICKS_LOG, "r", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                d = row.get("date") or ""
+                s = row.get("strategy") or ""
+                t = row.get("ticker") or ""
+                if not (d and s and t): continue
+                strat_dates[s].add(d)
+                strat_by_date[s][d].add(t)
+    except Exception as e:
+        print(f"  ⚠️ Streak computation failed: {e}")
+        _PICK_STREAKS_CACHE = dict(out)
+        return _PICK_STREAKS_CACHE
+    # For each strategy, walk run-dates in descending order, count consecutive presence
+    for s, dates in strat_dates.items():
+        sorted_dates = sorted(dates, reverse=True)   # newest first
+        # Get the union of all tickers ever picked for this strategy
+        all_tickers = set()
+        for d in sorted_dates:
+            all_tickers |= strat_by_date[s][d]
+        for t in all_tickers:
+            streak = 0
+            for d in sorted_dates:
+                if t in strat_by_date[s][d]:
+                    streak += 1
+                else:
+                    break    # consecutive run broken
+            out[s][t] = streak
+    _PICK_STREAKS_CACHE = dict(out)
+    return _PICK_STREAKS_CACHE
 
 
 def log_picks(picks_by_strategy: dict, prices: dict):
@@ -7047,6 +8340,114 @@ def compute_agent_performance(spy_prices: dict = None, spy_today: float = None) 
     return out
 
 
+def compute_strategy_scorecard(spy_prices: dict = None, spy_today: float = None,
+                                live_prices: dict = None) -> dict:
+    """Per-strategy attribution from PICKS_LOG (rule-based picks, not AI).
+
+    Same shape as compute_agent_performance() but keyed by strategy name. Lets
+    us answer 'which screen is actually working?' over time.
+
+    `live_prices`: optional dict of {ticker: current_price} to avoid duplicate
+    fetches when called alongside other workflow steps. Falls back to fetch_live_price.
+    """
+    if not os.path.exists(PICKS_LOG):
+        return {}
+    import statistics as _stats
+
+    def _spy_ret(entry_date_str: str):
+        if not spy_prices or not spy_today: return None
+        try:
+            target = datetime.date.fromisoformat(entry_date_str)
+        except ValueError:
+            return None
+        for delta in range(8):
+            d = (target - datetime.timedelta(days=delta)).isoformat()
+            if d in spy_prices and spy_prices[d] > 0:
+                return (spy_today - spy_prices[d]) / spy_prices[d]
+        return None
+
+    rows = []
+    try:
+        with open(PICKS_LOG, "r", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                rows.append(r)
+    except Exception:
+        return {}
+
+    # Hydrate live prices for all unique tickers (reuse cache if provided)
+    live_prices = dict(live_prices or {})
+    unique_t = list({r["ticker"] for r in rows if r.get("ticker")} - set(live_prices))
+    for t in unique_t:
+        p = fetch_live_price(t)
+        if p: live_prices[t] = p
+        time.sleep(0.05)
+
+    _per: dict = {}
+    for r in rows:
+        strat = r.get("strategy") or ""
+        if not strat: continue
+        t = r.get("ticker", "")
+        try:
+            entry = float(r.get("entry_price") or 0)
+        except (ValueError, TypeError):
+            entry = 0
+        curr = live_prices.get(t, 0)
+        ret = ((curr - entry) / entry) if entry > 0 and curr > 0 else None
+
+        date_str = r.get("date", "")
+        try:
+            days = (datetime.date.today() - datetime.date.fromisoformat(date_str)).days
+        except Exception:
+            days = None
+
+        spy_r = _spy_ret(date_str)
+        alpha_r = (ret - spy_r) if ret is not None and spy_r is not None else ret
+
+        ret_30d  = _checkpoint_ret_b1(t, entry, date_str, 30,  days)
+        ret_90d  = _checkpoint_ret_b1(t, entry, date_str, 90,  days)
+        ret_180d = _checkpoint_ret_b1(t, entry, date_str, 180, days)
+
+        if strat not in _per:
+            _per[strat] = {"rets": [], "alphas": [], "spy_rets": [], "days_list": [],
+                           "wins": 0, "n": 0,
+                           "hits_30": [], "hits_90": [], "hits_180": [],
+                           "best_ret": None, "best_t": "—",
+                           "worst_ret": None, "worst_t": "—"}
+        ag = _per[strat]
+        ag["n"] += 1
+        if ret is not None:
+            ag["rets"].append(ret)
+            if ret > 0: ag["wins"] += 1
+            if ag["best_ret"] is None or ret > ag["best_ret"]:
+                ag["best_ret"] = ret; ag["best_t"] = t
+            if ag["worst_ret"] is None or ret < ag["worst_ret"]:
+                ag["worst_ret"] = ret; ag["worst_t"] = t
+        if alpha_r is not None: ag["alphas"].append(alpha_r)
+        if spy_r is not None:   ag["spy_rets"].append(spy_r)
+        if days is not None:    ag["days_list"].append(days)
+        if ret_30d  is not None: ag["hits_30"].append( 1 if ret_30d  > 0 else 0)
+        if ret_90d  is not None: ag["hits_90"].append( 1 if ret_90d  > 0 else 0)
+        if ret_180d is not None: ag["hits_180"].append(1 if ret_180d > 0 else 0)
+
+    out = {}
+    for strat, ag in _per.items():
+        rets   = ag["rets"]
+        alphas = ag["alphas"]
+        out[strat] = {
+            "n_picks":  ag["n"],
+            "avg_ret":  (sum(rets)/len(rets))     if rets   else None,
+            "alpha":    (sum(alphas)/len(alphas)) if alphas else None,
+            "win_rate": (ag["wins"]/len(rets))    if rets   else None,
+            "hit_30d":  (sum(ag["hits_30"]) /len(ag["hits_30"]))  if ag["hits_30"]  else None,
+            "hit_90d":  (sum(ag["hits_90"]) /len(ag["hits_90"]))  if ag["hits_90"]  else None,
+            "hit_180d": (sum(ag["hits_180"])/len(ag["hits_180"])) if ag["hits_180"] else None,
+            "best_ticker":  ag["best_t"],   "best_ret":  ag["best_ret"],
+            "worst_ticker": ag["worst_t"],  "worst_ret": ag["worst_ret"],
+            "med_hold_days": (_stats.median(ag["days_list"]) if ag["days_list"] else None),
+        }
+    return out
+
+
 def _checkpoint_ret_b1(ticker: str, entry: float, entry_date_str: str,
                         horizon_days: int, hold_days) -> float | None:
     """Thin wrapper used by both build_picks_tracking._build_row and compute_agent_performance.
@@ -7114,6 +8515,7 @@ def build_picks_tracking(wb, stocks):
         "AI-HowardMarks":      "🔄 Contrarian",
         "AI-Burry":            "🕳️ Deep Value",
         "AI-InsiderTrack":     "👁️ Insider",
+        "AI-OffRadar":         "🛰️ Off-the-Radar",
         "AI-Judge":            "⚖️ Master Manager",
         "AI-MallManager":      "🛍️ Mall Manager",
         # legacy labels kept for old log entries
@@ -7460,6 +8862,9 @@ def build_quality_compounders(wb, stocks):
         if not s.get("mktCap", 0) > 1e9: continue
         if de is not None and de > 3.0: continue  # not excessively leveraged
 
+        # Kill: Going-concern / audit risk flag — compounders CANNOT have auditor red flags
+        if s.get("goingConcernRisk"): continue
+
         # Kill: RevConsistency floor — compounders must show steady revenue
         rc_kill = s.get("revConsistency")
         if rc_kill is not None and rc_kill < 0.60:
@@ -7563,8 +8968,17 @@ def build_quality_compounders(wb, stocks):
         if go_qc is not None and go_qc > 0.50:
             sc -= 5   # analysts projecting >50% more growth than history suggests
 
+        # Estimate revision momentum (Tier 3.8) — sell-side upgrading = early signal
+        _er_qc = s.get("estRevision30d")
+        if _er_qc is not None:
+            if _er_qc > 0.10:   sc += 12  # estimates revised up >10%: strong tailwind
+            elif _er_qc > 0.05: sc += 7   # up 5-10%
+            elif _er_qc < -0.10: sc -= 8  # estimates cut >10%: deteriorating thesis
+
+        # Macro regime: Quality Compounders are defensives — rewarded in risk-off
+        _qc_mult = {"risk_on": 0.85, "neutral": 1.00, "risk_off": 1.20}.get(_MACRO_REGIME, 1.0)
         row = format_stock_row(s)
-        row["Score"] = round(sc, 1)
+        row["Score"] = round(sc * _qc_mult, 1)
         qualified.append(row)
 
     qualified.sort(key=lambda x: -x["Score"])
@@ -7588,6 +9002,200 @@ def build_quality_compounders(wb, stocks):
     write_table(ws, qualified[:TOP_N], headers, sr, header_color="B71C1C", widths=widths)
     print(f"  ✅ Quality Compounders tab done — {min(len(qualified), TOP_N)} (from {len(qualified)})")
     return qualified
+
+
+def build_off_the_radar(wb, stocks):
+    """Tab: 🛰️ Off-the-Radar Compounders — institutional blindspot screen.
+
+    Targets the IREN/Nokia profile: pre-discovery setups that quality screens reject.
+    Thesis: buying *before* institutional re-rating, not when statistically cheap.
+
+    HARD GATES (institutional blindspot triggers):
+      $200M ≤ MktCap ≤ $3B + ≤5 analysts + $500K+ daily volume + not at 52W high
+    QUALITY ANCHOR (≥1 — proves it's not a falling knife):
+      positive FCF OR net cash >10% mc OR 3+ insider buys OR
+      RevConsistency ≥80% OR Familiar Brand
+    CATALYST PROXY (≥1 — sign change in progress):
+      52W base zone (0.50-0.85) OR insider cluster OR rev acceleration OR
+      Hidden Gem flag OR active buyback
+    """
+    print("\n📊 Building Tab: 🛰️ Off-the-Radar Compounders...")
+    qualified = []
+    for t, s in stocks.items():
+        if not _is_common_stock(s): continue
+
+        mc       = s.get("mktCap") or 0
+        adv      = s.get("avgDollarVol") or 0
+        ac       = s.get("analystCount")
+        n_buys   = s.get("insiderBuys") or 0
+        ins_val  = s.get("insiderValue") or 0
+        fcf      = s.get("fcfYield")
+        nc       = s.get("netCashRatio")
+        rc       = s.get("revConsistency")
+        consum   = s.get("consumerObservable")
+        rg       = s.get("revGrowth") or 0
+        rg_prev  = s.get("revGrowthPrev") or 0
+        pos52    = s.get("priceVs52H")
+        sg       = s.get("sharesGrowth")
+        div_flag = s.get("divergence")
+
+        # ─ HARD GATES (institutional blindspot triggers) ─
+        if not (200e6 <= mc <= 3e9): continue
+        if ac is not None and ac > 5: continue
+        if adv < 500_000: continue
+        # Exclude sectors where metrics are structurally incompatible
+        _sector = s.get("sector", "") or ""
+        if _sector in ("Financial Services", "Real Estate"): continue   # banks/REITs use different metrics
+        # Price position sanity: >90% = already re-rated; <38% = falling knife (not base-building)
+        if pos52 is not None and pos52 > 0.90: continue   # already discovered / re-rated
+        if pos52 is not None and pos52 < 0.38: continue   # freefall — not consolidation
+
+        # ─ QUALITY ANCHOR (≥1 required — not a falling knife) ─
+        # Extra: require some evidence of a real operating business (not a cash shell):
+        # operatingMargin must exist and not be catastrophically negative (< -200%)
+        _om = s.get("operatingMargin")
+        if _om is not None and _om < -2.0: continue       # cash-burning shell with no viable path
+        anchor = (
+            (fcf is not None and fcf > 0) or
+            (nc is not None and nc > 0.10) or
+            (n_buys >= 3) or
+            s.get("insiderBurst", False) or                    # burst = strong insider conviction signal
+            (rc is not None and rc >= 0.80) or
+            consum
+        )
+        if not anchor: continue
+
+        # ─ CATALYST PROXY (≥1 required — sign change in progress) ─
+        rev_accel = (rg > 0 and rg_prev is not None and rg > rg_prev * 1.20)
+        _burst   = s.get("insiderBurst", False)
+        _l30v    = s.get("last30dValue") or 0
+        catalyst = (
+            (pos52 is not None and 0.38 <= pos52 <= 0.85) or  # updated lower bound to match gate
+            (n_buys >= 3) or
+            _burst or                                          # concentrated burst: sharpest signal
+            rev_accel or
+            (div_flag == "hidden_gem") or
+            (sg is not None and sg < -0.02)
+        )
+        if not catalyst: continue
+
+        # ─ SCORING ─
+        score = 0
+
+        # ── Size tier (primary blindspot driver — better than analystCount which FMP under-reports) ──
+        # FMP's analystCount returns 0 for ~90% of small caps regardless of actual coverage.
+        # Market cap is the reliable proxy: smaller = more structurally invisible to institutions.
+        if   mc < 350e6:              score += 32   # sub-$350M: virtually no institutional visibility
+        elif mc < 600e6:              score += 26   # micro: <$600M, limited fund eligibility
+        elif mc < 1_000e6:            score += 20   # small: $600M-$1B, some coverage starts
+        elif mc < 1_500e6:            score += 14   # small-mid: $1B-$1.5B, coverage building
+        elif mc < 2_000e6:            score += 9    # mid-small: $1.5B-$2B, borderline
+        else:                         score += 4    # $2B-$3B: upper limit, reduced edge
+        # Confirmed analyst coverage (if FMP returns >0, treat it as real signal)
+        if ac is not None and ac > 0: score -= min(ac * 4, 20)   # each known analyst reduces blindspot score
+
+        # ── Insider conviction ──
+        if n_buys >= 5:              score += 18
+        elif n_buys >= 3:            score += 14
+        elif n_buys >= 1:            score += 6
+        if ins_val >= 1_000_000:     score += 8
+        elif ins_val >= 250_000:     score += 4
+
+        # ── Insider burst (concentrated buying in last 30d with silence in prior 60d) ──
+        # This is sharper than total count: 4 buys in 2 weeks with none before = urgency signal
+        if _burst:
+            score += 15
+            if _l30v >= 1_000_000:   score += 5    # meaningful $ size reinforces the signal
+
+        # ── Balance sheet quality ──
+        if nc is not None and nc > 0.20:     score += 10
+        elif nc is not None and nc > 0.05:   score += 5
+
+        # ── Revenue inflection ──
+        if rev_accel:                score += 12
+        if rg > 0 and rg_prev is not None and rg > rg_prev * 1.5:
+            score += 4              # extra for >50% acceleration
+
+        # ── Familiar Brand + Under-Covered combo (user has direct edge) ──
+        if consum and (ac is None or ac <= 4):  score += 10
+
+        # ── Quality operator at unloved name ──
+        ceo = s.get("ceoAllocator") or {}
+        if ceo.get("grade") in ("A+", "A", "B+"):  score += 10
+
+        # ── FCF positive ──
+        if fcf is not None and fcf > 0:     score += 5
+
+        # ── Distress signal — Altman-Z (partial proxy for going-concern risk) ──
+        az = s.get("altmanZ")
+        if az is not None and az < 1.5:   score -= 15   # Altman distress zone
+        elif az is not None and az < 2.5: score -= 5    # grey zone
+
+        # ── Going-concern / SEC audit risk flag (Tier 3.7) ──
+        if s.get("goingConcernRisk"):      score -= 20   # auditor red-flag = major penalty
+
+        # ── 52-week position ──
+        if pos52 is None:
+            score -= 5                                          # unknown position: mild penalty
+        elif 0.50 <= pos52 <= 0.75:
+            score += 8                                          # deep base zone (best entry setup)
+        elif pos52 > 0.88:
+            score -= 15                                         # very close to highs — likely re-rating started
+        elif pos52 > 0.82:
+            score -= 8                                          # near highs — fading blindspot
+
+        # ── Active buybacks ──
+        if sg is not None and sg < -0.02:   score += 6
+
+        # ── Divergence flags ──
+        if div_flag == "hidden_gem":        score += 12
+        elif div_flag == "conviction_stack": score += 6
+
+        # ── Estimate revision momentum (Tier 3.8) ──
+        _er = s.get("estRevision30d")
+        if _er is not None:
+            if _er > 0.10:    score += 12   # sell-side upgraded >10% — sharp signal
+            elif _er > 0.05:  score += 7    # mild upgrade tailwind
+            elif _er < -0.10: score -= 8    # cuts erode thesis
+
+        # ── Penalties ──
+        if rc is not None and rc < 0.40:         score -= 12  # genuine zombie revenue
+        if ceo.get("grade") in ("D", "C"):       score -= 8   # capital destroyer
+
+        row = format_stock_row(s)
+        row["Score"] = round(score, 1)
+        row["Coverage"] = ac if ac is not None else 0
+        row["Insider Cluster"] = f"{n_buys}x" if n_buys else ""
+        row["Catalyst"] = " · ".join(filter(None, [
+            "🔥 Insider BURST" if _burst else "",
+            "Base-building" if (pos52 is not None and 0.50 <= pos52 <= 0.85) else "",
+            "Insider cluster" if (n_buys >= 3 and not _burst) else "",
+            "Rev accelerating" if rev_accel else "",
+            "Hidden Gem" if div_flag == "hidden_gem" else "",
+            "Buyback" if (sg is not None and sg < -0.02) else "",
+            (f"📈 Est +{_er*100:.0f}%" if (_er is not None and _er > 0.05) else ""),
+        ]))
+        qualified.append(row)
+
+    qualified.sort(key=lambda x: -x["Score"])
+    for i, row in enumerate(qualified):
+        row["Rank"] = i + 1
+
+    ws = wb.create_sheet("4. Off-the-Radar")
+    ws.sheet_view.showGridLines = False
+    sr = add_title(ws,
+        "🛰️ Off-the-Radar Compounders — Pre-Discovery Setups",
+        f"Targets institutional blindspots: $200M-$3B, ≤5 analysts, 52wPos 38-90%, $500K+ liquidity. "
+        f"Quality anchor + catalyst proxy required. "
+        f"The IREN/Nokia profile — buying BEFORE the re-rating. Top 50. {datetime.date.today()}")
+
+    headers = ["Rank", "Ticker", "Company", "Sector", "Familiar", "Price", "MktCap ($B)",
+               "Coverage", "Insider Cluster", "52w Pos", "Net Cash/Sh", "FCF Yield",
+               "Rev Growth", "Rev Gr Prev", "CEO Score", "Catalyst", "Score"]
+    widths = [5, 8, 22, 14, 8, 8, 10, 9, 14, 8, 11, 9, 10, 11, 12, 32, 6]
+    write_table(ws, qualified[:50], headers, sr, header_color="00695C", widths=widths)
+    print(f"  ✅ Off-the-Radar tab done — {min(len(qualified), 50)} (from {len(qualified)} qualifying)")
+    return qualified[:50]
 
 
 def build_hold_forever_tab(wb, stocks):
@@ -7629,6 +9237,7 @@ def build_hold_forever_tab(wb, stocks):
         if rc is None or rc < 0.80: continue
         if fgc is not None and fgc < 0.60: continue   # may be missing for new IPOs — allow None
         if rg5 is None or rg5 < 0.05 or rg5 > 0.25: continue
+        if s.get("goingConcernRisk"): continue         # auditor red-flag disqualifies
         # Moat proxy: high gross margin OR high operating margin (business has pricing power)
         moat = (gm and gm > 0.40) or (om and om > 0.15)
         if not moat: continue
@@ -7652,8 +9261,10 @@ def build_hold_forever_tab(wb, stocks):
         # Under-covered bonus — Wall St hasn't piled in
         if s.get("underCovered"): score += 5
 
+        # Macro regime: Hold Forever is the ultimate quality/defensive screen
+        _hf_mult = {"risk_on": 0.85, "neutral": 1.00, "risk_off": 1.20}.get(_MACRO_REGIME, 1.0)
         row = format_stock_row(s)
-        row["Score"] = round(score, 1)
+        row["Score"] = round(score * _hf_mult, 1)
         # Add Hold Forever-specific columns the user wants to see
         row["Rev Consist."] = rc
         row["FCF Consist."] = fgc
@@ -7681,6 +9292,95 @@ def build_hold_forever_tab(wb, stocks):
     write_table(ws, qualified[:25], headers, sr, header_color="6A1B9A", widths=widths)
     print(f"  ✅ Hold Forever tab done — {min(len(qualified), 25)} (from {len(qualified)} qualifying)")
     return qualified[:25]
+
+
+def build_sector_relative_bargains(wb, stocks):
+    """Sector-Relative Bargains tab: stocks cheap on ≥2 valuation metrics vs their own sector peers.
+
+    An absolute EV/EBITDA of 15 is 'cheap' in Healthcare but 'rich' in Industrials.
+    This tab finds stocks in the bottom 25th percentile of their sector on 2+ of:
+      P/E, EV/EBITDA, P/FCF, FCF Yield (inverted).
+    Light quality floor applied to avoid value traps. Top 50.
+    """
+    print("\n📊 Building Tab: Sector-Relative Bargains...")
+    qualified = []
+    for t, s in stocks.items():
+        if not _is_common_stock(s):
+            continue
+        mc  = s.get("mktCap") or 0
+        if mc < 200e6: continue        # micro-illiquid — skip
+        cheap_n = s.get("sectorCheapCount") or 0
+        if cheap_n < 2: continue       # must be cheap on ≥2 metrics vs sector
+
+        # ── Light quality floor (avoid value traps) ──
+        pio  = s.get("piotroski")
+        roe  = s.get("roe")
+        rg   = s.get("revGrowth") or 0
+        fcf  = s.get("fcfYield")
+        # Skip if Piotroski < 4 (financially distressed) OR ROE deeply negative
+        if pio is not None and pio < 4: continue
+        if roe is not None and roe < -0.30: continue
+        # Skip if revenue is collapsing
+        if rg < -0.30: continue
+
+        # ── Score: deeper + more flags = higher ──
+        score = cheap_n * 20           # 2 flags → 40, 3 → 60, 4 → 80
+
+        # Add richness for quality combo
+        if pio is not None and pio >= 7:    score += 15
+        elif pio is not None and pio >= 5:  score += 7
+        if roe is not None and roe > 0.15:  score += 8
+        if fcf is not None and fcf > 0.05:  score += 8
+        elif fcf is not None and fcf > 0:   score += 4
+        if rg > 0.05:                       score += 5
+        if s.get("insiderBuys", 0) >= 2:    score += 8   # insiders agree
+        if s.get("insiderBurst", False):    score += 10  # burst = very timely
+
+        # Build readable "Cheap Metrics" string
+        cheap_parts = []
+        _pe_p = s.get("pe_sector_pctile")
+        if _pe_p is not None and _pe_p <= 25:
+            cheap_parts.append(f"P/E p{int(_pe_p)}")
+        _ev_p = s.get("evEbitda_sector_pctile")
+        if _ev_p is not None and _ev_p <= 25:
+            cheap_parts.append(f"EV/EBITDA p{int(_ev_p)}")
+        _pf_p = s.get("pFcf_sector_pctile")
+        if _pf_p is not None and _pf_p <= 25:
+            cheap_parts.append(f"P/FCF p{int(_pf_p)}")
+        _fy_p = s.get("fcfYield_sector_pctile")
+        if _fy_p is not None and _fy_p <= 25:
+            cheap_parts.append(f"FCF Yield p{int(_fy_p)}")
+
+        row = format_stock_row(s)
+        row["Score"]       = round(score, 1)
+        row["Cheap #"]     = cheap_n
+        row["Cheap Metrics"] = " · ".join(cheap_parts)
+        row["P/E Pctile"]     = f"{int(_pe_p)}%" if s.get("pe_sector_pctile") is not None else ""
+        row["EV/EBITDA Pctile"] = f"{int(s['evEbitda_sector_pctile'])}%" if s.get("evEbitda_sector_pctile") is not None else ""
+        row["FCF Yld Pctile"] = f"{int(s['fcfYield_sector_pctile'])}%" if s.get("fcfYield_sector_pctile") is not None else ""
+        row["Piotroski"]   = pio
+        qualified.append(row)
+
+    qualified.sort(key=lambda x: (-x.get("Cheap #", 0), -x["Score"]))
+    for i, row in enumerate(qualified):
+        row["Rank"] = i + 1
+
+    ws = wb.create_sheet("4b. Sector Bargains")
+    ws.sheet_view.showGridLines = False
+    sr = add_title(ws,
+        "📐 Sector-Relative Bargains — Cheap vs Peers",
+        f"Stocks in the bottom 25th percentile on ≥2 valuation metrics (P/E, EV/EBITDA, P/FCF, FCF Yield) "
+        f"within their own sector. Light quality floor (Piotroski ≥4). "
+        f"A 15x EV/EBITDA is cheap in Healthcare, rich in Industrials — this screen accounts for that. "
+        f"Top 50. {datetime.date.today()}")
+
+    headers = ["Rank", "Ticker", "Company", "Sector", "Price", "MktCap ($B)",
+               "Cheap #", "Cheap Metrics", "P/E Pctile", "EV/EBITDA Pctile", "FCF Yld Pctile",
+               "P/E", "EV/EBITDA", "FCF Yield", "ROIC", "Rev Growth", "Piotroski", "Score"]
+    widths   = [5, 8, 22, 14, 8, 11, 8, 34, 9, 14, 12, 7, 10, 9, 7, 10, 9, 7]
+    write_table(ws, qualified[:50], headers, sr, header_color="1565C0", widths=widths)
+    print(f"  ✅ Sector-Relative Bargains tab done — {min(len(qualified), 50)} (from {len(qualified)} qualifying)")
+    return qualified[:50]
 
 
 def fetch_etf_returns(etf_tickers: list) -> dict:
@@ -8700,15 +10400,45 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       sector_rows=None, etf_rows=None, ai=None, macro=None,
                       portfolio=None, fmp_call_count=0, ten_baggers=None,
                       agent_perf=None,     # B1: per-agent attribution dict
+                      strategy_perf=None,  # T1.2: per-strategy scorecard (rule-based picks)
                       sparklines=None,
                       hold_forever=None,
-                      mall=None) -> str:  # 🛍️ Mall Manager picks (Lynch consumer-observable)
+                      mall=None,           # 🛍️ Mall Manager picks (Lynch consumer-observable)
+                      off_the_radar=None,  # 🛰️ Off-the-Radar Compounders (pre-discovery setups)
+                      spinoff_events=None, # 🔔 Front-page spin-off alert events
+                      catalyst_stack=None) -> str:  # 🎲 Catalyst Stack watchlist
     """Generate a self-contained mobile-responsive HTML dashboard.
     Reads the same data structures that feed the Excel — no extra computation.
     Returns the full HTML string.
     """
     today = datetime.date.today().strftime("%Y-%m-%d")
     now   = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # ── Inject per-(strategy, ticker) Streak into row dicts ──────────────
+    # Streak = # consecutive run-dates this ticker has appeared in this strategy.
+    # Higher streak = stronger persistence signal (not noise from a single-day spike).
+    _streaks = _compute_pick_streaks()
+    _strat_to_rows = {
+        "IV Discount":        iv_rows,
+        "Stalwarts":          stalwarts,
+        "Fast Growers":       fast_growers,
+        "Slow Growers":       slow_growers,
+        "Cyclicals":          cyclicals,
+        "Turnarounds":        turnarounds,
+        "Asset Plays":        asset_plays,
+        "Lynch 10-Baggers":   ten_baggers,
+        "Quality Compounders":quality_compounders,
+        "Off-the-Radar":      off_the_radar,
+        "Hold Forever":       hold_forever,
+    }
+    for _strat_name, _rows in _strat_to_rows.items():
+        if not _rows: continue
+        _strat_streaks = _streaks.get(_strat_name, {})
+        for _r in _rows:
+            _t = _r.get("Ticker", "")
+            # Streak counts already-logged days; today's pick hasn't been logged yet at HTML build time
+            # so add +1 (today is implicit). A first-ever appearance shows as 1.
+            _r["Streak"] = (_strat_streaks.get(_t, 0) or 0) + 1
 
     # ── CSS ───────────────────────────────────────────────────────────────
     css = """
@@ -9161,6 +10891,62 @@ function showMacroDetail(el, id) {
                 '👑 Capital Allocation</div>'
                 + "".join(rows) + '</div>')
 
+    # Custom DCF cross-check mini-block — transparent valuation alongside FMP's DCF
+    def _dcf_block(stock):
+        if not stock:
+            return ""
+        iv_c   = stock.get("ivCustom")
+        mos_c  = stock.get("mosCustom")
+        wacc_c = stock.get("waccCustom")
+        g_a    = stock.get("growthAssumed")
+        fcf_b  = stock.get("fcfBaseB")
+        ig     = stock.get("impliedGrowth")
+        # Skip when nothing to show (e.g. financials/REITs return None across the board)
+        if iv_c is None and ig is None:
+            return ""
+        # FMP MoS for comparison row
+        fmp_mos = stock.get("mos")
+        rows = []
+        # Row 1: side-by-side FMP vs Custom MoS
+        mos_bits = []
+        if fmp_mos is not None:
+            color = "#66bb6a" if fmp_mos > 0 else "#ef5350"
+            mos_bits.append(f'FMP <span style="color:{color}">{fmp_mos*100:+.0f}%</span>')
+        if mos_c is not None:
+            color = "#66bb6a" if mos_c > 0 else "#ef5350"
+            mos_bits.append(f'Custom <span style="color:{color}">{mos_c*100:+.0f}%</span>')
+        if mos_bits:
+            rows.append(f'<div><b>MoS:</b> {" · ".join(mos_bits)}</div>')
+        # Row 2: implied growth (key reverse-DCF signal)
+        if ig is not None:
+            if ig >= 0.395:
+                ig_disp = '<span style="color:#ef5350">≥40%/y (extreme)</span>'
+            elif ig <= -0.045:
+                ig_disp = '<span style="color:#ef5350">≤-5%/y (decline)</span>'
+            elif ig > 0.20:
+                ig_disp = f'<span style="color:#ffb74d">{ig*100:.0f}%/y (high bar)</span>'
+            elif ig > 0:
+                ig_disp = f'<span style="color:#a5d6a7">{ig*100:.0f}%/y</span>'
+            else:
+                ig_disp = f'<span style="color:#ef9a9a">{ig*100:.0f}%/y</span>'
+            rows.append(f'<div style="font-size:.65rem;color:#b0bec5;margin-top:2px">'
+                        f'Price implies 10Y FCF growth of {ig_disp}</div>')
+        # Row 3: assumptions used (transparency — what's in the model)
+        assump_bits = []
+        if iv_c is not None:    assump_bits.append(f"IV ${iv_c:.0f}")
+        if wacc_c is not None:  assump_bits.append(f"WACC {wacc_c*100:.1f}%")
+        if g_a is not None:     assump_bits.append(f"g {g_a*100:.0f}%/y")
+        if fcf_b is not None:   assump_bits.append(f"FCF ${fcf_b:.1f}B")
+        if assump_bits:
+            rows.append(f'<div style="color:#78909c;font-size:.6rem;margin-top:2px">'
+                        f'({" · ".join(assump_bits)})</div>')
+        return ('<div style="background:#1a1a2488;border-left:2px solid #4caf5055;'
+                'border-radius:3px;padding:5px 8px;margin-top:6px">'
+                '<div style="font-size:.60rem;font-weight:700;color:#4caf50;'
+                'text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">'
+                '💰 Valuation Cross-Check</div>'
+                + "".join(rows) + '</div>')
+
     _sparklines_data = sparklines or {}
 
     def _sparkline_svg(ticker, w=200, h=44):
@@ -9254,6 +11040,14 @@ function showMacroDetail(el, id) {
                     cells.append(_cell(_pct(v), v, _roe_cls(v)))
                 elif c in ("MoS", "MoS%"):
                     cells.append(_cell(_pct(v), v, _mos_cls(v)))
+                elif c == "MoS (Custom)":
+                    tip = r.get("_dcf_tooltip", "")
+                    tip_attr = f' title="{tip}" style="cursor:help"' if tip else ""
+                    cells.append(f'<td{tip_attr}><span style="{_mos_cls(v)}">{_pct(v) if v is not None else "—"}</span></td>')
+                elif c == "IV (Custom)":
+                    cells.append(_cell(_money(v) if v is not None else "—", v))
+                elif c == "Implied 5Y Growth":
+                    cells.append(_cell(_pct(v) if v is not None else "—", v))
                 elif c == "Price":
                     cells.append(_cell(_money(v), v))
                 elif c in ("FCF Yield", "Rev Growth", "EPS Growth", "Rev Growth 5Y",
@@ -9281,6 +11075,61 @@ function showMacroDetail(el, id) {
                     cells.append(f'<td{tip_attr}>{v if v else "—"}</td>')
                 elif c == "Divergence":
                     cells.append(f"<td>{v if v else '—'}</td>")
+                elif c == "Net Buyback Yld":
+                    # Positive = net cash returned after SBC offset; negative = cosmetic/dilutive
+                    _bb_tip = (
+                        f"Gross buybacks: ${r.get('Gross Buyback Yld', 0) or 0:.1%}/y avg | "
+                        f"SBC offset: {(r.get('Gross Buyback Yld', 0) or 0) - (v or 0):.1%}/y | "
+                        f"Net yield = gross − SBC"
+                        if v is not None else ""
+                    )
+                    _tip_a = f' title="{_bb_tip}" style="cursor:help"' if _bb_tip else ""
+                    _color = (
+                        "color:#66bb6a;font-weight:600" if v is not None and v > 0.02
+                        else "color:#ef9a9a" if v is not None and v < 0
+                        else ""
+                    )
+                    cells.append(f'<td{_tip_a}><span style="{_color}">{_pct(v) if v is not None else "—"}</span></td>')
+                elif c == "BB Consistency":
+                    cells.append(f"<td style='text-align:center'>{v if v else '—'}</td>")
+                elif c == "BB Announced":
+                    cells.append(f"<td style='text-align:center'>{v if v else ''}</td>")
+                elif c == "Catalyst Stack":
+                    # Render catalyst badges with line-wrap
+                    _cs = v or ""
+                    cells.append(f"<td style='text-align:left;font-size:11px;line-height:1.5'>{_cs if _cs else '—'}</td>")
+                elif c == "Catalyst Score":
+                    # Color-grade: 40–59 yellow, 60–79 green, 80+ bright green
+                    if v is None:
+                        cells.append("<td style='text-align:center'>—</td>")
+                    else:
+                        _sv = int(round(v))
+                        if _sv >= 80:   _sc_col = "#1b5e20"; _sc_bg = "#e8f5e9"
+                        elif _sv >= 60: _sc_col = "#2e7d32"; _sc_bg = "#f1f8e9"
+                        else:           _sc_col = "#f57f17"; _sc_bg = "#fffde7"
+                        cells.append(f"<td style='text-align:center;background:{_sc_bg};"
+                                     f"font-weight:bold;color:{_sc_col}'>{_sv}</td>")
+                elif c == "Acq 5y/MC":
+                    # M&A spend over 5Y / market cap
+                    _tip_acq = " title='M&amp;A spend (5Y) / current market cap'"
+                    cells.append(f"<td{_tip_acq} style='text-align:right'>"
+                                 f"{_pct(v) if v is not None else '—'}</td>")
+                elif c == "CEO Tenure":
+                    cells.append(f"<td style='text-align:center;white-space:nowrap'>{v if v else '—'}</td>")
+                elif c == "Streak":
+                    # Persistence badge: ticker has appeared in this strategy for N consecutive runs
+                    n = int(v) if isinstance(v, (int, float)) else 1
+                    if   n >= 8: bg, fg = "#1b5e20", "#fff"      # rock-solid
+                    elif n >= 5: bg, fg = "#2e7d32", "#fff"      # strong
+                    elif n >= 3: bg, fg = "#558b2f", "#fff"      # building
+                    elif n >= 2: bg, fg = "#37474f", "#b0bec5"   # second appearance
+                    else:        bg, fg = "#1e1e2e", "#78909c"   # first time today
+                    label = f"{n}x" if n > 1 else "new"
+                    cells.append(
+                        f'<td title="Appeared in this strategy for {n} consecutive run(s)" '
+                        f'style="text-align:center"><span style="background:{bg};color:{fg};'
+                        f'border-radius:9px;padding:1px 6px;font-size:.7rem;font-weight:600">'
+                        f'{label}</span></td>')
                 else:
                     cells.append(f"<td>{v if v is not None else '—'}</td>")
             body_rows.append(f"<tr{alt}>{''.join(cells)}</tr>")
@@ -9402,9 +11251,11 @@ function showMacroDetail(el, id) {
         ("macro",    "🌍 Macro"),
         ("hold",     "💎 Hold Forever"),
         ("qual",     "🏆 Quality Comp."),
+        ("offradar", "🛰️ Off-the-Radar"),
         ("fastg",    "🚀 Fast Growers"),
         ("tenb",     "🎯 10-Baggers"),
         ("turn",     "🔁 Turnarounds"),
+        ("catalyst", "🎲 Catalyst Stack"),
         ("asset",    "🏗 Asset Plays"),
         ("cycl",     "🔄 Cyclicals"),
         ("slowg",    "🐢 Slow Growers"),
@@ -9789,6 +11640,24 @@ function showMacroDetail(el, id) {
             for dot, lbl, bc, desc in _thumb_lines
         )
 
+        # Scoring-weight note for the regime banner
+        _smr = _MACRO_REGIME   # module-level regime set by main()
+        _smr_effects = {
+            "risk_on":  ("🚀 Growth-weight mode", "#42a5f5",
+                         "Fast Growers scored at 100% · Quality/Hold-Forever at 85% · IV Discount at 90%"),
+            "neutral":  ("⚖️ Balanced-weight mode", "#66bb6a",
+                         "All tab scores unmodified (neutral multipliers in effect)"),
+            "risk_off": ("🛡️ Defensive-weight mode", "#ef5350",
+                         "Quality/Stalwarts/Hold-Forever at 120% · IV Discount at 115% · Fast Growers at 65%"),
+        }
+        _smr_label, _smr_color, _smr_desc = _smr_effects.get(_smr, _smr_effects["neutral"])
+        _scoring_note = (
+            f'<div style="margin-top:10px;border-top:1px solid #ffffff11;padding-top:8px;'
+            f'font-size:.64rem;color:#b0bec5">'
+            f'<span style="font-weight:700;color:{_smr_color}">{_smr_label}</span>'
+            f' &nbsp;—&nbsp; {_smr_desc}</div>'
+        )
+
         _regime_bar = (
             f'<div style="margin:10px 0 8px;background:{_regime_bg};border-left:3px solid {_regime_color};'
             f'border-radius:4px;padding:10px 14px">'
@@ -9812,6 +11681,7 @@ function showMacroDetail(el, id) {
             f'{_thumb_html}'
             f'</div>'
             f'</div>'
+            + _scoring_note +
             f'</div>'
         )
 
@@ -10046,6 +11916,7 @@ function showMacroDetail(el, id) {
     {_mm_spark_block}
     {_biz_block}
     {_capalloc_block(s)}
+    {_dcf_block(s)}
     <p class="mm-hl">"{hl}"</p>
     <p class="mm-story">{story}</p>
     <div class="mm-meta">
@@ -10374,10 +12245,14 @@ function showMacroDetail(el, id) {
             "InsiderTrack":   ("👁️ Insider & Smart Money","263238",
                 "Tracks cluster insider buying (multiple executives buying simultaneously) and significant "
                 "open-market purchases with personal capital — the highest-signal conviction indicator."),
+            "OffRadar":       ("🛰️ Off-the-Radar","00695C",
+                "Pre-discovery institutional arbitrage: finds stocks that are structurally invisible to funds "
+                "($200M–$3B, ≤5 analysts) with a narrative pivot in progress and insider conviction. "
+                "The IREN/Nokia profile — buying BEFORE the re-rating."),
         }
         _AGENT_ORDER = ["QualityGrowth", "SpecialSit", "CapAppreciation", "EmergingGrowth", "TenBagger",
                         "LynchBWYK", "CathieWood",
-                        "Pabrai", "HowardMarks", "Burry", "InsiderTrack"]
+                        "Pabrai", "HowardMarks", "Burry", "InsiderTrack", "OffRadar"]
 
         # ── Strategy Picks Summary table ──────────────────────────────────
         _strat_defs = [
@@ -10390,6 +12265,7 @@ function showMacroDetail(el, id) {
             ("🔁 Cyclicals",           cyclicals,           "827717"),
             ("🏗️ Asset Plays",         asset_plays,         "4E342E"),
             ("🎯 10-Baggers",          ten_baggers,         "BF360D"),
+            ("🛰️ Off-the-Radar",       off_the_radar,       "00695C"),
         ]
         _strat_rows_html = []
         for _sl, _sd, _sc in _strat_defs:
@@ -10453,6 +12329,7 @@ function showMacroDetail(el, id) {
     </table>
   </div>
 </details>""" if _strat_rows_html else ""
+
 
         # ── Wrap major AI blocks in collapsible <details> ─────────────────
         def _collapsible(title, subtitle, content, open_by_default=True, accent="#42a5f5"):
@@ -10592,6 +12469,7 @@ function showMacroDetail(el, id) {
     {_sp_spark_block}
     {_sp_biz}
     {_capalloc_block(s2)}
+    {_dcf_block(s2)}
     <p class="mm-hl">"{rationale3}"</p>
     {f'<p class="mm-story">{brief}</p>' if brief else ''}
     <div class="mm-meta">{_sp_meta_items}</div>
@@ -10822,6 +12700,7 @@ function showMacroDetail(el, id) {
             "AI-HowardMarks":     "🔄 Contrarian",
             "AI-Burry":           "🕳️ Deep Value",
             "AI-InsiderTrack":    "👁️ Insider",
+            "AI-OffRadar":        "🛰️ Off-the-Radar",
             # Retired agents — labels kept so historical CSV entries display correctly
             "AI-GoldmanSC":       "🏦 Goldman SC (retired)",
             "AI-SocialArb":       "📱 Social Arb (retired)",
@@ -11262,6 +13141,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
         return f"""
 <section id="perf">
   <div class="section-title">📈 Performance Tracking</div>
+  {strategy_scorecard_html}
   {scorecard_html}
   {leaderboard_html}
   {port_table}
@@ -11269,9 +13149,133 @@ Sharpe on alpha series. Click any column header to sort.</p>
 </section>"""
 
     # ── STRATEGY TABLE COLS ───────────────────────────────────────────────
-    STRAT_COLS = ["Rank","Ticker","Company","Sector","Price","Score",
+    STRAT_COLS = ["Rank","Ticker","Streak","Company","Sector","Price","Score",
                   "PEG","Fwd PEG","P/E","ROIC","ROE","FCF Yield",
                   "MoS","Rev Growth","Piotroski","MktCap ($B)"]
+
+    # ── 🔔 SPIN-OFF ALERT BANNER (Greenblatt edge — only renders when events present) ─
+    def _spinoff_banner(events: list) -> str:
+        if not events:
+            return ""  # discreet absence — no UI clutter when nothing to show
+        chips = []
+        for e in events[:8]:  # cap displayed events
+            t = e.get("ticker", "")
+            s = stocks.get(t, {})
+            price = s.get("price")
+            mc = s.get("mktCapB")
+            company = (e.get("company") or s.get("name") or "")[:28]
+            meta_parts = []
+            if price: meta_parts.append(f"${price:.2f}")
+            if mc:    meta_parts.append(f"${mc:.1f}B")
+            meta_str = (" · " + " · ".join(meta_parts)) if meta_parts else ""
+            link = e.get("link", "")
+            link_open = f'<a href="{link}" target="_blank" style="text-decoration:none;color:inherit">' if link else ''
+            link_close = '</a>' if link else ''
+            chips.append(
+                f'{link_open}<div style="display:inline-block;background:#1a237e;'
+                f'border:1px solid #ffc107;border-radius:4px;padding:5px 10px;'
+                f'margin:3px 4px;font-size:.72rem">'
+                f'<b style="color:#ffc107">{t}</b> '
+                f'<span style="color:#fff">{company}</span> '
+                f'<span style="color:#b0bec5;font-size:.65rem">— {e.get("date","")}</span>'
+                f'<span style="color:#b0bec5">{meta_str}</span>'
+                f'</div>{link_close}')
+        return (
+            '<div style="background:#0d1117;border-bottom:2px solid #ffc107;'
+            'padding:10px 16px">'
+            '<div style="font-size:.65rem;font-weight:700;color:#ffc107;'
+            'text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'
+            f'🔔 Spin-Off Watch · {len(events)} recent corporate separation'
+            f'{"s" if len(events) != 1 else ""} (last 90d) · '
+            'Greenblatt edge: forced selling = often mispriced'
+            '</div>'
+            + "".join(chips) +
+            '</div>')
+
+    _spinoff_html = _spinoff_banner(spinoff_events or [])
+
+    # ── T1.2: Strategy Scorecard (built here so both _ai_section and _perf_section can use it) ──
+    def _build_strategy_scorecard_html(perf: dict) -> str:
+        if not perf: return ""
+        valid = {k: v for k, v in perf.items() if (v.get("n_picks") or 0) >= 3}
+        if not valid: return ""
+        ranked = sorted(valid.items(),
+                        key=lambda kv: (kv[1].get("alpha") if kv[1].get("alpha") is not None else -9.99),
+                        reverse=True)
+        n = len(ranked)
+        top3_keys = {k for k, _ in ranked[:min(3, n)]}
+        bot3_keys = {k for k, _ in ranked[-min(3, n):]} if n > 3 else set()
+
+        def _sc_pct(x): return f"{x*100:+.1f}%" if x is not None else "—"
+        def _sc_pctp(x): return f"{x*100:.0f}%"  if x is not None else "—"
+
+        row_html = []
+        for k, v in ranked:
+            if k in top3_keys:    bg = "background:#1b5e2022"
+            elif k in bot3_keys:  bg = "background:#b71c1c22"
+            else:                 bg = ""
+            alpha = v.get("alpha")
+            a_color = "#a5d6a7" if (alpha or 0) >= 0 else "#ef9a9a"
+            row_html.append(
+                f'<tr style="{bg}">'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f">{k}</td>'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;text-align:right;color:#90caf9">'
+                f'{v.get("n_picks") or 0}</td>'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;text-align:right;color:{a_color};'
+                f'font-weight:700">{_sc_pct(alpha)}</td>'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;text-align:right;color:#b0bec5">'
+                f'{_sc_pct(v.get("avg_ret"))}</td>'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;text-align:right">'
+                f'{_sc_pctp(v.get("win_rate"))}</td>'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;text-align:right;color:#78909c">'
+                f'{_sc_pctp(v.get("hit_30d"))}</td>'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;text-align:right;color:#78909c">'
+                f'{_sc_pctp(v.get("hit_90d"))}</td>'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;text-align:right;color:#78909c">'
+                f'{_sc_pctp(v.get("hit_180d"))}</td>'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;color:#a5d6a7;font-size:.7rem">'
+                f'{v.get("best_ticker", "")} ({_sc_pct(v.get("best_ret"))})</td>'
+                f'<td style="padding:5px 8px;border-bottom:1px solid #ffffff0f;color:#ef9a9a;font-size:.7rem">'
+                f'{v.get("worst_ticker", "")} ({_sc_pct(v.get("worst_ret"))})</td>'
+                f'</tr>')
+        return f"""
+<details open style="margin-bottom:14px">
+  <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+    padding:8px 12px;background:#161b22;border-radius:6px;border:1px solid #ffd54f33;
+    font-size:.75rem;font-weight:700;color:#ffd54f;text-transform:uppercase;letter-spacing:.05em;
+    user-select:none">
+    <span style="font-size:.9rem">📈</span> Strategy Scorecard — Which Screen Actually Works?
+    <span style="font-size:.65rem;color:#546e7a;font-weight:400;text-transform:none;margin-left:4px">
+      — historical alpha vs SPY by strategy (top-3 green, bottom-3 red)
+    </span>
+    <span style="margin-left:auto;font-size:.7rem;color:#546e7a">▼</span>
+  </summary>
+  <div style="margin-top:8px;background:#0d1117;border:1px solid #ffffff12;border-radius:6px;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:.72rem;min-width:900px">
+      <thead>
+        <tr style="background:#161b22">
+          <th style="padding:6px 8px;text-align:left;color:#546e7a;font-weight:600">Strategy</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600"># Picks</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600">Alpha vs SPY</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600">Avg Return</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600">Win Rate</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600">Hit 30d</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600">Hit 90d</th>
+          <th style="padding:6px 8px;text-align:right;color:#546e7a;font-weight:600">Hit 180d</th>
+          <th style="padding:6px 8px;text-align:left;color:#546e7a;font-weight:600">Best</th>
+          <th style="padding:6px 8px;text-align:left;color:#546e7a;font-weight:600">Worst</th>
+        </tr>
+      </thead>
+      <tbody>{"".join(row_html)}</tbody>
+    </table>
+    <p style="font-size:.62rem;color:#546e7a;padding:6px 12px;line-height:1.5">
+      Alpha = pick return − SPY return over same hold period. Win rate = % positive (any horizon).
+      Hit-30/90/180d = % of picks ≥30/90/180 days old that are positive at that mark.
+      Strategies with &lt;3 picks excluded for statistical stability.
+    </p>
+  </div>
+</details>"""
+    strategy_scorecard_html = _build_strategy_scorecard_html(strategy_perf or {})
 
     # ── ASSEMBLE ──────────────────────────────────────────────────────────
     body = f"""
@@ -11282,43 +13286,55 @@ Sharpe on alpha series. Click any column header to sort.</p>
   </div>
   <small style="color:#9fa8da">17 Specialists · Master Manager</small>
 </div>
+{_spinoff_html}
 <nav class="nav">{nav_html}</nav>
 {_ai_section()}
 {_macro_section()}
-{_strategy_table(iv_rows,   STRAT_COLS + ["IV","D/E","EV/EBITDA"],   "iv",       "📊 IV Discount Picks",
+{_strategy_table(iv_rows,   STRAT_COLS + ["IV","MoS (Custom)","IV (Custom)","Implied 5Y Growth","D/E","EV/EBITDA"],   "iv",       "📊 IV Discount Picks",
     "DCF intrinsic value discount ≥5% · Piotroski ≥6 (value-trap gate only) · Altman Z ≥1.5. "
     "Ranked on: MoS + Lynch quality (rev consistency, FCF conversion, EPS growth, buybacks) "
     "+ FCF yield + ROIC + ROE + multi-metric cheapness. Top 50.")}
 {_strategy_table(stalwarts,  STRAT_COLS + ["CEO Score","FCF/Sh 5Y","Divergence"],    "stalwart", "🏛 Stalwarts",
     "Revenue growth 5–25% · MktCap >$2B · P/E <50 · FCF positive · Piotroski ≥5 · "
     "Rev consistency ≥60% · Excl. Basic Materials. Lynch 'boring but reliable' category.")}
-{_strategy_table(fast_growers, STRAT_COLS + ["Rev Growth 5Y","EPS Growth 5Y"], "fastg",    "🚀 Fast Growers",
+{_strategy_table(fast_growers, STRAT_COLS + ["MoS (Custom)","IV (Custom)","Rev Growth 5Y","EPS Growth 5Y"], "fastg",    "🚀 Fast Growers",
     "Revenue growth >20% · PEG <1.5 · ROIC >10% · FCF positive or high-growth exception. "
     "Lynch's highest-return category — find the next 10-bagger before it's obvious.")}
-{_strategy_table(ten_baggers or [], STRAT_COLS + ["Gross Margin","Oper Margin","Net Debt/EBITDA"], "tenb", "🎯 Lynch 10-Baggers",
+{_strategy_table(ten_baggers or [], STRAT_COLS + ["MoS (Custom)","IV (Custom)","Gross Margin","Oper Margin","Net Debt/EBITDA"], "tenb", "🎯 Lynch 10-Baggers",
     "Small-cap $50M–$2B · PEG<2 · Gross margin>20% · Operating margin>0. "
     "Lynch's real criteria: pricing power + growth at a reasonable price. No FCF kill — early Amazon had negative FCF too.")}
-{_strategy_table(slow_growers, STRAT_COLS + ["Div Yield"],              "slowg",    "🐢 Slow Growers",
+{_strategy_table(slow_growers, STRAT_COLS + ["MoS (Custom)","IV (Custom)","Div Yield"],              "slowg",    "🐢 Slow Growers",
     "Dividend yield ≥2% · Stable multi-year earnings · Large established companies. "
     "Lynch category: own for income + capital preservation, not growth.")}
 {_strategy_table(cyclicals,  STRAT_COLS,                               "cycl",     "🔄 Cyclicals",
     "Cyclical sectors (Industrials, Energy, Materials, Consumer Cyclical) at earnings trough. "
     "Lynch: P/E is INVERTED for cyclicals — HIGH or missing P/E = depressed earnings = BUY. "
     "LOW P/E = peak earnings = SELL. Best entry: decline decelerating + FCF positive + net debt &lt; 3× EBITDA.")}
-{_strategy_table(turnarounds, STRAT_COLS,                              "turn",     "🔁 Turnarounds",
+{_strategy_table(turnarounds, STRAT_COLS + ["MoS (Custom)","IV (Custom)"],                              "turn",     "🔁 Turnarounds",
     "Down ≥40% from 52W high · Revenue recovering (positive growth trend) · Piotroski ≥4. "
     "Lynch: near-bankrupt companies that survive can be 10x — but require highest conviction.")}
+{_strategy_table(catalyst_stack or [], ["Rank","Ticker","Streak","Company","Sector","Price","Catalyst Score","Catalyst Stack","CEO Tenure","Acq 5y/MC","Rev Growth","Rev Gr Prev","52w Pos","Net Buyback Yld","MktCap ($B)","MoS (Custom)","IV (Custom)"],
+    "catalyst", "🎲 Catalyst Stack — Stale-Narrative Watchlist",
+    "$400M–$200B mktcap + multi-catalyst stack (≥3 of: new CEO &lt;2.5y, buyback announced, "
+    "M&amp;A intensity, restructuring 8-K, insider burst, rev acceleration). "
+    "⚠️ WATCHLIST not buy list — candidates require qualitative review. Higher variance; size smaller. "
+    "Examples: Nokia 2024–25, Disney 2022–23, AT&amp;T 2020–22, Boeing 2024+.")}
 {_strategy_table(asset_plays, STRAT_COLS + ["P/B","Graham NN"],        "asset",    "🏗 Asset Plays",
     "P/B <1 · Hidden tangible asset value (real estate, cash, IP) · FCF positive. "
     "Lynch/Graham: buy $1 of assets for <$1. Best in Financial Services, Real Estate, Industrials.")}
-{_strategy_table(quality_compounders, STRAT_COLS + ["P/FCF","EV/EBITDA","CEO Score","FCF/Sh 5Y","Divergence"], "qual",  "🏆 Quality Compounders",
+{_strategy_table(quality_compounders, STRAT_COLS + ["MoS (Custom)","IV (Custom)","P/FCF","EV/EBITDA","CEO Score","FCF/Sh 5Y","Net Buyback Yld","BB Consistency","Divergence"], "qual",  "🏆 Quality Compounders",
     "ROIC >15% · PEG <2 · FCF positive · Operating margin >20% · Revenue growth >8%. "
     "Buffett category: wonderful companies at fair prices — hold forever, let compounding work. "
     "(absorbs IV Discount + Stalwarts cuts — same compounding thesis, different ranking lenses)")}
-{_strategy_table(hold_forever or [], STRAT_COLS + ["FCF Margin","CEO Score","FCF/Sh 5Y","Divergence"], "hold",  "💎 Hold Forever — Buy-and-Forget",
+{_strategy_table(hold_forever or [], STRAT_COLS + ["MoS (Custom)","IV (Custom)","FCF Margin","CEO Score","FCF/Sh 5Y","Net Buyback Yld","BB Consistency","BB Announced","Divergence"], "hold",  "💎 Hold Forever — Buy-and-Forget",
     "Strict cuts: ROIC >15% · 80%+ rev consistency · 5–25% steady CAGR · moat (gross margin >40% or oper margin >15%) · "
     "no dilution · low debt · Piotroski ≥6. Top 25 names. The user's natural buy-and-hold candidate pool — "
     "scan for 🛒 (Familiar Brand) and 🔍 (Wall St under-coverage) tags; cross-check against personal knowledge before sizing.")}
+{_strategy_table(off_the_radar or [], ["Rank","Ticker","Streak","Company","Sector","Familiar","Price","MoS (Custom)","IV (Custom)","MktCap ($B)","Coverage","Insider Cluster","52w Pos","Net Cash/Sh","FCF Yield","Rev Growth","Rev Gr Prev","CEO Score","Catalyst","Score"], "offradar",  "🛰️ Off-the-Radar Compounders — Pre-Discovery Setups",
+    "$200M-$3B + ≤5 analysts + $500K+ liquidity + (positive FCF/net cash/insider cluster/consistent revenue/familiar brand) + "
+    "(base-building 0.50-0.85 of 52W high / insider cluster / rev acceleration / Hidden Gem / active buyback). "
+    "The IREN/Nokia profile — quality in institutional blindspots, BEFORE the re-rating. "
+    "Scan for 🛒 Familiar Brand + low Coverage as the strongest setups.")}
 {_sector_section()}
 {_perf_section()}
 <footer style="padding:16px;color:#555;font-size:.72rem;text-align:center">
@@ -11929,6 +13945,8 @@ def main():
                         help="C4: Walk-forward portfolio replay from date (or all-time if omitted)")
     parser.add_argument("--force-fresh-ai", action="store_true",
                         help="Bypass the daily AI cache and re-run all specialists + judge for this run")
+    parser.add_argument("--neutral-judge", action="store_true",
+                        help="Strip all macro context from the judge — picks purely on fundamentals and specialist consensus")
     args = parser.parse_args()
 
     # B5: Backtest mode — run and exit without building the full report
@@ -11993,7 +14011,12 @@ def main():
     # Fetch macro indicators early (fast, cached, free via FRED)
     phase_start("macro", "Fetching macro indicators (FRED)")
     macro_data = fetch_macro_indicators()
+    # Set global macro regime — consumed by tab scoring functions for adaptive weighting
+    global _MACRO_REGIME
+    _MACRO_REGIME = _macro_regime(macro_data)
     market_intel = fetch_market_intelligence()   # FMP news for Social Arb / Disruptive / Insider agents
+    spinoff_events = fetch_recent_spinoffs(days_back=90)  # 🔔 front-page spin-off alert
+    going_concern_tickers = fetch_going_concern_flags()   # 🔍 Tier 3.7: audit risk scan
 
     # Phase 1: Universe from screener (already has price, mktCap, sector)
     phase_start("universe", "Fetching US stock universe (live prices)")
@@ -12020,6 +14043,14 @@ def main():
     ratios_ttm = fetch_ratios_ttm(top_for_enrichment)
     dcf_data = fetch_dcf_bulk(top_for_enrichment)
     estimates = fetch_growth_estimates(top_for_enrichment)
+    # Tier 3.8: persist today's snapshot + compute revision delta vs 30d-ago snapshot
+    _save_estimate_snapshot(estimates)
+    _est_revisions = _compute_estimate_revisions(estimates, lookback_days=30)
+    if _est_revisions:
+        _pos_rev = sum(1 for v in _est_revisions.values() if v > 0.05)
+        _neg_rev = sum(1 for v in _est_revisions.values() if v < -0.05)
+        print(f"  📈 Estimate revisions (30d): {len(_est_revisions)} tickers — "
+              f"{_pos_rev} upgraded ≥5%, {_neg_rev} cut ≥5%")
     scores = fetch_financial_scores(top_for_enrichment)
     ratings = fetch_ratings(top_for_enrichment)
     growth_data = fetch_financial_growth(top_for_enrichment)
@@ -12033,6 +14064,7 @@ def main():
     capalloc_universe = top_for_enrichment[:2000]
     bs_5y_data        = fetch_balance_sheet_5y(capalloc_universe)
     cfs_5y_data       = fetch_cash_flow_5y(capalloc_universe)
+    cfs_ttm_data      = fetch_cash_flow_ttm(capalloc_universe)   # Tier 2.1: quarterly for TTM freshness
     executives_data   = fetch_key_executives(capalloc_universe)
 
     # Fetch 52-week high/low (not returned by screener on Starter plan; batched via /quote)
@@ -12192,14 +14224,41 @@ def main():
                 _rng_applied += 1
         print(f"  ✅ SC 52w applied: +{_rng_applied} stocks now have yearHigh")
 
+        # ── SC 5Y cash-flow fetch — enables Custom IV / DCF for 10-Bagger candidates ──
+        # The main capalloc_universe (top 2000 by mktcap) does NOT include most small-caps
+        # (mktCap < $500M). Without cfs_5y data, compute_custom_dcf() returns None →
+        # MoS (Custom) and IV (Custom) show "—" for virtually every 10-Bagger candidate.
+        # Fix: fetch annual CFS for the top 1000 SC candidates by mktcap (1 API call/ticker).
+        # Cached separately as "cash_flow_5y_sc" (7-day TTL via standard cache).
+        # After fetch, merge into cfs_5y_data so assemble_stock_data() picks them up.
+        _sc_cfs_candidates = [
+            t for t in _sc_candidates[:1000]
+            if t not in cfs_5y_data   # skip tickers already covered by large-cap fetch
+        ]
+        if _sc_cfs_candidates:
+            _sc_cfs5 = fetch_cash_flow_5y(_sc_cfs_candidates, cache_key="cash_flow_5y_sc")
+            _cfs_added = sum(1 for t in _sc_cfs5 if t not in cfs_5y_data)
+            cfs_5y_data.update(_sc_cfs5)   # merge — large-cap entries take priority
+            print(f"  ✅ SC CFS merge: +{_cfs_added} small-cap stocks now have 5Y cash flows (Custom IV enabled)")
+        else:
+            # All top-1000 SC already covered by large-cap fetch or already cached
+            _sc_cfs5_cached = _cache.get("cash_flow_5y_sc") or {}
+            if _sc_cfs5_cached:
+                _cfs_merged = sum(1 for t in _sc_cfs5_cached if t not in cfs_5y_data)
+                cfs_5y_data.update(_sc_cfs5_cached)
+                print(f"  📦 SC CFS (cached): +{_cfs_merged} small-caps merged into CFS data")
+
         save_cache()   # persist SC cache keys for next run
 
     # Assemble
     stocks = assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                                  estimates, scores, ratings, growth_data, insider_data,
                                  balance_sheet, earnings_surp,
-                                 bs_5y=bs_5y_data, cfs_5y=cfs_5y_data,
-                                 executives=executives_data)
+                                 bs_5y=bs_5y_data, cfs_5y=cfs_5y_data, cfs_ttm=cfs_ttm_data,
+                                 executives=executives_data,
+                                 macro=macro_data,
+                                 going_concern_tickers=going_concern_tickers,
+                                 est_revisions=_est_revisions)
 
     print(f"\n  📊 FMP API calls this run: {_fmp_call_count}")
 
@@ -12617,6 +14676,13 @@ def main():
         # Insider buying = management confidence in their own growth story
         if s.get("insiderBuys", 0) >= 3:   sc += 6
         elif s.get("insiderBuys", 0) >= 1: sc += 3
+
+        # Estimate revision momentum (Tier 3.8) — sell-side upgrading growth story = leading signal
+        _er_fg = s.get("estRevision30d")
+        if _er_fg is not None:
+            if _er_fg > 0.10:    sc += 12   # estimates revised up >10% in 30d: sharp tailwind
+            elif _er_fg > 0.05:  sc += 7    # mild upgrade
+            elif _er_fg < -0.10: sc -= 8    # cuts erode growth thesis
 
         # ── Market cap size bonus: surfaces underfollowed small caps ─────────
         # Smaller companies have more analytical blind spots = more mispricing = more alpha.
@@ -13048,6 +15114,146 @@ def main():
                                   "Recovery plays: beaten-down price + ≥2 active recovery signals. NOT already-great businesses.",
                                   custom_headers=_ta_headers, custom_widths=_ta_widths)
 
+    # ─── Catalyst Stack: Nokia-style multi-catalyst watchlist ──────────────────
+    # Hypothesis: when ≥3 board-driven catalysts cluster within ~12 months
+    # (new CEO + buyback + M&A + restructuring + insider buying), the market's prior of
+    # "stale value trap" is statistically slow to update → asymmetric re-rating opportunity.
+    # WATCHLIST not buy list. Higher variance basket. ~20% may re-rate; rest go sideways.
+    # Examples: Nokia 2024-25, Disney 2022-23 (Iger return), AT&T 2020-22, Boeing 2024+, Intel 2024+.
+    def _catalyst_stack_score(s, return_categories: bool = False):
+        """Catalyst Stack scoring. Returns (score, n_categories_with_pts) or just score.
+
+        Rubric (max 100):
+          Leadership (max 25)        — new CEO + 8-K appointment
+          Capital reallocation (30)  — buyback announced + consistency + M&A intensity
+          Operating inflection (30)  — restructuring + rev acceleration + insider burst
+          Position quality (15)      — 52w range + insider buys + DCF cross-check
+
+        Hard floor: must register ≥5pts in ≥3 of 4 categories (else returns 0).
+        """
+        # ── Leadership (max 25) ───────────────────────────────────────────────
+        lead_pts = 0
+        ceo_alloc = s.get("ceoAllocator") or {}
+        tenure = ceo_alloc.get("tenure_years")
+        if tenure is not None and tenure < 2.5:
+            if tenure < 1.5:
+                # Very fresh CEO: scale 7–12pts (clears ≥5 category gate easily)
+                lead_pts += max(7, int(round(12 * (2.5 - tenure) / 2.5)))
+            else:
+                # 1.5–2.5y: still counts, gives 5pts (clears ≥5 category gate)
+                lead_pts += 5
+        if s.get("recentCeoAppointment"):
+            lead_pts += 13
+        lead_pts = min(lead_pts, 25)
+
+        # ── Capital reallocation (max 30) ─────────────────────────────────────
+        cap_pts = 0
+        if s.get("recentBuybackAnnouncement"):
+            cap_pts += 12
+        bb_consist = s.get("buybackConsistency")
+        if bb_consist is not None and bb_consist >= 3:
+            cap_pts += 6
+        # Actual buyback yield as a direct capital-return signal (available even without 8-K news)
+        # Uses TTM net buyback yield if available, falling back to annual gross yield
+        _nby = s.get("netBuybackYield") or s.get("buybackYieldTTM") or s.get("grossBuybackYield") or 0
+        if _nby > 0.05:       # >5% — very aggressive buyback program
+            cap_pts += 10
+        elif _nby > 0.02:     # >2% — meaningful buyback activity
+            cap_pts += 5
+        # M&A intensity bonus
+        acq_i = s.get("acqIntensity")
+        # Sanity cap: acqIntensity >2.0 is almost always an accounting artifact
+        # (e.g. banks where FMP maps loan originations to acquisitionsNet)
+        if acq_i is not None and acq_i > 2.0:
+            acq_i = None
+        # Anti-roll-up safeguard: serial acquirers WITHOUT revenue inflection get half credit
+        rg = s.get("revGrowth")
+        is_rollup = (acq_i is not None and acq_i > 0.30 and (rg is None or rg < 0.10))
+        if acq_i is not None:
+            ma_pts = 0
+            if acq_i >= 0.05: ma_pts += 8
+            if acq_i >= 0.15: ma_pts += 4   # bonus
+            if is_rollup:
+                ma_pts = ma_pts // 2        # serial acquirer = structural, not catalyst
+            cap_pts += ma_pts
+        cap_pts = min(cap_pts, 30)
+
+        # ── Operating inflection (max 30) ─────────────────────────────────────
+        op_pts = 0
+        # Anti-pre-distress: heavy debt + restructuring without buyback = distressed, not strategic
+        nde = s.get("netDebtEbitda")
+        is_pre_distress = (nde is not None and nde > 5 and not s.get("recentBuybackAnnouncement"))
+        if s.get("recentRestructuring"):
+            op_pts += 10 if not is_pre_distress else 5
+        # Revenue acceleration — current growth meaningfully > prior year
+        rg_prev = s.get("revGrowthPrev")
+        if rg is not None and rg_prev is not None and rg > rg_prev:
+            delta = rg - rg_prev
+            # Scale: 3pp = ~3 pts, 10pp = full 10 pts
+            op_pts += min(10, max(0, int(round(delta * 100))))
+        if s.get("insiderBurst"):
+            op_pts += 10
+        op_pts = min(op_pts, 30)
+
+        # ── Position quality (max 15) ────────────────────────────────────────
+        pos_pts = 0
+        # 52w position: 0.40-0.85 sweet spot (off lows but not extended)
+        # Compute as price / yearHigh (approx). Use priceVs52H if available.
+        pvs52h = s.get("priceVs52H")
+        if pvs52h is not None:
+            if 0.40 <= pvs52h <= 0.85:
+                pos_pts += 8
+            elif 0.35 <= pvs52h <= 0.90:
+                pos_pts += 4   # soft taper
+        if (s.get("insiderBuys") or 0) > 0:
+            pos_pts += 4
+        if s.get("mosCustom") is not None and s["mosCustom"] > 0:
+            pos_pts += 3
+        pos_pts = min(pos_pts, 15)
+
+        # ── Hard floor: ≥3 distinct categories with ≥5pts each ───────────────
+        cats_active = sum(1 for x in (lead_pts, cap_pts, op_pts, pos_pts) if x >= 5)
+        if cats_active < 3:
+            return (0, cats_active) if return_categories else 0
+
+        total = lead_pts + cap_pts + op_pts + pos_pts
+        return (total, cats_active) if return_categories else total
+
+    def _catalyst_stack_filter(s):
+        if not _is_common_stock(s): return False
+        mc = s.get("mktCap") or 0
+        if mc < 400e6 or mc > 200e9: return False              # $400M–$200B (per user)
+        if (s.get("avgDollarVol") or 0) < 5e6: return False    # institutional liquidity
+        if s.get("sector") in ("Real Estate", "Basic Materials"): return False
+        if s.get("goingConcernRisk"): return False             # exclude actively-distressed
+        beta = s.get("beta")
+        if beta is not None and (beta < 0.4 or beta > 2.5): return False
+        # NO quality filters — turnarounds have bad current quality by definition.
+        # Catalyst gate: score ≥35 AND ≥3 categories firing (enforced inside score fn)
+        score, n_cats = _catalyst_stack_score(s, return_categories=True)
+        # Cache the score on the stock dict for display in the row formatter
+        s["catalystScore"] = score
+        s["catalystCategoriesActive"] = n_cats
+        return score >= 35 and n_cats >= 3
+
+    _cat_headers = [
+        "Rank", "Ticker", "Company", "Sector", "Price",
+        "Catalyst Score", "Catalyst Stack", "CEO Tenure",
+        "Acq 5y/MC", "Rev Growth", "Rev Gr Prev",
+        "52w Pos", "Net Buyback Yld", "MktCap ($B)",
+        "MoS (Custom)", "IV (Custom)", "🏦 Insider",
+    ]
+    _cat_widths = [5, 8, 22, 15, 8, 10, 36, 9, 8, 9, 9, 7, 12, 10, 10, 10, 14]
+
+    catalyst_stack = build_lynch_tab(
+        wb, stocks, "Catalyst Stack", "7b",
+        _catalyst_stack_filter, _catalyst_stack_score,
+        "FFD9B3",
+        "Watchlist: ≥3 simultaneous catalysts (new CEO + buyback + M&A + restructuring + insider). "
+        "Mid/large caps where stale narrative may break. NOT a buy list — candidates require qualitative review. "
+        "Higher-variance basket; size positions smaller than core compounders.",
+        custom_headers=_cat_headers, custom_widths=_cat_widths)
+
     # ─── Asset Plays: Hidden value vs asset prices — Lynch style ───────────
     # Lynch: "Find companies where specific assets are worth more than the whole."
     # Five qualifying paths:
@@ -13397,8 +15603,13 @@ def main():
                                   custom_headers=_tb_headers, custom_widths=_tb_widths)
 
     quality_compounders = build_quality_compounders(wb, stocks)
+    # 🛰️ Off-the-Radar Compounders — institutional blindspot screen (IREN/Nokia profile)
+    off_the_radar = build_off_the_radar(wb, stocks)
     # Sprint 3 A4: 💎 Hold Forever — strict long-term shortlist (~25 names)
     hold_forever = build_hold_forever_tab(wb, stocks)
+
+    # Sector-Relative Bargains — stocks cheap on ≥2 valuation metrics vs sector peers
+    sector_bargains = build_sector_relative_bargains(wb, stocks)
 
     # Sector Valuations (ETF Rotation tab retired in v4 — pure trader signal, not aligned with long-term picking)
     _sector_rows, _etf_rets = build_sector_valuations(wb, stocks)
@@ -13424,6 +15635,8 @@ def main():
         except Exception:
             pass
     agent_perf = compute_agent_performance(_b1_spy_prices, _b1_spy_today)
+    # Strategy scorecard — same metrics aggregated per rule-based strategy ("which screen actually works?")
+    strategy_perf = compute_strategy_scorecard(_b1_spy_prices, _b1_spy_today)
 
     # Auto-log strategy picks every run (deduped by date+ticker+strategy)
     current_prices = {t: s["price"] for t, s in stocks.items() if s.get("price")}
@@ -13433,6 +15646,7 @@ def main():
         "Turnarounds": turnarounds, "Slow Growers": slow_growers,
         "Cyclicals": cyclicals, "Asset Plays": asset_plays,
         "Lynch 10-Baggers": ten_baggers,
+        "Off-the-Radar": off_the_radar,
     }, current_prices)
 
     # ── AI analysis (single call — result shared across Overview + AI tab) ──
@@ -13446,6 +15660,7 @@ def main():
         "Cyclicals (Lynch)": cyclicals,
         "Asset Plays (Lynch)": asset_plays,
         "Lynch 10-Baggers": ten_baggers,
+        "Off-the-Radar":    off_the_radar,   # Pre-discovery blindspot setups feed all specialists
     }
     # ── Daily AI result cache — skip Claude calls if already run today ──
     _AI_CACHE_KEY = "_ai_result"
@@ -13470,10 +15685,14 @@ def main():
     else:
         if args.force_fresh_ai and _cached_ai.get("date") == _today_str:
             print("\n  🔄 --force-fresh-ai: bypassing today's AI cache, re-running all specialists + judge + mall manager")
-        phase_start("ai_analysis", "Running multi-agent AI analysis (11 specialists + judge)")
+        _neutral = getattr(args, "neutral_judge", False)
+        if _neutral:
+            print("\n  🔬 --neutral-judge: macro context stripped — judge picks on fundamentals only")
+        phase_start("ai_analysis", "Running multi-agent AI analysis (12 specialists + judge)")
         ai_result = call_claude_analysis(picks_data, stocks, macro=macro_data,
                                          market_intel=market_intel,
-                                         agent_perf=agent_perf)   # B4: performance feedback
+                                         agent_perf=agent_perf,
+                                         neutral_judge=_neutral)   # B4: performance feedback
         mall_result = {}
         if ai_result and ai_result.get("picks"):
             # Mall Manager runs after the judge, takes specialist pool + strategy tabs
@@ -13481,7 +15700,8 @@ def main():
                                             macro=macro_data,
                                             market_intel=market_intel,
                                             fast_growers=fast_growers,
-                                            quality_compounders=quality_compounders) or {}
+                                            quality_compounders=quality_compounders,
+                                            off_the_radar=off_the_radar) or {}
             # Cache result for remainder of today
             _cache[_AI_CACHE_KEY] = {"date": _today_str,
                                      "result": ai_result,
@@ -13495,7 +15715,8 @@ def main():
                                         macro=macro_data,
                                         market_intel=market_intel,
                                         fast_growers=fast_growers,
-                                        quality_compounders=quality_compounders) or {}
+                                        quality_compounders=quality_compounders,
+                                        off_the_radar=off_the_radar) or {}
         if mall_result:
             _cache[_AI_CACHE_KEY] = {"date": _today_str,
                                      "result": ai_result,
@@ -13641,7 +15862,8 @@ def main():
                        _fmp_call_count, ai=ai_result,
                        portfolio=portfolio, portfolio_nav=_ptf_nav,
                        portfolio_ret=_ptf_ret, portfolio_spy_ret=_ptf_spy_ret,
-                       macro=macro_data, ten_baggers=ten_baggers)
+                       macro=macro_data, ten_baggers=ten_baggers,
+                       off_the_radar=off_the_radar)
 
     # Save
     phase_start("save", "Saving Excel + HTML dashboard")
@@ -13656,9 +15878,13 @@ def main():
         portfolio=portfolio, fmp_call_count=_fmp_call_count,
         ten_baggers=ten_baggers,
         agent_perf=agent_perf,   # B1: per-agent attribution for leaderboard (B8)
+        strategy_perf=strategy_perf,   # T1.2: per-strategy scorecard (which screen actually works)
         sparklines=_sparklines,  # 5Y price history for AI pick mini-charts
         hold_forever=hold_forever,  # Sprint 3 A4: long-term shortlist tab
         mall=mall_result,        # 🛍️ Mall Manager picks (Lynch consumer-observable)
+        off_the_radar=off_the_radar,  # 🛰️ Off-the-Radar Compounders (pre-discovery)
+        spinoff_events=spinoff_events,  # 🔔 Front-page spin-off alert
+        catalyst_stack=catalyst_stack,  # 🎲 Catalyst Stack watchlist
     )
     html_file = output_file.replace(".xlsx", ".html")
     with open(html_file, "w", encoding="utf-8") as _hf:
