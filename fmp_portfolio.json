@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 25779.122299999995,
+  "cash": 25898.5238,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,27 +100,27 @@
       "sector": "Healthcare"
     },
     {
-      "ticker": "PEGA",
-      "company": "Pegasystems Inc.",
-      "shares": 135,
-      "entry_price": 36.79,
+      "ticker": "BKNG",
+      "company": "Booking Holdings",
+      "shares": 29,
+      "entry_price": 167.4,
       "entry_date": "2026-05-05",
-      "rationale": "SELL HRB + NICE frees $10.2k. PEGA = 21% ROIC, 8.2% FCF yield, PEG 0.43, +17% growth\u2014hybrid Stalwart/FastGrower. Already sold earlier; re-entry justified: strong Software-as-a-Service moat, discipline",
-      "conviction": "HIGH",
-      "sell_trigger": "PEG rises above 1.2 OR FCF yield falls below 6% OR growth decelerates below +10%",
-      "lynch_category": "Stalwart+FastGrower",
-      "sector": "Technology"
+      "rationale": "FastGrower: 68% ROIC (top 1%), 6.9% FCF yield, PEG 0.52, 13% growth. Online travel dominance + AI-powered personalization. Margin expansion runway. Fills Healthcare/diversification need. 33% MoS.",
+      "conviction": "VERY HIGH",
+      "sell_trigger": "Competitive loss of market share to alternative OTAs; RevPAR declines across key geographies for 2+ quarters",
+      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
+      "sector": "Consumer Cyclical"
     },
     {
-      "ticker": "RELY",
-      "company": "Remitly Global, Inc.",
-      "shares": 210,
-      "entry_price": 23.78,
+      "ticker": "INFY",
+      "company": "Infosys Limited",
+      "shares": 408,
+      "entry_price": 12.25,
       "entry_date": "2026-05-05",
-      "rationale": "PEGA entry frees remaining $10.2k. RELY = 7% ROIC (below 12% threshold but recovering Turnaround), 6.2% FCF yield, PEG 0.32, +29% growth, 78% MoS. Digital remittance market has 3\u20135 year structural tai",
-      "conviction": "MEDIUM-HIGH",
-      "sell_trigger": "FCF yield falls below 4% OR growth stalls below +15% OR unit economics deteriorate (COGS/revenue ratio exceeds 45%)",
-      "lynch_category": "FastGrower+Turnaround",
+      "rationale": "Slow Grower IV Discount: 27% ROIC, 7.4% FCF yield, PEG 1.84, 5% growth. Diversified IT services, 62% MoS, management quality. Fills underweighted sector. Defensive positioning in tech slowdown.",
+      "conviction": "HIGH",
+      "sell_trigger": "Deal pipeline deteriorates; large-deal wins fall <$100M in any quarter; guidance reduced 2+ times",
+      "lynch_category": "SlowGrower+Turnaround",
       "sector": "Technology"
     }
   ],
@@ -1096,6 +1096,54 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "PEGA entry frees remaining $10.2k. RELY = 7% ROIC (below 12% threshold but recovering Turnaround), 6.2% FCF yield, PEG 0.32, +29% growth, 78% MoS. Digital remittance market has 3\u20135 year structural tai"
+    },
+    {
+      "date": "2026-05-05",
+      "action": "SELL",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 135,
+      "price": 36.5,
+      "value": 4921.57,
+      "return_pct": -0.79,
+      "transaction_cost": 5.93,
+      "rationale": "Thesis BROKEN by PORTFOLIO STRUCTURE, NOT FUNDAMENTALS. Selling to rebalance Lynch categories: portfolio has 7 Stalwarts (cap 5) and 7 FastGrowers (cap 4). While PEGA fundamentals are sound (21% ROIC, 8.2% FCF, PEG 0.43, 17% growth), category caps must be restored. PEGA is 0 days old\u2014lowest conviction entry. Redeploy capital to restore sector and Lynch balance."
+    },
+    {
+      "date": "2026-05-05",
+      "action": "SELL",
+      "ticker": "RELY",
+      "company": "Remitly Global, Inc.",
+      "shares": 210,
+      "price": 24.14,
+      "value": 5062.28,
+      "return_pct": 1.49,
+      "transaction_cost": 6.07,
+      "rationale": "Thesis BROKEN: ROIC = 7%, below 12% minimum threshold. Fails primary buy rule regardless of PEG or growth. No recovery catalyst evident. Additionally, portfolio is over-cap on Stalwarts and FastGrowers; RELY frees $10.2k. 0 days old; this was emergency rebalance\u2014prune immediately."
+    },
+    {
+      "date": "2026-05-05",
+      "action": "BUY",
+      "ticker": "BKNG",
+      "company": "Booking Holdings",
+      "shares": 29,
+      "price": 167.4,
+      "value": 4854.6,
+      "return_pct": 0.0,
+      "transaction_cost": 5.85,
+      "rationale": "FastGrower: 68% ROIC (top 1%), 6.9% FCF yield, PEG 0.52, 13% growth. Online travel dominance + AI-powered personalization. Margin expansion runway. Fills Healthcare/diversification need. 33% MoS."
+    },
+    {
+      "date": "2026-05-05",
+      "action": "BUY",
+      "ticker": "INFY",
+      "company": "Infosys Limited",
+      "shares": 408,
+      "price": 12.25,
+      "value": 4998.0,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "Slow Grower IV Discount: 27% ROIC, 7.4% FCF yield, PEG 1.84, 5% growth. Diversified IT services, 62% MoS, management quality. Fills underweighted sector. Defensive positioning in tech slowdown."
     }
   ],
   "last_updated": "2026-05-05"
