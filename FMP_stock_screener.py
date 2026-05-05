@@ -1396,11 +1396,8 @@ def fetch_going_concern_flags(pages: int = 20) -> set:
     the going-concern scan already does.
 
     Returns a set of tickers where RED-FLAG language was detected (going concern etc.).
-    Also stores 4 separate cache entries (each 7-day TTL aligned to this scan):
+    Also stores 1 separate cache entry (7-day TTL aligned to this scan):
       - "buyback_announcements"        → get_buyback_announcement_tickers()
-      - "restructuring_announcements"  → get_restructuring_tickers()        (Catalyst Stack)
-      - "ceo_appointments"             → get_ceo_appointment_tickers()      (Catalyst Stack)
-      - "manda_announcements"          → get_manda_announcement_tickers()   (Catalyst Stack)
 
     Cache TTL: 7 days.
     """
@@ -1437,40 +1434,8 @@ def fetch_going_concern_flags(pages: int = 20) -> set:
         r"self[\s\-]tender|open[\s\-]market\s+repurchase)\b",
         re.IGNORECASE)
 
-    # Catalyst Stack — 3 new patterns (zero extra API calls; same loop as buyback scan)
-    # Restructuring / reorganization signals — operating reset
-    _restructuring_re = re.compile(
-        r"\b(restructur|reorganiz|workforce\s+reduc|layoffs?|"
-        r"plant\s+clos|facility\s+shut|divest|spin[\s\-]?off|"
-        r"cost[\s\-]?cut\s+program|strategic\s+review|operational\s+review)\b",
-        re.IGNORECASE)
-    # CEO appointment signals — leadership change (paired with ceoAllocator.tenure_years)
-    _ceo_appoint_re = re.compile(
-        r"\b(appoints?\s+(?:new\s+)?(?:ceo|chief\s+executive)|"
-        r"names?\s+(?:new\s+)?(?:ceo|chief\s+executive)|"
-        r"ceo\s+(?:succession|appointment|transition)|"
-        r"new\s+chief\s+executive)\b",
-        re.IGNORECASE)
-    # M&A deal announcements — signals capital reallocation in progress
-    # Excludes "customer acquisition" (marketing) and "asset acquisition" (small bolt-ons)
-    _manda_re = re.compile(
-        r"\b(definitive\s+agreement|agreement\s+to\s+acquire|"
-        r"merger\s+agreement|acquisition\s+of|to\s+combine\s+with|"
-        r"tender\s+offer\s+for|stock\s+purchase\s+agreement)\b",
-        re.IGNORECASE)
-    # Negative regex — exclude "customer acquisition cost", "data acquisition", etc.
-    _manda_excl_re = re.compile(
-        r"\b(customer\s+acquisition|data\s+acquisition|asset\s+acquisition\s+cost|"
-        r"client\s+acquisition|land\s+acquisition)\b",
-        re.IGNORECASE)
-
     flagged: set            = set()
     buyback_announced: set  = set()
-    restructuring: set      = set()
-    ceo_appointments: set   = set()
-    manda_announced: set    = set()
-    # Diagnostic samples (debug-only — first 5 matched titles per pattern, for sanity check)
-    _samples = {"restructuring": [], "ceo_appoint": [], "manda": []}
 
     endpoints_to_try = ["sec-filings-latest", "sec-filings", "8k-latest"]
     for ep in endpoints_to_try:
@@ -1500,80 +1465,16 @@ def fetch_going_concern_flags(pages: int = 20) -> set:
                         flagged.add(ticker)
                     if _buyback_re.search(title):
                         buyback_announced.add(ticker)
-                    if _restructuring_re.search(title):
-                        restructuring.add(ticker)
-                        if len(_samples["restructuring"]) < 5:
-                            _samples["restructuring"].append(f"{ticker}: {title[:90]}")
-                    if _ceo_appoint_re.search(title):
-                        ceo_appointments.add(ticker)
-                        if len(_samples["ceo_appoint"]) < 5:
-                            _samples["ceo_appoint"].append(f"{ticker}: {title[:90]}")
-                    # M&A: positive match AND no excluded phrase
-                    if _manda_re.search(title) and not _manda_excl_re.search(title):
-                        manda_announced.add(ticker)
-                        if len(_samples["manda"]) < 5:
-                            _samples["manda"].append(f"{ticker}: {title[:90]}")
                 time.sleep(0.15)
             except Exception:
                 break
         if success:
             break   # used this endpoint successfully — don't try others
 
-    # ── Supplemental: scan news headlines for catalyst patterns ──────────────
-    # The SEC filings endpoints may not be available on all FMP plan tiers.
-    # The news/stock-latest endpoint is universally available and carries the same
-    # signal for CEO appointments, M&A announcements, and restructuring news.
-    # Only runs when the SEC scan yielded nothing (avoids double-counting).
-    if not (restructuring or ceo_appointments or manda_announced or buyback_announced):
-        _news_pages = 30    # 30 × 250 = 7 500 recent headlines (~3–4 months of US coverage)
-        _news_found = 0
-        for _np in range(_news_pages):
-            try:
-                _nr = requests.get(
-                    f"{FMP_BASE}/news/stock-latest",
-                    params={"page": _np, "limit": 250, "apikey": FMP_KEY},
-                    timeout=30)
-                _fmp_call_count += 1
-                if _nr.status_code != 200:
-                    break
-                _narticles = _nr.json()
-                if not isinstance(_narticles, list) or not _narticles:
-                    break
-                _news_found += len(_narticles)
-                for _art in _narticles:
-                    _nticker = ((_art.get("symbol") or _art.get("ticker") or "")).strip().upper()
-                    _ntitle  = (_art.get("title") or "").strip()
-                    if not _nticker or not _ntitle:
-                        continue
-                    if _buyback_re.search(_ntitle):
-                        buyback_announced.add(_nticker)
-                    if _restructuring_re.search(_ntitle):
-                        restructuring.add(_nticker)
-                        if len(_samples["restructuring"]) < 5:
-                            _samples["restructuring"].append(f"{_nticker}: {_ntitle[:90]}")
-                    if _ceo_appoint_re.search(_ntitle):
-                        ceo_appointments.add(_nticker)
-                        if len(_samples["ceo_appoint"]) < 5:
-                            _samples["ceo_appoint"].append(f"{_nticker}: {_ntitle[:90]}")
-                    if _manda_re.search(_ntitle) and not _manda_excl_re.search(_ntitle):
-                        manda_announced.add(_nticker)
-                        if len(_samples["manda"]) < 5:
-                            _samples["manda"].append(f"{_nticker}: {_ntitle[:90]}")
-                time.sleep(0.15)
-            except Exception:
-                break
-        if _news_found:
-            print(f"  📰 News catalyst scan: {_news_found} headlines → "
-                  f"buybacks={len(buyback_announced)}, restructuring={len(restructuring)}, "
-                  f"CEO={len(ceo_appointments)}, M&A={len(manda_announced)}")
-
     _cache[cache_key] = {"flagged": list(flagged), "_ts": time.time()}
-    # Buyback (Tier 3.2) and 3 Catalyst-Stack caches — all 7-day TTL aligned to this scan
+    # Buyback (Tier 3.2) cache — 7-day TTL aligned to this scan
     _now = time.time()
-    _cache["buyback_announcements"]       = {"tickers": list(buyback_announced), "_ts": _now}
-    _cache["restructuring_announcements"] = {"tickers": list(restructuring),     "_ts": _now}
-    _cache["ceo_appointments"]            = {"tickers": list(ceo_appointments),  "_ts": _now}
-    _cache["manda_announcements"]         = {"tickers": list(manda_announced),   "_ts": _now}
+    _cache["buyback_announcements"] = {"tickers": list(buyback_announced), "_ts": _now}
 
     if flagged:
         print(f"  ⚠️  Going-concern flags found: {len(flagged)} tickers — {', '.join(sorted(flagged)[:10])}"
@@ -1583,21 +1484,6 @@ def fetch_going_concern_flags(pages: int = 20) -> set:
     if buyback_announced:
         print(f"  🔔 Buyback announcements detected: {len(buyback_announced)} tickers — "
               + ", ".join(sorted(buyback_announced)[:8]) + (" ..." if len(buyback_announced) > 8 else ""))
-    if restructuring:
-        print(f"  🏗️  Restructuring announcements: {len(restructuring)} tickers — "
-              + ", ".join(sorted(restructuring)[:6]) + (" ..." if len(restructuring) > 6 else ""))
-        for s in _samples["restructuring"][:3]:
-            print(f"     ↳ {s}")
-    if ceo_appointments:
-        print(f"  👔 CEO appointments: {len(ceo_appointments)} tickers — "
-              + ", ".join(sorted(ceo_appointments)[:6]) + (" ..." if len(ceo_appointments) > 6 else ""))
-        for s in _samples["ceo_appoint"][:3]:
-            print(f"     ↳ {s}")
-    if manda_announced:
-        print(f"  🎯 M&A deal announcements: {len(manda_announced)} tickers — "
-              + ", ".join(sorted(manda_announced)[:6]) + (" ..." if len(manda_announced) > 6 else ""))
-        for s in _samples["manda"][:3]:
-            print(f"     ↳ {s}")
     return flagged
 
 
@@ -1614,21 +1500,6 @@ def _get_catalyst_cache_set(cache_key: str) -> set:
 def get_buyback_announcement_tickers() -> set:
     """Tickers with a recent buyback-related 8-K from the going-concern scan cache."""
     return _get_catalyst_cache_set("buyback_announcements")
-
-
-def get_restructuring_tickers() -> set:
-    """Catalyst Stack: tickers with recent restructuring/reorganization 8-K filings."""
-    return _get_catalyst_cache_set("restructuring_announcements")
-
-
-def get_ceo_appointment_tickers() -> set:
-    """Catalyst Stack: tickers with recent CEO-appointment 8-K filings."""
-    return _get_catalyst_cache_set("ceo_appointments")
-
-
-def get_manda_announcement_tickers() -> set:
-    """Catalyst Stack: tickers with recent M&A deal-announcement 8-K filings."""
-    return _get_catalyst_cache_set("manda_announcements")
 
 
 def fmp_get(endpoint: str, params: dict = None) -> dict | list | None:
@@ -3213,10 +3084,6 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
     sector_overrides = _load_sector_overrides()
     # Tier 3.2: retrieve buyback announcement tickers from going-concern scan cache (no extra API call)
     _buyback_announced_tickers = get_buyback_announcement_tickers()
-    # Catalyst Stack: 3 additional 8-K signal sets (populated by same 8-K scan, no extra API calls)
-    _restructuring_tickers     = get_restructuring_tickers()
-    _ceo_appointment_tickers   = get_ceo_appointment_tickers()
-    _manda_announcement_tickers = get_manda_announcement_tickers()
     if sector_overrides:
         print(f"  📑 Sector overrides loaded: {len(sector_overrides)} tickers")
 
@@ -3571,18 +3438,6 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             if _disagreement > 0.50:
                 buyback_data_quality = "low"
 
-        # ── Catalyst Stack: M&A intensity from cfs_5y ──────────────────────────────
-        # Total acquisition spend over last 5 years / current mktCap = M&A intensity ratio.
-        # FMP `acquisitionsNet` is typically negative (cash outflow); abs() to be safe.
-        # Flags companies that have been actively reallocating capital via M&A.
-        # Used by Catalyst Stack tab as one of 4 catalyst categories.
-        acquisitions_5y_total = None
-        acq_intensity         = None
-        if _cfs5 and len(_cfs5) >= 2 and mktCap and mktCap > 0:
-            _acq_total = sum(abs(r.get("acquisitionsNet") or 0) for r in _cfs5[:5])
-            acquisitions_5y_total = round(_acq_total, 0)
-            acq_intensity         = round(_acq_total / mktCap, 4)
-
         # Apply manual sector/industry overrides (FMP misclassifies BTC miners etc. as Financial Services)
         _ovr = sector_overrides.get(t)
         _sector_final   = (_ovr.get("sector")   if _ovr else None) or u.get("sector", "Unknown")
@@ -3745,13 +3600,6 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             # Tier 3.2: recent buyback announcement from 8-K scan (forward-looking capital return signal)
             # True = company filed a buyback-related 8-K recently; visible before financials show it
             "recentBuybackAnnouncement": (t in _buyback_announced_tickers),
-            # Catalyst Stack: 3 additional 8-K-derived signals (zero extra API cost — same scan loop)
-            "recentRestructuring":     (t in _restructuring_tickers),
-            "recentCeoAppointment":    (t in _ceo_appointment_tickers),
-            "recentMandaAnnouncement": (t in _manda_announcement_tickers),
-            # Catalyst Stack: 5y M&A intensity = sum(abs(acquisitionsNet)) / mktCap
-            "acquisitions5yTotal": acquisitions_5y_total,
-            "acqIntensity":        acq_intensity,
             # Earnings estimate revision momentum (Tier 3.8) — % change in FY1 EPS vs 30d ago
             "estRevision30d": (est_revisions or {}).get(t),
             "beta": prof.get("beta") or u.get("beta"),
@@ -4193,25 +4041,6 @@ def format_stock_row(s: dict) -> dict:
         "BB Announced": "🔔 Recent" if s.get("recentBuybackAnnouncement") else "",
         # Tier 3.3: sector-relative net buyback yield percentile (0=best returner in sector)
         "BB Yld Pctile": s.get("netBuybackYield_sector_pctile"),
-        # Catalyst Stack fields
-        "Catalyst Stack": " · ".join(filter(None, [
-            "🆕 New CEO" if (s.get("ceoAllocator") or {}).get("tenure_years") is not None
-                            and s["ceoAllocator"]["tenure_years"] < 2.5 else "",
-            "👔 CEO 8-K" if s.get("recentCeoAppointment") else "",
-            "🔔 Buyback" if s.get("recentBuybackAnnouncement") else "",
-            "🎯 M&A"     if s.get("recentMandaAnnouncement") else "",
-            "🏗️ Restruct" if s.get("recentRestructuring") else "",
-            "🔥 Insider" if s.get("insiderBurst") else "",
-            "📈 Rev Accel" if (s.get("revGrowth") and s.get("revGrowthPrev") and
-                               s["revGrowth"] > s["revGrowthPrev"] + 0.03) else "",
-        ])),
-        "Catalyst Score": s.get("catalystScore"),
-        "Acq 5y/MC":     s.get("acqIntensity"),
-        "CEO Tenure":    (lambda _c: (
-            f"{_c['tenure_years']:.1f}y 🆕" if _c.get("tenure_years") is not None
-            and _c["tenure_years"] < 2.5 else
-            f"{_c['tenure_years']:.1f}y" if _c.get("tenure_years") is not None else ""
-        ))(s.get("ceoAllocator") or {}),
         "FCF Conv.": s.get("fcfConversion"),
         "FCF Margin": s.get("fcfMargin"),
         "FCF Consist.": s.get("fcfGrowthConsistency"),
@@ -10405,8 +10234,7 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       hold_forever=None,
                       mall=None,           # 🛍️ Mall Manager picks (Lynch consumer-observable)
                       off_the_radar=None,  # 🛰️ Off-the-Radar Compounders (pre-discovery setups)
-                      spinoff_events=None, # 🔔 Front-page spin-off alert events
-                      catalyst_stack=None) -> str:  # 🎲 Catalyst Stack watchlist
+                      spinoff_events=None) -> str:  # 🔔 Front-page spin-off alert events
     """Generate a self-contained mobile-responsive HTML dashboard.
     Reads the same data structures that feed the Excel — no extra computation.
     Returns the full HTML string.
@@ -11094,42 +10922,22 @@ function showMacroDetail(el, id) {
                     cells.append(f"<td style='text-align:center'>{v if v else '—'}</td>")
                 elif c == "BB Announced":
                     cells.append(f"<td style='text-align:center'>{v if v else ''}</td>")
-                elif c == "Catalyst Stack":
-                    # Render catalyst badges with line-wrap
-                    _cs = v or ""
-                    cells.append(f"<td style='text-align:left;font-size:11px;line-height:1.5'>{_cs if _cs else '—'}</td>")
-                elif c == "Catalyst Score":
-                    # Color-grade: 40–59 yellow, 60–79 green, 80+ bright green
-                    if v is None:
-                        cells.append("<td style='text-align:center'>—</td>")
-                    else:
-                        _sv = int(round(v))
-                        if _sv >= 80:   _sc_col = "#1b5e20"; _sc_bg = "#e8f5e9"
-                        elif _sv >= 60: _sc_col = "#2e7d32"; _sc_bg = "#f1f8e9"
-                        else:           _sc_col = "#f57f17"; _sc_bg = "#fffde7"
-                        cells.append(f"<td style='text-align:center;background:{_sc_bg};"
-                                     f"font-weight:bold;color:{_sc_col}'>{_sv}</td>")
-                elif c == "Acq 5y/MC":
-                    # M&A spend over 5Y / market cap
-                    _tip_acq = " title='M&amp;A spend (5Y) / current market cap'"
-                    cells.append(f"<td{_tip_acq} style='text-align:right'>"
-                                 f"{_pct(v) if v is not None else '—'}</td>")
-                elif c == "CEO Tenure":
-                    cells.append(f"<td style='text-align:center;white-space:nowrap'>{v if v else '—'}</td>")
                 elif c == "Streak":
                     # Persistence badge: ticker has appeared in this strategy for N consecutive runs
                     n = int(v) if isinstance(v, (int, float)) else 1
-                    if   n >= 8: bg, fg = "#1b5e20", "#fff"      # rock-solid
-                    elif n >= 5: bg, fg = "#2e7d32", "#fff"      # strong
-                    elif n >= 3: bg, fg = "#558b2f", "#fff"      # building
-                    elif n >= 2: bg, fg = "#37474f", "#b0bec5"   # second appearance
-                    else:        bg, fg = "#1e1e2e", "#78909c"   # first time today
-                    label = f"{n}x" if n > 1 else "new"
-                    cells.append(
-                        f'<td title="Appeared in this strategy for {n} consecutive run(s)" '
-                        f'style="text-align:center"><span style="background:{bg};color:{fg};'
-                        f'border-radius:9px;padding:1px 6px;font-size:.7rem;font-weight:600">'
-                        f'{label}</span></td>')
+                    if n <= 1:
+                        # First appearance — no badge (reduces noise; badge starts at streak=2)
+                        cells.append("<td></td>")
+                    else:
+                        if   n >= 8: bg, fg = "#1b5e20", "#fff"      # rock-solid
+                        elif n >= 5: bg, fg = "#2e7d32", "#fff"      # strong
+                        elif n >= 3: bg, fg = "#558b2f", "#fff"      # building
+                        else:        bg, fg = "#37474f", "#b0bec5"   # second appearance
+                        cells.append(
+                            f'<td title="Appeared in this strategy for {n} consecutive run(s)" '
+                            f'style="text-align:center"><span style="background:{bg};color:{fg};'
+                            f'border-radius:9px;padding:1px 6px;font-size:.7rem;font-weight:600">'
+                            f'{n}x</span></td>')
                 else:
                     cells.append(f"<td>{v if v is not None else '—'}</td>")
             body_rows.append(f"<tr{alt}>{''.join(cells)}</tr>")
@@ -11255,7 +11063,6 @@ function showMacroDetail(el, id) {
         ("fastg",    "🚀 Fast Growers"),
         ("tenb",     "🎯 10-Baggers"),
         ("turn",     "🔁 Turnarounds"),
-        ("catalyst", "🎲 Catalyst Stack"),
         ("asset",    "🏗 Asset Plays"),
         ("cycl",     "🔄 Cyclicals"),
         ("slowg",    "🐢 Slow Growers"),
@@ -12095,7 +11902,7 @@ function showMacroDetail(el, id) {
                     '<div style="background:#0d1117;border:1px solid #42a5f533;border-radius:8px;'
                     'padding:12px 14px;margin-bottom:14px">'
                     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
-                    '<span style="font-size:1rem;font-weight:700;color:#42a5f5">🎯 HIGH-CONSENSUS PICKS</span>'
+                    # Inline title removed — collapsible wrapper already shows "🎯 High-Consensus Picks"
                     f'<span style="font-size:.72rem;color:#78909c">— {len(_hi_consensus)} '
                     f'tickers nominated by {_min_consensus}+ of today\'s {len(_sp)} specialists</span>'
                     '</div>'
@@ -12495,8 +12302,8 @@ function showMacroDetail(el, id) {
   <div class="section-title">🤖 AI Analysis — Master Manager + {n_agents} Specialists</div>
   {strat_summary_html}
   {consensus_wrapped}
-  {wrapped_mm}
   {wrapped_mall}
+  {wrapped_mm}
   <details style="margin-bottom:6px">
     <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
       padding:8px 12px;background:#161b22;border-radius:6px;border:1px solid #ffffff18;
@@ -12710,6 +12517,7 @@ function showMacroDetail(el, id) {
             "AI-WallStBlind":     "🔍 WallStBlind (retired)",
         }
         _AGENT_ORDER = list(_AGENT_ICONS.keys())
+        _AGENT_ORDER = [a for a in _AGENT_ORDER if "(retired)" not in _AGENT_ICONS.get(a, "")]
 
         # ── Read AI picks log ─────────────────────────────────────────────
         ai_perf_rows = []
@@ -13010,6 +12818,16 @@ Sharpe on alpha series. Click any column header to sort.</p>
                                  else f"<td>{disp}</td>")
                 elif c in ("Entry $","Current $","Cost Basis","Mkt Value"):
                     cells.append(f"<td>{_money(v)}</td>")
+                elif c == "Ticker":
+                    import datetime as _dt
+                    _entry_str = r.get("Entry Date") or ""
+                    try:
+                        _entry_date = _dt.date.fromisoformat(_entry_str[:10])
+                        _is_new = (_dt.date.today() - _entry_date).days <= 7
+                    except Exception:
+                        _is_new = False
+                    _badge = ' <span style="background:#e3f2fd;color:#1565c0;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;vertical-align:middle">NEW</span>' if _is_new else ""
+                    cells.append(f"<td><b>{v or ''}</b>{_badge}</td>")
                 elif c == "Conviction":
                     cells.append(f"<td>{_conv_badge(v) if v else '—'}</td>")
                 else:
@@ -13313,12 +13131,6 @@ Sharpe on alpha series. Click any column header to sort.</p>
 {_strategy_table(turnarounds, STRAT_COLS + ["MoS (Custom)","IV (Custom)"],                              "turn",     "🔁 Turnarounds",
     "Down ≥40% from 52W high · Revenue recovering (positive growth trend) · Piotroski ≥4. "
     "Lynch: near-bankrupt companies that survive can be 10x — but require highest conviction.")}
-{_strategy_table(catalyst_stack or [], ["Rank","Ticker","Streak","Company","Sector","Price","Catalyst Score","Catalyst Stack","CEO Tenure","Acq 5y/MC","Rev Growth","Rev Gr Prev","52w Pos","Net Buyback Yld","MktCap ($B)","MoS (Custom)","IV (Custom)"],
-    "catalyst", "🎲 Catalyst Stack — Stale-Narrative Watchlist",
-    "$400M–$200B mktcap + multi-catalyst stack (≥3 of: new CEO &lt;2.5y, buyback announced, "
-    "M&amp;A intensity, restructuring 8-K, insider burst, rev acceleration). "
-    "⚠️ WATCHLIST not buy list — candidates require qualitative review. Higher variance; size smaller. "
-    "Examples: Nokia 2024–25, Disney 2022–23, AT&amp;T 2020–22, Boeing 2024+.")}
 {_strategy_table(asset_plays, STRAT_COLS + ["P/B","Graham NN"],        "asset",    "🏗 Asset Plays",
     "P/B <1 · Hidden tangible asset value (real estate, cash, IP) · FCF positive. "
     "Lynch/Graham: buy $1 of assets for <$1. Best in Financial Services, Real Estate, Industrials.")}
@@ -15114,146 +14926,6 @@ def main():
                                   "Recovery plays: beaten-down price + ≥2 active recovery signals. NOT already-great businesses.",
                                   custom_headers=_ta_headers, custom_widths=_ta_widths)
 
-    # ─── Catalyst Stack: Nokia-style multi-catalyst watchlist ──────────────────
-    # Hypothesis: when ≥3 board-driven catalysts cluster within ~12 months
-    # (new CEO + buyback + M&A + restructuring + insider buying), the market's prior of
-    # "stale value trap" is statistically slow to update → asymmetric re-rating opportunity.
-    # WATCHLIST not buy list. Higher variance basket. ~20% may re-rate; rest go sideways.
-    # Examples: Nokia 2024-25, Disney 2022-23 (Iger return), AT&T 2020-22, Boeing 2024+, Intel 2024+.
-    def _catalyst_stack_score(s, return_categories: bool = False):
-        """Catalyst Stack scoring. Returns (score, n_categories_with_pts) or just score.
-
-        Rubric (max 100):
-          Leadership (max 25)        — new CEO + 8-K appointment
-          Capital reallocation (30)  — buyback announced + consistency + M&A intensity
-          Operating inflection (30)  — restructuring + rev acceleration + insider burst
-          Position quality (15)      — 52w range + insider buys + DCF cross-check
-
-        Hard floor: must register ≥5pts in ≥3 of 4 categories (else returns 0).
-        """
-        # ── Leadership (max 25) ───────────────────────────────────────────────
-        lead_pts = 0
-        ceo_alloc = s.get("ceoAllocator") or {}
-        tenure = ceo_alloc.get("tenure_years")
-        if tenure is not None and tenure < 2.5:
-            if tenure < 1.5:
-                # Very fresh CEO: scale 7–12pts (clears ≥5 category gate easily)
-                lead_pts += max(7, int(round(12 * (2.5 - tenure) / 2.5)))
-            else:
-                # 1.5–2.5y: still counts, gives 5pts (clears ≥5 category gate)
-                lead_pts += 5
-        if s.get("recentCeoAppointment"):
-            lead_pts += 13
-        lead_pts = min(lead_pts, 25)
-
-        # ── Capital reallocation (max 30) ─────────────────────────────────────
-        cap_pts = 0
-        if s.get("recentBuybackAnnouncement"):
-            cap_pts += 12
-        bb_consist = s.get("buybackConsistency")
-        if bb_consist is not None and bb_consist >= 3:
-            cap_pts += 6
-        # Actual buyback yield as a direct capital-return signal (available even without 8-K news)
-        # Uses TTM net buyback yield if available, falling back to annual gross yield
-        _nby = s.get("netBuybackYield") or s.get("buybackYieldTTM") or s.get("grossBuybackYield") or 0
-        if _nby > 0.05:       # >5% — very aggressive buyback program
-            cap_pts += 10
-        elif _nby > 0.02:     # >2% — meaningful buyback activity
-            cap_pts += 5
-        # M&A intensity bonus
-        acq_i = s.get("acqIntensity")
-        # Sanity cap: acqIntensity >2.0 is almost always an accounting artifact
-        # (e.g. banks where FMP maps loan originations to acquisitionsNet)
-        if acq_i is not None and acq_i > 2.0:
-            acq_i = None
-        # Anti-roll-up safeguard: serial acquirers WITHOUT revenue inflection get half credit
-        rg = s.get("revGrowth")
-        is_rollup = (acq_i is not None and acq_i > 0.30 and (rg is None or rg < 0.10))
-        if acq_i is not None:
-            ma_pts = 0
-            if acq_i >= 0.05: ma_pts += 8
-            if acq_i >= 0.15: ma_pts += 4   # bonus
-            if is_rollup:
-                ma_pts = ma_pts // 2        # serial acquirer = structural, not catalyst
-            cap_pts += ma_pts
-        cap_pts = min(cap_pts, 30)
-
-        # ── Operating inflection (max 30) ─────────────────────────────────────
-        op_pts = 0
-        # Anti-pre-distress: heavy debt + restructuring without buyback = distressed, not strategic
-        nde = s.get("netDebtEbitda")
-        is_pre_distress = (nde is not None and nde > 5 and not s.get("recentBuybackAnnouncement"))
-        if s.get("recentRestructuring"):
-            op_pts += 10 if not is_pre_distress else 5
-        # Revenue acceleration — current growth meaningfully > prior year
-        rg_prev = s.get("revGrowthPrev")
-        if rg is not None and rg_prev is not None and rg > rg_prev:
-            delta = rg - rg_prev
-            # Scale: 3pp = ~3 pts, 10pp = full 10 pts
-            op_pts += min(10, max(0, int(round(delta * 100))))
-        if s.get("insiderBurst"):
-            op_pts += 10
-        op_pts = min(op_pts, 30)
-
-        # ── Position quality (max 15) ────────────────────────────────────────
-        pos_pts = 0
-        # 52w position: 0.40-0.85 sweet spot (off lows but not extended)
-        # Compute as price / yearHigh (approx). Use priceVs52H if available.
-        pvs52h = s.get("priceVs52H")
-        if pvs52h is not None:
-            if 0.40 <= pvs52h <= 0.85:
-                pos_pts += 8
-            elif 0.35 <= pvs52h <= 0.90:
-                pos_pts += 4   # soft taper
-        if (s.get("insiderBuys") or 0) > 0:
-            pos_pts += 4
-        if s.get("mosCustom") is not None and s["mosCustom"] > 0:
-            pos_pts += 3
-        pos_pts = min(pos_pts, 15)
-
-        # ── Hard floor: ≥3 distinct categories with ≥5pts each ───────────────
-        cats_active = sum(1 for x in (lead_pts, cap_pts, op_pts, pos_pts) if x >= 5)
-        if cats_active < 3:
-            return (0, cats_active) if return_categories else 0
-
-        total = lead_pts + cap_pts + op_pts + pos_pts
-        return (total, cats_active) if return_categories else total
-
-    def _catalyst_stack_filter(s):
-        if not _is_common_stock(s): return False
-        mc = s.get("mktCap") or 0
-        if mc < 400e6 or mc > 200e9: return False              # $400M–$200B (per user)
-        if (s.get("avgDollarVol") or 0) < 5e6: return False    # institutional liquidity
-        if s.get("sector") in ("Real Estate", "Basic Materials"): return False
-        if s.get("goingConcernRisk"): return False             # exclude actively-distressed
-        beta = s.get("beta")
-        if beta is not None and (beta < 0.4 or beta > 2.5): return False
-        # NO quality filters — turnarounds have bad current quality by definition.
-        # Catalyst gate: score ≥35 AND ≥3 categories firing (enforced inside score fn)
-        score, n_cats = _catalyst_stack_score(s, return_categories=True)
-        # Cache the score on the stock dict for display in the row formatter
-        s["catalystScore"] = score
-        s["catalystCategoriesActive"] = n_cats
-        return score >= 35 and n_cats >= 3
-
-    _cat_headers = [
-        "Rank", "Ticker", "Company", "Sector", "Price",
-        "Catalyst Score", "Catalyst Stack", "CEO Tenure",
-        "Acq 5y/MC", "Rev Growth", "Rev Gr Prev",
-        "52w Pos", "Net Buyback Yld", "MktCap ($B)",
-        "MoS (Custom)", "IV (Custom)", "🏦 Insider",
-    ]
-    _cat_widths = [5, 8, 22, 15, 8, 10, 36, 9, 8, 9, 9, 7, 12, 10, 10, 10, 14]
-
-    catalyst_stack = build_lynch_tab(
-        wb, stocks, "Catalyst Stack", "7b",
-        _catalyst_stack_filter, _catalyst_stack_score,
-        "FFD9B3",
-        "Watchlist: ≥3 simultaneous catalysts (new CEO + buyback + M&A + restructuring + insider). "
-        "Mid/large caps where stale narrative may break. NOT a buy list — candidates require qualitative review. "
-        "Higher-variance basket; size positions smaller than core compounders.",
-        custom_headers=_cat_headers, custom_widths=_cat_widths)
-
     # ─── Asset Plays: Hidden value vs asset prices — Lynch style ───────────
     # Lynch: "Find companies where specific assets are worth more than the whole."
     # Five qualifying paths:
@@ -15884,7 +15556,6 @@ def main():
         mall=mall_result,        # 🛍️ Mall Manager picks (Lynch consumer-observable)
         off_the_radar=off_the_radar,  # 🛰️ Off-the-Radar Compounders (pre-discovery)
         spinoff_events=spinoff_events,  # 🔔 Front-page spin-off alert
-        catalyst_stack=catalyst_stack,  # 🎲 Catalyst Stack watchlist
     )
     html_file = output_file.replace(".xlsx", ".html")
     with open(html_file, "w", encoding="utf-8") as _hf:
