@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 35775.413499999995,
+  "cash": 25823.073099999994,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -98,6 +98,30 @@
       "sell_trigger": "Pipeline stalls OR ROIC falls below 15% due to failed trial OR FCF turns negative",
       "lynch_category": "FastGrower+AssetPlay",
       "sector": "Healthcare"
+    },
+    {
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 160,
+      "entry_price": 31.08,
+      "entry_date": "2026-05-05",
+      "rationale": "Stalwart IV Discount: 30% ROIC, 13.2% FCF yield, PEG 0.29 with +4% growth and 76% MoS. Secular tailwind from tax code complexity; DIY shift drives margin expansion. Fills healthcare/diversified servic",
+      "conviction": "HIGH",
+      "sell_trigger": "Market share declines >3pp YoY in tax filing; tax code simplification bill passes Congress with >90% support; ROIC falls below 20% for 2 consecutive y",
+      "lynch_category": "Turnaround",
+      "sector": "Consumer Cyclical"
+    },
+    {
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 40,
+      "entry_price": 124.19,
+      "entry_date": "2026-05-05",
+      "rationale": "Stalwart IV Discount: 13% ROIC, 10.6% FCF yield, PEG 0.23 with +8% growth and 78% MoS. AI-powered customer engagement software; defensive secular growth in contact center automation. Complements QLYS/",
+      "conviction": "HIGH",
+      "sell_trigger": "Customer churn accelerates >200bp above guidance; AI-driven margin expansion stalls for 2 consecutive quarters; PEG expands above 1.5",
+      "lynch_category": "Stalwart+Turnaround",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -1000,6 +1024,30 @@
       "return_pct": 1.63,
       "transaction_cost": 6.08,
       "rationale": "Thesis broken by PORTFOLIO STRUCTURE, NOT FUNDAMENTALS. PEGA is quality (21% ROIC, 8.2% FCF, PEG 0.42, +17% growth) but portfolio has 7 FastGrowers + Stalwarts overlap (cap 4 FastGrower total). Only 1 day held; entry conviction valid but structure constraint is binding. De-risk higher-volatility Turnarounds first, then re-add if PEG remains <0.5. Sell at market."
+    },
+    {
+      "date": "2026-05-05",
+      "action": "BUY",
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 160,
+      "price": 31.08,
+      "value": 4972.8,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "Stalwart IV Discount: 30% ROIC, 13.2% FCF yield, PEG 0.29 with +4% growth and 76% MoS. Secular tailwind from tax code complexity; DIY shift drives margin expansion. Fills healthcare/diversified servic"
+    },
+    {
+      "date": "2026-05-05",
+      "action": "BUY",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 40,
+      "price": 124.19,
+      "value": 4967.6,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "Stalwart IV Discount: 13% ROIC, 10.6% FCF yield, PEG 0.23 with +8% growth and 78% MoS. AI-powered customer engagement software; defensive secular growth in contact center automation. Complements QLYS/"
     }
   ],
   "last_updated": "2026-05-05"
