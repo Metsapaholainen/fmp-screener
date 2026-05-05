@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 25823.073099999994,
+  "cash": 25779.122299999995,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,27 +100,27 @@
       "sector": "Healthcare"
     },
     {
-      "ticker": "HRB",
-      "company": "H&R Block, Inc.",
-      "shares": 160,
-      "entry_price": 31.08,
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 135,
+      "entry_price": 36.79,
       "entry_date": "2026-05-05",
-      "rationale": "Stalwart IV Discount: 30% ROIC, 13.2% FCF yield, PEG 0.29 with +4% growth and 76% MoS. Secular tailwind from tax code complexity; DIY shift drives margin expansion. Fills healthcare/diversified servic",
+      "rationale": "SELL HRB + NICE frees $10.2k. PEGA = 21% ROIC, 8.2% FCF yield, PEG 0.43, +17% growth\u2014hybrid Stalwart/FastGrower. Already sold earlier; re-entry justified: strong Software-as-a-Service moat, discipline",
       "conviction": "HIGH",
-      "sell_trigger": "Market share declines >3pp YoY in tax filing; tax code simplification bill passes Congress with >90% support; ROIC falls below 20% for 2 consecutive y",
-      "lynch_category": "Turnaround",
-      "sector": "Consumer Cyclical"
+      "sell_trigger": "PEG rises above 1.2 OR FCF yield falls below 6% OR growth decelerates below +10%",
+      "lynch_category": "Stalwart+FastGrower",
+      "sector": "Technology"
     },
     {
-      "ticker": "NICE",
-      "company": "NICE Ltd.",
-      "shares": 40,
-      "entry_price": 124.19,
+      "ticker": "RELY",
+      "company": "Remitly Global, Inc.",
+      "shares": 210,
+      "entry_price": 23.78,
       "entry_date": "2026-05-05",
-      "rationale": "Stalwart IV Discount: 13% ROIC, 10.6% FCF yield, PEG 0.23 with +8% growth and 78% MoS. AI-powered customer engagement software; defensive secular growth in contact center automation. Complements QLYS/",
-      "conviction": "HIGH",
-      "sell_trigger": "Customer churn accelerates >200bp above guidance; AI-driven margin expansion stalls for 2 consecutive quarters; PEG expands above 1.5",
-      "lynch_category": "Stalwart+Turnaround",
+      "rationale": "PEGA entry frees remaining $10.2k. RELY = 7% ROIC (below 12% threshold but recovering Turnaround), 6.2% FCF yield, PEG 0.32, +29% growth, 78% MoS. Digital remittance market has 3\u20135 year structural tai",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "FCF yield falls below 4% OR growth stalls below +15% OR unit economics deteriorate (COGS/revenue ratio exceeds 45%)",
+      "lynch_category": "FastGrower+Turnaround",
       "sector": "Technology"
     }
   ],
@@ -1048,6 +1048,54 @@
       "return_pct": 0.0,
       "transaction_cost": 5.97,
       "rationale": "Stalwart IV Discount: 13% ROIC, 10.6% FCF yield, PEG 0.23 with +8% growth and 78% MoS. AI-powered customer engagement software; defensive secular growth in contact center automation. Complements QLYS/"
+    },
+    {
+      "date": "2026-05-05",
+      "action": "SELL",
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 160,
+      "price": 31.08,
+      "value": 4966.83,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, NOT FUNDAMENTALS. HRB is a solid Stalwart (30% ROIC, 13.2% FCF yield, PEG 0.29), but portfolio is AT LYNCH CAP with 7 Stalwarts (max 5). Must trim Stalwarts to restore balance. Selling HRB (held 0d, most recent entry) creates space for higher-conviction plays and corrects category overweight. Fundamentals intact; exit is purely structural."
+    },
+    {
+      "date": "2026-05-05",
+      "action": "SELL",
+      "ticker": "NICE",
+      "company": "NICE Ltd.",
+      "shares": 40,
+      "price": 124.19,
+      "value": 4961.63,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "Thesis broken by PORTFOLIO STRUCTURE, NOT FUNDAMENTALS. NICE is sound (13% ROIC, 10.6% FCF yield, PEG 0.23, 78% MoS) but portfolio is AT LYNCH CAP with 7 Stalwarts (max 5). Must exit Stalwarts to comply with category caps. Selling NICE (held 0d, second-newest entry) preserves higher-conviction positions and restores structural compliance. Fundamentals intact; exit is structural necessity."
+    },
+    {
+      "date": "2026-05-05",
+      "action": "BUY",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 135,
+      "price": 36.79,
+      "value": 4966.65,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "SELL HRB + NICE frees $10.2k. PEGA = 21% ROIC, 8.2% FCF yield, PEG 0.43, +17% growth\u2014hybrid Stalwart/FastGrower. Already sold earlier; re-entry justified: strong Software-as-a-Service moat, discipline"
+    },
+    {
+      "date": "2026-05-05",
+      "action": "BUY",
+      "ticker": "RELY",
+      "company": "Remitly Global, Inc.",
+      "shares": 210,
+      "price": 23.78,
+      "value": 4993.8,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "PEGA entry frees remaining $10.2k. RELY = 7% ROIC (below 12% threshold but recovering Turnaround), 6.2% FCF yield, PEG 0.32, +29% growth, 78% MoS. Digital remittance market has 3\u20135 year structural tai"
     }
   ],
   "last_updated": "2026-05-05"
