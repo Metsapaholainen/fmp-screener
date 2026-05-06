@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 25898.5238,
+  "cash": 26037.0169,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -112,15 +112,15 @@
       "sector": "Consumer Cyclical"
     },
     {
-      "ticker": "INFY",
-      "company": "Infosys Limited",
-      "shares": 408,
-      "entry_price": 12.25,
-      "entry_date": "2026-05-05",
-      "rationale": "Slow Grower IV Discount: 27% ROIC, 7.4% FCF yield, PEG 1.84, 5% growth. Diversified IT services, 62% MoS, management quality. Fills underweighted sector. Defensive positioning in tech slowdown.",
+      "ticker": "IT",
+      "company": "Gartner, Inc.",
+      "shares": 33,
+      "entry_price": 149.49,
+      "entry_date": "2026-05-06",
+      "rationale": "IV Discount Stalwart: 19% ROIC, 11.9% FCF yield, PEG 0.26, +4% growth, 64% MoS. Enterprise research/advisory moat; inflation-resistant recurring revenue. Frees $~12.3k from INFY sale. Rebalances Stalw",
       "conviction": "HIGH",
-      "sell_trigger": "Deal pipeline deteriorates; large-deal wins fall <$100M in any quarter; guidance reduced 2+ times",
-      "lynch_category": "SlowGrower+Turnaround",
+      "sell_trigger": "Renewal rates drop below 90% or ROIC falls below 15% for 2 consecutive quarters",
+      "lynch_category": "Turnaround",
       "sector": "Technology"
     }
   ],
@@ -1144,7 +1144,31 @@
       "return_pct": 0.0,
       "transaction_cost": 6.0,
       "rationale": "Slow Grower IV Discount: 27% ROIC, 7.4% FCF yield, PEG 1.84, 5% growth. Diversified IT services, 62% MoS, management quality. Fills underweighted sector. Defensive positioning in tech slowdown."
+    },
+    {
+      "date": "2026-05-06",
+      "action": "SELL",
+      "ticker": "INFY",
+      "company": "Infosys Limited",
+      "shares": 408,
+      "price": 12.46,
+      "value": 5077.6,
+      "return_pct": 1.71,
+      "transaction_cost": 6.08,
+      "rationale": "Thesis broken: PEG 1.87 at +5% growth violates PEG <2.5 threshold minimally, but more critically\u2014INFY is a Slow Grower in a portfolio already at Lynch cap (1/6 SlowGrowers). Only 1d old; thesis is structural fit, not fundamentals. Sell to free capital for higher-conviction FastGrower or Stalwart rebalancing. Portfolio rule breach: category imbalance forces exit despite solid metrics."
+    },
+    {
+      "date": "2026-05-06",
+      "action": "BUY",
+      "ticker": "IT",
+      "company": "Gartner, Inc.",
+      "shares": 33,
+      "price": 149.49,
+      "value": 4933.17,
+      "return_pct": 0.0,
+      "transaction_cost": 5.93,
+      "rationale": "IV Discount Stalwart: 19% ROIC, 11.9% FCF yield, PEG 0.26, +4% growth, 64% MoS. Enterprise research/advisory moat; inflation-resistant recurring revenue. Frees $~12.3k from INFY sale. Rebalances Stalw"
     }
   ],
-  "last_updated": "2026-05-05"
+  "last_updated": "2026-05-06"
 }
