@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 26037.0169,
+  "cash": 26106.0017,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -88,39 +88,39 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "PTCT",
-      "company": "PTC Therapeutics, Inc.",
-      "shares": 76,
-      "entry_price": 65.15,
-      "entry_date": "2026-05-04",
-      "rationale": "FastGrower: 37% ROIC, 12.9% FCF yield, PEG 0.30 (exceptional), +115% growth. Secular biotech compounder with rare combination of capital efficiency and high growth. Fills Healthcare/FastGrower gap. He",
-      "conviction": "VERY_HIGH",
-      "sell_trigger": "Pipeline stalls OR ROIC falls below 15% due to failed trial OR FCF turns negative",
-      "lynch_category": "FastGrower+AssetPlay",
-      "sector": "Healthcare"
-    },
-    {
-      "ticker": "BKNG",
-      "company": "Booking Holdings",
-      "shares": 29,
-      "entry_price": 167.4,
-      "entry_date": "2026-05-05",
-      "rationale": "FastGrower: 68% ROIC (top 1%), 6.9% FCF yield, PEG 0.52, 13% growth. Online travel dominance + AI-powered personalization. Margin expansion runway. Fills Healthcare/diversification need. 33% MoS.",
-      "conviction": "VERY HIGH",
-      "sell_trigger": "Competitive loss of market share to alternative OTAs; RevPAR declines across key geographies for 2+ quarters",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 65,
+      "entry_price": 76.85,
+      "entry_date": "2026-05-08",
+      "rationale": "Turnaround/IV Discount: 18% ROIC, 9.9% FCF, PEG 1.06, +12% growth, 85% MoS. Government contractor with secular tailwinds (defense spending). Frees slot from PTCT sale. Turnaround category at 7/3 cap\u2014t",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "Winning rate on new contracts falls below 40% or guidance lowered due to competitive losses",
       "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
-      "sector": "Consumer Cyclical"
+      "sector": "Industrials"
     },
     {
-      "ticker": "IT",
-      "company": "Gartner, Inc.",
-      "shares": 33,
-      "entry_price": 149.49,
-      "entry_date": "2026-05-06",
-      "rationale": "IV Discount Stalwart: 19% ROIC, 11.9% FCF yield, PEG 0.26, +4% growth, 64% MoS. Enterprise research/advisory moat; inflation-resistant recurring revenue. Frees $~12.3k from INFY sale. Rebalances Stalw",
-      "conviction": "HIGH",
-      "sell_trigger": "Renewal rates drop below 90% or ROIC falls below 15% for 2 consecutive quarters",
+      "ticker": "PYPL",
+      "company": "PayPal Holdings",
+      "shares": 108,
+      "entry_price": 46.22,
+      "entry_date": "2026-05-08",
+      "rationale": "Turnaround/IV Discount: 15% ROIC, 12.3% FCF yield, PEG 0.57, +4% growth, 56% MoS. Fintech turnaround with strong FCF generation. Frees slot from BKNG sale. Portfolio needs Turnaround rebalancing (7/3 ",
+      "conviction": "MEDIUM",
+      "sell_trigger": "Active account growth turns negative or take-rate compression exceeds 200bps year-over-year",
       "lynch_category": "Turnaround",
+      "sector": "Financial Services"
+    },
+    {
+      "ticker": "EXLS",
+      "company": "ExlService Holdings",
+      "shares": 159,
+      "entry_price": 31.34,
+      "entry_date": "2026-05-08",
+      "rationale": "Stalwart/FastGrower hybrid: 18% ROIC, 6.1% FCF, PEG 0.66, +14% growth, 47% MoS. Business process outsourcing with AI tailwind. Frees slot from IT sale. Despite Stalwart category being over-cap, EXLS b",
+      "conviction": "MEDIUM",
+      "sell_trigger": "Organic revenue growth falls below 5% or AI-driven automation initiatives fail to offset wage inflation",
+      "lynch_category": "Stalwart+FastGrower",
       "sector": "Technology"
     }
   ],
@@ -1168,7 +1168,79 @@
       "return_pct": 0.0,
       "transaction_cost": 5.93,
       "rationale": "IV Discount Stalwart: 19% ROIC, 11.9% FCF yield, PEG 0.26, +4% growth, 64% MoS. Enterprise research/advisory moat; inflation-resistant recurring revenue. Frees $~12.3k from INFY sale. Rebalances Stalw"
+    },
+    {
+      "date": "2026-05-08",
+      "action": "SELL",
+      "ticker": "PTCT",
+      "company": "PTC Therapeutics, Inc.",
+      "shares": 76,
+      "price": 64.49,
+      "value": 4895.34,
+      "return_pct": -1.01,
+      "transaction_cost": 5.9,
+      "rationale": "PORTFOLIO STRUCTURE VIOLATION, NOT FUNDAMENTALS. PTCT is a FastGrower (6/4 cap, at-cap). Thesis intact (37% ROIC, 12.9% FCF, PEG 0.30, +115% growth), but category is full. Must trim FastGrower exposure before adding more. Sell to rebalance."
+    },
+    {
+      "date": "2026-05-08",
+      "action": "SELL",
+      "ticker": "BKNG",
+      "company": "Booking Holdings",
+      "shares": 29,
+      "price": 171.28,
+      "value": 4961.15,
+      "return_pct": 2.32,
+      "transaction_cost": 5.97,
+      "rationale": "PORTFOLIO STRUCTURE VIOLATION, NOT FUNDAMENTALS. BKNG is a FastGrower (6/4 cap, at-cap). Thesis intact (68% ROIC, 6.9% FCF, PEG 0.53, +13% growth\u2014exceptional), but category is overweight. Sell to clear FastGrower slot and restore category discipline."
+    },
+    {
+      "date": "2026-05-08",
+      "action": "SELL",
+      "ticker": "IT",
+      "company": "Gartner, Inc.",
+      "shares": 33,
+      "price": 157.78,
+      "value": 5200.53,
+      "return_pct": 5.55,
+      "transaction_cost": 6.21,
+      "rationale": "PORTFOLIO STRUCTURE VIOLATION, NOT FUNDAMENTALS. IT is a Stalwart (7/5 cap, at-cap). Thesis intact (19% ROIC, 11.9% FCF, PEG 0.28, +4% growth, 62% MoS), but Stalwart category is severely overweight (7 vs. 5 max). Sell to rebalance and free slots for other categories."
+    },
+    {
+      "date": "2026-05-08",
+      "action": "BUY",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 65,
+      "price": 76.85,
+      "value": 4995.25,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "Turnaround/IV Discount: 18% ROIC, 9.9% FCF, PEG 1.06, +12% growth, 85% MoS. Government contractor with secular tailwinds (defense spending). Frees slot from PTCT sale. Turnaround category at 7/3 cap\u2014t"
+    },
+    {
+      "date": "2026-05-08",
+      "action": "BUY",
+      "ticker": "PYPL",
+      "company": "PayPal Holdings",
+      "shares": 108,
+      "price": 46.22,
+      "value": 4991.76,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "Turnaround/IV Discount: 15% ROIC, 12.3% FCF yield, PEG 0.57, +4% growth, 56% MoS. Fintech turnaround with strong FCF generation. Frees slot from BKNG sale. Portfolio needs Turnaround rebalancing (7/3 "
+    },
+    {
+      "date": "2026-05-08",
+      "action": "BUY",
+      "ticker": "EXLS",
+      "company": "ExlService Holdings",
+      "shares": 159,
+      "price": 31.34,
+      "value": 4983.06,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "Stalwart/FastGrower hybrid: 18% ROIC, 6.1% FCF, PEG 0.66, +14% growth, 47% MoS. Business process outsourcing with AI tailwind. Frees slot from IT sale. Despite Stalwart category being over-cap, EXLS b"
     }
   ],
-  "last_updated": "2026-05-07"
+  "last_updated": "2026-05-08"
 }
