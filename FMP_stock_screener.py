@@ -1797,6 +1797,66 @@ def fetch_key_metrics(tickers: list) -> dict:
     return _parallel_fetch(tickers, "key-metrics-ttm", "key metrics", "key_metrics")
 
 
+def fetch_pe_history(tickers: list, cache_key: str = "pe_history_10y") -> dict:
+    """Fetch 10-year annual P/E ratios per ticker, return ticker → median P/E.
+    Uses MEDIAN (not mean) because earnings shocks (one bad year → P/E=500) destroy
+    a simple average. Filters out years where peRatio is missing, ≤0, or > 200
+    (likely a near-zero-EPS artefact, not a real valuation).
+    Cache key 'pe_history_10y' (default) or 'pe_history_10y_sc' for small-cap
+    supplemental — annual data changes ≤ once per year so this can sit in cache
+    long-term; once warmed, re-runs cost zero API calls.
+    """
+    if _cache.get(cache_key):
+        print(f"  📦 Using cached 10Y P/E history ({len(_cache[cache_key])} stocks)")
+        return _cache[cache_key]
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    print(f"\n  📊 Fetching 10Y annual P/E history (one-time fetch — cached long-term)...")
+    results = {}
+    _lock = threading.Lock()
+    _throttle = threading.Semaphore(4)
+
+    def _f(t):
+        with _throttle:
+            # Use 'ratios' (not 'key-metrics') — annual key-metrics returns earningsYield,
+            # while ratios returns priceToEarningsRatio directly. Same data, different name.
+            data = fmp_get("ratios",
+                           {"symbol": t, "period": "annual", "limit": "10"})
+            time.sleep(0.2)
+            if not data or not isinstance(data, list) or len(data) < 3:
+                return t, None
+            # Extract P/E values, filter: must be positive and < 200
+            # (PE > 200 typically means EPS near zero, not a real high valuation)
+            pes = []
+            for row in data:
+                pe = row.get("priceToEarningsRatio")
+                if pe is not None and 0 < pe < 200:
+                    pes.append(pe)
+            if len(pes) < 3:
+                return t, None    # need at least 3 clean years for a meaningful median
+            pes.sort()
+            n = len(pes)
+            # Median: middle value (or average of two middles for even n)
+            median = pes[n // 2] if n % 2 == 1 else (pes[n // 2 - 1] + pes[n // 2]) / 2.0
+            return t, {"median": round(median, 2), "n_years": n}
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futs = {pool.submit(_f, t): t for t in tickers}
+        done = 0
+        for fut in as_completed(futs):
+            t, data = fut.result()
+            if data:
+                with _lock: results[t] = data
+            done += 1
+            if done % 200 == 0:
+                print(f"    [{done}/{len(tickers)}] 10Y P/E history fetched...")
+
+    _cache[cache_key] = results
+    print(f"  ✅ 10Y P/E history loaded: {len(results)} stocks")
+    return results
+
+
 def fetch_dcf_bulk(tickers: list) -> dict:
     return _parallel_fetch(tickers, "discounted-cash-flow", "DCF values", "dcf")
 
@@ -3078,7 +3138,8 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                         balance_sheet=None, earnings_surp=None,
                         bs_5y=None, cfs_5y=None, cfs_ttm=None, executives=None,
                         macro=None, going_concern_tickers: set = None,
-                        est_revisions: dict = None) -> dict:
+                        est_revisions: dict = None,
+                        pe_history: dict = None) -> dict:
     """Merge all FMP data sources into a single dict per stock."""
     print("\n  🔧 Assembling unified stock data...")
     sector_overrides = _load_sector_overrides()
@@ -3457,6 +3518,10 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             "peg": peg,
             "fwdPE": fwd_pe,
             "fwdPEG": fwd_peg,
+            # 10-year median P/E (FMP annual key-metrics, filtered to clean years).
+            # Used as a "cheap-vs-history" anchor: current P/E ÷ peHistMedian10y < 0.8 → cheap.
+            "peHistMedian10y": (pe_history or {}).get(t, {}).get("median"),
+            "peHistYears":     (pe_history or {}).get(t, {}).get("n_years"),
             # P/B, D/E, Div Yield, Gross Margin → ratios-ttm (confirmed field names)
             "pb": pb_val,
             "ps": _first(rtm.get("priceToSalesRatioTTM"), km.get("evToSalesTTM")),
@@ -4001,6 +4066,7 @@ def format_stock_row(s: dict) -> dict:
         "Fwd PEG": s.get("fwdPEG"),
         "Fwd P/E": s.get("fwdPE"),
         "P/E": s.get("pe"),
+        "P/E 10Y Avg": s.get("peHistMedian10y"),
         "P/B": s.get("pb"),
         "EV/EBITDA": s.get("evEbitda"),
         "EV/Rev": s.get("evRevenue"),
@@ -4252,7 +4318,7 @@ def build_iv_discount(wb, stocks):
     headers = [
         "Rank", "Ticker", "Company", "Sector", "Price", "IV", "MoS",
         "IV (Custom)", "MoS (Custom)", "Implied 5Y Growth",
-        "P/E", "EV/EBITDA", "PEG", "P/B", "FCF Yield", "ROIC", "ROE", "D/E",
+        "P/E", "P/E 10Y Avg", "EV/EBITDA", "PEG", "P/B", "FCF Yield", "ROIC", "ROE", "D/E",
         "Beat Rate", "Rev Consist.", "FCF Conv.", "EPS Growth 5Y",
         "MktCap ($B)", "Score", "🏦 Insider",
     ]
@@ -4305,7 +4371,7 @@ def build_lynch_tab(wb, stocks, category_name, tab_number, filter_fn, sort_key,
     sr = add_title(ws, f"📚 Lynch: {category_name}", description + f" — {datetime.date.today()}")
 
     headers = custom_headers or [
-        "Rank", "Ticker", "Company", "Sector", "Price", "PEG", "P/E", "P/B", "IV", "MoS",
+        "Rank", "Ticker", "Company", "Sector", "Price", "PEG", "P/E", "P/E 10Y Avg", "P/B", "IV", "MoS",
         "ROE", "FCF Yield", "Rev Growth", "EPS Growth 5Y", "Piotroski",
         "Div Yield", "MktCap ($B)", "Score", "🏦 Insider",
     ]
@@ -5595,12 +5661,21 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
 Today is {datetime.date.today()}.{_neutral_note}
 Your eleven specialists are: Quality Growth (compounders), Special Situation, Capital Appreciation, Emerging Growth, 10-Bagger Hunter, Lynch Buy What You Know, Disruptive Innovation, Pabrai Asymmetric Bet, Marks Second-Level, Burry Deep Value, Insider & Smart Money.
 
-YOUR INVESTMENT PHILOSOPHY:
-- Quality first: ROIC > 15% sustained is the clearest indicator of durable competitive advantage; it is the CORE decision variable — check ROIC before anything else
-- Valuation discipline: PEG < 1.5 is the entry gate, but ALSO check P/FCF < 25 and EV/EBITDA < 15 for non-hypergrowth stocks; a cheap-looking PEG with no FCF is a warning sign, not a buy signal
-- {"Macro-neutral mode: pick on business quality and valuation alone — rate environment is intentionally excluded." if neutral_judge else "In elevated rate environments (10Y yield > 4%): require FCF yield > 4% or an explicit growth-justified premium — any business must earn its risk premium over Treasuries"}
-- A great business at a fair price beats a fair business at a great price every time (Buffett), but an average business at a "cheap" price destroys capital (value trap)
-- Catalyst discipline: prefer picks where a specific, identifiable event in 1-6 months can unlock value — "cheap" without a catalyst is a portfolio deadweight
+YOUR INVESTMENT PHILOSOPHY — VALUE-TILTED QUALITY:
+- Your job is to find SOLID companies at LOW valuations, not great companies at fair prices. The Buffett "great business at any reasonable price" lens has become crowded; your edge is finding solid businesses where the market is currently mispricing them as boring, broken, or out-of-favour.
+- Quality floor (must clear, not maximise): ROIC > 12% sustained, FCF positive, revConsistency > 0.50, no debt distress. A "solid" business clears these gates — chasing 30%+ ROIC names usually means paying up.
+- Valuation discipline (THE primary decision variable): demand at least TWO of these to fire:
+    * PEG < 1.2  (was the old gate; now mid-tier only)
+    * P/FCF < 18  (free-cash-flow yield > ~5.5% — the real owner's yield)
+    * EV/EBITDA < 12  (enterprise-value cheapness independent of capital structure)
+    * FCF yield > 6%  (cash return on price — the bond-equivalent floor)
+    * P/B < 2.0 with tangible book intact (Graham-style asset coverage for slower-moving names)
+  ONE valuation hit is not enough — single-metric cheapness is often a value trap (low PEG with no FCF, low P/B with negative ROE, etc).
+- Margin of Safety (MoS) — if the candidate carries a mosCustom or MoS tag in the data, PREFER picks with MoS > 20%. Treat MoS > 30% with intact quality as the highest-priority cheap setup.
+- {"Macro-neutral mode: pick on quality floor + cheap valuation alone — rate environment intentionally excluded." if neutral_judge else "In elevated rate environments (10Y yield > 4%): tighten further — require FCF yield > 5% or explicit reinvestment-economics justification. Any equity must clearly out-yield Treasuries plus an equity risk premium."}
+- An average business at a deeply discounted price (P/FCF < 12, mosCustom > 30%) can be a great pick IF the balance sheet is intact and there is a self-correcting mechanism (cyclical recovery, buybacks, asset sale). Resist the reflex to "always pay up for quality" — that's the consensus trade.
+- Avoid premium-priced compounders unless valuation is genuinely defensible: a P/FCF of 35 with 25% growth is a market-implied 5%+ FCF yield in 3 years — only acceptable if you have very high confidence the growth will materialise.
+- Catalyst discipline: a clearly cheap stock with a hard catalyst in 1-6 months is the highest-conviction setup; a clearly cheap stock with no catalyst is still investable as long as the cheapness itself self-corrects via FCF generation/buybacks (skip "cheap" turnarounds with bleeding FCF and no catalyst — those are real value traps).
 - Size neutrality: a $100B compounder at PEG 0.8 and 35% ROIC beats a $1B name at PEG 0.8 with 15% ROIC; size is irrelevant to quality
 - 🛒 FAMILIAR-BRAND PREFERENCE — the user picks stocks based on personal knowledge of products/services they directly use (Adobe, Microsoft, Costco, etc.). Candidates carrying the 🛒FamiliarBrand tag are consumer-observable — the user can independently evaluate the product. When two picks are otherwise equal in quality and valuation, PREFER the 🛒 one. Note in synopsis when a pick is 🛒 ("user can directly evaluate this product/service").
 - 🔍 UNDER-COVERED PREFERENCE — names tagged 🔍UnderCovered have <8 sell-side analysts (or <12 for >$2B caps). This is structural Wall Street inefficiency: analysts cluster on big mega-caps because that's where the fees are; small/mid quality names get neglected and persistently mispriced. When two picks are otherwise equal, PREFER the 🔍 one — that's where personal-knowledge edge generates alpha vs the consensus crowd.
@@ -5670,12 +5745,17 @@ YOUR TASK:
 4. Assess competitive position with specifics: who are the top 2-3 competitors, and what structural advantage makes this company hard to displace?
 5. Survivability check: be explicit — what happens to revenues and FCF in a -20% GDP recession scenario?
 
-QUALITY FILTERS — verify before including any pick:
-  1. ROIC > 15% preferred (✅ROIC flag in data) — this is the primary quality gate; check it first
-  2. Valuation: PEG < 1.5 AND (P/FCF < 25 OR EV/EBITDA < 15) — two valuation confirmations required for non-hypergrowth
-  3. FCF conversion ≥ 0.6 (FCFConv in data) — earnings quality gate; growth without FCF conversion is accounting, not business performance
-  4. Flag ⚠GrwthGap and ⚠EpsGap picks explicitly — analyst optimism significantly ahead of track record is a red flag, not a buy signal
-  5. Rate adjustment: if 10Y > 4%, verify FCF yield > 4% or explicitly justify why growth premium is warranted
+QUALITY + VALUATION FILTERS — verify before including any pick:
+  1. QUALITY FLOOR (must clear, not maximise): ROIC > 12% sustained, FCF positive, revConsistency > 0.50.
+     Chasing 30%+ ROIC names usually means paying up. "Solid" is the bar, not "exceptional".
+  2. VALUATION GATE — at least TWO of these must fire (single-metric cheapness is a value trap):
+        PEG < 1.2  ·  P/FCF < 18  ·  EV/EBITDA < 12  ·  FCF yield > 6%  ·  P/B < 2.0 with intact tangible book
+     Three-or-more hits = strong cheap signal. One hit alone = REJECT, regardless of how attractive that one number looks.
+  3. MARGIN OF SAFETY: when mosCustom is in the data, PREFER MoS > 20%; treat MoS > 30% + intact quality as a CORE-priority cheap setup.
+  4. FCF conversion ≥ 0.6 (FCFConv in data) — earnings quality gate; growth without FCF conversion is accounting, not business performance.
+  5. Flag ⚠GrwthGap and ⚠EpsGap picks explicitly — analyst optimism significantly ahead of track record is a red flag, not a buy signal; in a value-tilted system these are particularly dangerous.
+  6. Rate adjustment: if 10Y > 4%, tighten further — require FCF yield > 5% or reject. The point of value tilt is to demand a clear yield premium over Treasuries.
+  7. PREMIUM-PRICED COMPOUNDERS: do not include any pick with P/FCF > 25 unless its expected forward FCF yield (using consensus growth) exceeds 5% within 3 years AND the data carries ≥4 quality flags. Resist the "great business at fair price" reflex — that's the consensus trade your value tilt is designed to avoid.
 
 KILL CRITERIA — hard rejections, no exceptions:
   ❌ FCF negative (unless 10-Bagger candidate with gross margin > 30% AND operating income positive)
@@ -5996,6 +6076,23 @@ JSON only. No markdown, no preamble."""
         except Exception as je:
             print(f"  ⚠️ Mall Manager JSON parse failed: {str(je)[:100]}")
             return {}
+        # Dedupe picks by ticker — the LLM occasionally repeats a ticker
+        # (e.g. with "Placeholder — see above" body), keep the first occurrence
+        _seen_tickers = set()
+        _deduped = []
+        _dropped = []
+        for _p in result.get("picks", []):
+            _t = (_p.get("ticker") or "").upper()
+            if not _t:
+                continue
+            if _t in _seen_tickers:
+                _dropped.append(_t)
+                continue
+            _seen_tickers.add(_t)
+            _deduped.append(_p)
+        if _dropped:
+            print(f"  🧹 Mall Manager: dropped {len(_dropped)} duplicate pick(s): {', '.join(_dropped)}")
+        result["picks"] = _deduped
         n = len(result.get("picks", []))
         print(f"  ✅ Mall Manager picks: {n}")
         return result
@@ -10888,6 +10985,30 @@ function showMacroDetail(el, id) {
                 elif c in ("P/E", "P/B", "P/FCF", "EV/EBITDA", "Fwd P/E", "Score", "Rank",
                            "Piotroski", "MktCap ($B)", "Beta", "Net Debt/EBITDA"):
                     cells.append(_cell(_num(v, 1) if isinstance(v, float) else (str(v) if v is not None else "—"), v))
+                elif c == "P/E 10Y Avg":
+                    # Color-code current P/E vs 10Y median: < 0.8x = cheap (green),
+                    # > 1.3x = expensive vs history (red), else neutral.
+                    # Tooltip explains the calculation.
+                    _cur_pe = r.get("P/E")
+                    if v is None or not isinstance(v, (int, float)):
+                        cells.append("<td style='text-align:right;color:#78909c'>—</td>")
+                    else:
+                        _ratio = (_cur_pe / v) if (isinstance(_cur_pe, (int, float)) and _cur_pe > 0 and v > 0) else None
+                        if _ratio is None:
+                            _color = ""; _badge = ""
+                        elif _ratio < 0.80:
+                            _color = "color:#66bb6a;font-weight:600"; _badge = " ⬇"
+                        elif _ratio > 1.30:
+                            _color = "color:#ef5350;font-weight:600"; _badge = " ⬆"
+                        else:
+                            _color = "color:#b0bec5"; _badge = ""
+                        _tip = (f"10Y median P/E from annual data. Current P/E ÷ 10Y "
+                                f"median = {_ratio:.2f}x" if _ratio else
+                                "10Y median P/E from annual data")
+                        cells.append(
+                            f"<td style='text-align:right;{_color}' title='{_tip}'>"
+                            f"{_num(v, 1)}{_badge}</td>"
+                        )
                 elif c == "FCF/Sh 5Y":
                     cells.append(_cell(_pct(v) if v is not None else "—", v))
                 elif c == "CEO Score":
@@ -11922,6 +12043,13 @@ function showMacroDetail(el, id) {
         mall_section_html = ""
         try:
             _mall_picks = (mall or {}).get("picks", []) if mall else []
+            # Defensive dedupe at render time — handles cached results from before the
+            # call_mall_manager dedupe was added (LLM occasionally emits the same ticker twice)
+            if _mall_picks:
+                _seen_mall = set()
+                _mall_picks = [_p for _p in _mall_picks
+                               if not ((_p.get("ticker") or "").upper() in _seen_mall
+                                       or _seen_mall.add((_p.get("ticker") or "").upper()))]
             if _mall_picks:
                 _mall_synopsis = (mall or {}).get("synopsis", "")
                 _mall_rejected = (mall or {}).get("rejected_examples", "")
@@ -12968,7 +13096,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
 
     # ── STRATEGY TABLE COLS ───────────────────────────────────────────────
     STRAT_COLS = ["Rank","Ticker","Streak","Company","Sector","Price","Score",
-                  "PEG","Fwd PEG","P/E","ROIC","ROE","FCF Yield",
+                  "PEG","Fwd PEG","P/E","P/E 10Y Avg","ROIC","ROE","FCF Yield",
                   "MoS","Rev Growth","Piotroski","MktCap ($B)"]
 
     # ── 🔔 SPIN-OFF ALERT BANNER (Greenblatt edge — only renders when events present) ─
@@ -13853,6 +13981,7 @@ def main():
 
     key_metrics = fetch_key_metrics(top_for_enrichment)
     ratios_ttm = fetch_ratios_ttm(top_for_enrichment)
+    pe_history_10y = fetch_pe_history(top_for_enrichment)   # 10Y median P/E for "cheap-vs-history" view
     dcf_data = fetch_dcf_bulk(top_for_enrichment)
     estimates = fetch_growth_estimates(top_for_enrichment)
     # Tier 3.8: persist today's snapshot + compute revision delta vs 30d-ago snapshot
@@ -14044,7 +14173,7 @@ def main():
         # Cached separately as "cash_flow_5y_sc" (7-day TTL via standard cache).
         # After fetch, merge into cfs_5y_data so assemble_stock_data() picks them up.
         _sc_cfs_candidates = [
-            t for t in _sc_candidates[:1000]
+            t for t in _sc_candidates[:2000]   # widened to match SC supplemental scope below
             if t not in cfs_5y_data   # skip tickers already covered by large-cap fetch
         ]
         if _sc_cfs_candidates:
@@ -14060,6 +14189,86 @@ def main():
                 cfs_5y_data.update(_sc_cfs5_cached)
                 print(f"  📦 SC CFS (cached): +{_cfs_merged} small-caps merged into CFS data")
 
+        # ── SC supplemental: key_metrics + scores + dcf + pe_history ─────────
+        # These four caches were previously only built for the top 4000 by mktcap,
+        # leaving small-cap AI picks (TenBagger, OffRadar) rendered with empty
+        # ROIC, FCF Yield, Piotroski, DCF, P/E 10Y Avg cells — the user's "missing
+        # data" complaint. Top 2000 SC by mktcap (~$625M floor) covers virtually
+        # every ticker that lands in the AI sc_top_stocks pool. ~8000 extra calls
+        # on first run (cached long-term), zero on subsequent runs.
+        _sc_for_supp = [t for t in _sc_candidates[:2000]]
+
+        # 1. SC key_metrics (ROIC, FCF Yield, EV/EBITDA, Net Debt/EBITDA, Graham Number)
+        _sc_km_needed = [t for t in _sc_for_supp if t not in key_metrics]
+        if _sc_km_needed:
+            _sc_km = _parallel_fetch(_sc_km_needed, "key-metrics-ttm",
+                                     "SC key metrics", "key_metrics_sc")
+            _km_added = sum(1 for t in _sc_km if t not in key_metrics)
+            for t, d in _sc_km.items():
+                if t not in key_metrics:
+                    key_metrics[t] = d
+            print(f"  ✅ SC key_metrics merge: +{_km_added} stocks (ROIC, FCF Yield, EV/EBITDA enabled)")
+        else:
+            _sc_km_cached = _cache.get("key_metrics_sc") or {}
+            for t, d in _sc_km_cached.items():
+                if t not in key_metrics:
+                    key_metrics[t] = d
+            if _sc_km_cached:
+                print(f"  📦 SC key_metrics (cached): merged {len(_sc_km_cached)} stocks into key_metrics")
+
+        # 2. SC Piotroski scores
+        _sc_sc_needed = [t for t in _sc_for_supp if t not in scores]
+        if _sc_sc_needed:
+            _sc_scores = _parallel_fetch(_sc_sc_needed, "financial-scores",
+                                         "SC Piotroski scores", "scores_sc")
+            _sc_added = sum(1 for t in _sc_scores if t not in scores)
+            for t, d in _sc_scores.items():
+                if t not in scores:
+                    scores[t] = d
+            print(f"  ✅ SC scores merge: +{_sc_added} stocks (Piotroski enabled)")
+        else:
+            _sc_scores_cached = _cache.get("scores_sc") or {}
+            for t, d in _sc_scores_cached.items():
+                if t not in scores:
+                    scores[t] = d
+            if _sc_scores_cached:
+                print(f"  📦 SC scores (cached): merged {len(_sc_scores_cached)} stocks into scores")
+
+        # 3. SC FMP DCF values
+        _sc_dcf_needed = [t for t in _sc_for_supp if t not in dcf_data]
+        if _sc_dcf_needed:
+            _sc_dcf = _parallel_fetch(_sc_dcf_needed, "discounted-cash-flow",
+                                      "SC DCF values", "dcf_sc")
+            _dcf_added = sum(1 for t in _sc_dcf if t not in dcf_data)
+            for t, d in _sc_dcf.items():
+                if t not in dcf_data:
+                    dcf_data[t] = d
+            print(f"  ✅ SC DCF merge: +{_dcf_added} stocks (FMP DCF enabled)")
+        else:
+            _sc_dcf_cached = _cache.get("dcf_sc") or {}
+            for t, d in _sc_dcf_cached.items():
+                if t not in dcf_data:
+                    dcf_data[t] = d
+            if _sc_dcf_cached:
+                print(f"  📦 SC DCF (cached): merged {len(_sc_dcf_cached)} stocks into dcf_data")
+
+        # 4. SC 10Y P/E history median
+        _sc_pe_needed = [t for t in _sc_for_supp if t not in pe_history_10y]
+        if _sc_pe_needed:
+            _sc_pe = fetch_pe_history(_sc_pe_needed, cache_key="pe_history_10y_sc")
+            _pe_added = sum(1 for t in _sc_pe if t not in pe_history_10y)
+            for t, d in _sc_pe.items():
+                if t not in pe_history_10y:
+                    pe_history_10y[t] = d
+            print(f"  ✅ SC P/E history merge: +{_pe_added} stocks (P/E 10Y Avg enabled)")
+        else:
+            _sc_pe_cached = _cache.get("pe_history_10y_sc") or {}
+            for t, d in _sc_pe_cached.items():
+                if t not in pe_history_10y:
+                    pe_history_10y[t] = d
+            if _sc_pe_cached:
+                print(f"  📦 SC P/E history (cached): merged {len(_sc_pe_cached)} stocks")
+
         save_cache()   # persist SC cache keys for next run
 
     # Assemble
@@ -14070,7 +14279,8 @@ def main():
                                  executives=executives_data,
                                  macro=macro_data,
                                  going_concern_tickers=going_concern_tickers,
-                                 est_revisions=_est_revisions)
+                                 est_revisions=_est_revisions,
+                                 pe_history=pe_history_10y)
 
     print(f"\n  📊 FMP API calls this run: {_fmp_call_count}")
 
