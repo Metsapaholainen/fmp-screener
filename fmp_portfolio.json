@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 31050.2772,
+  "cash": 26079.762600000002,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -110,6 +110,18 @@
       "sell_trigger": "Combined ratio exceeds 98% for 2 consecutive quarters, or catastrophe losses materially exceed guidance",
       "lynch_category": "Turnaround",
       "sector": "Financial Services"
+    },
+    {
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 138,
+      "entry_price": 35.98,
+      "entry_date": "2026-05-09",
+      "rationale": "Stalwart/FastGrower hybrid: 21% ROIC, 8.2% FCF yield, PEG 0.42 with +17% growth. Low enterprise software PEG (0.42) is genuinely rare. Workflow automation + low-code platform has secular tailwinds. NO",
+      "conviction": "HIGH",
+      "sell_trigger": "Revenue growth decelerates below 10% for two consecutive quarters, or ROIC falls below 15%",
+      "lynch_category": "Stalwart+FastGrower",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -1288,6 +1300,18 @@
       "return_pct": 0.0,
       "transaction_cost": 5.9,
       "rationale": "Premium insurer with 31% ROIC, 21.0% FCF yield, PEG 0.78, and +5% growth. Superior to CB on FCF yield (21% vs 12.8%) and comparable ROIC. Diversified across homeowners, auto, and specialty. Rate envir"
+    },
+    {
+      "date": "2026-05-09",
+      "action": "BUY",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 138,
+      "price": 35.98,
+      "value": 4964.55,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "Stalwart/FastGrower hybrid: 21% ROIC, 8.2% FCF yield, PEG 0.42 with +17% growth. Low enterprise software PEG (0.42) is genuinely rare. Workflow automation + low-code platform has secular tailwinds. NO"
     }
   ],
   "last_updated": "2026-05-09"
