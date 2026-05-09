@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 26106.0017,
+  "cash": 31107.594100000002,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -86,18 +86,6 @@
       "sell_trigger": "Underwriting profitability deteriorates OR investment portfolio realizes material losses OR M&A becomes destructive",
       "lynch_category": "Stalwart+Cyclical",
       "sector": "Financial Services"
-    },
-    {
-      "ticker": "BAH",
-      "company": "Booz Allen Hamilton",
-      "shares": 65,
-      "entry_price": 76.85,
-      "entry_date": "2026-05-08",
-      "rationale": "Turnaround/IV Discount: 18% ROIC, 9.9% FCF, PEG 1.06, +12% growth, 85% MoS. Government contractor with secular tailwinds (defense spending). Frees slot from PTCT sale. Turnaround category at 7/3 cap\u2014t",
-      "conviction": "MEDIUM-HIGH",
-      "sell_trigger": "Winning rate on new contracts falls below 40% or guidance lowered due to competitive losses",
-      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
-      "sector": "Industrials"
     },
     {
       "ticker": "PYPL",
@@ -1240,7 +1228,19 @@
       "return_pct": 0.0,
       "transaction_cost": 5.98,
       "rationale": "Stalwart/FastGrower hybrid: 18% ROIC, 6.1% FCF, PEG 0.66, +14% growth, 47% MoS. Business process outsourcing with AI tailwind. Frees slot from IT sale. Despite Stalwart category being over-cap, EXLS b"
+    },
+    {
+      "date": "2026-05-09",
+      "action": "SELL",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 65,
+      "price": 77.04,
+      "value": 5001.59,
+      "return_pct": 0.25,
+      "transaction_cost": 6.01,
+      "rationale": "PORTFOLIO STRUCTURE VIOLATION, NOT FUNDAMENTALS. BAH is a Turnaround in a category at 8/3 capacity. Must trim Turnarounds to 3-max. BAH (18% ROIC, 10% FCF, 1.06 PEG) is solid but EXLS (hybrid Stalwart/FastGrower) and PYPL (higher FCF yield 13.8%) have stronger structural positioning. Only 1 day held\u2014this was a squeeze entry. Sell to rebalance."
     }
   ],
-  "last_updated": "2026-05-08"
+  "last_updated": "2026-05-09"
 }
