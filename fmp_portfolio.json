@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 26079.762600000002,
+  "cash": 26043.1123,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -88,18 +88,6 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "MNDY",
-      "company": "monday.com Ltd.",
-      "shares": 69,
-      "entry_price": 72.07,
-      "entry_date": "2026-05-09",
-      "rationale": "Turnaround/FastGrower hybrid: 27% growth with improving ROIC trajectory (currently -0% but FCF positive at 8.6% yield suggests earnings inflection). PEG 0.49 is exceptional for 27% growth. 60% MoS. Re",
-      "conviction": "HIGH",
-      "sell_trigger": "ROIC fails to improve toward 12%+ within 2 quarters, or user growth falls below +20% YoY",
-      "lynch_category": "FastGrower+Turnaround+AssetPlay",
-      "sector": "Technology"
-    },
-    {
       "ticker": "ALL",
       "company": "The Allstate Corporation",
       "shares": 23,
@@ -121,6 +109,18 @@
       "conviction": "HIGH",
       "sell_trigger": "Revenue growth decelerates below 10% for two consecutive quarters, or ROIC falls below 15%",
       "lynch_category": "Stalwart+FastGrower",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "PGY",
+      "company": "Pagaya Technologies",
+      "shares": 329,
+      "entry_price": 15.19,
+      "entry_date": "2026-05-10",
+      "rationale": "After MNDY sale, opens 1 Turnaround slot. PGY is exceptional: ROIC 59%, FCF 18.6%, PEG 0.53, RG +26%. Quality Compounder + FastGrower + 10-bagger DNA. AI-powered credit platform with structural tailwi",
+      "conviction": "VERY HIGH",
+      "sell_trigger": "ROIC deteriorates below 30% sustained for 2+ quarters, or FCF yield drops below 10%",
+      "lynch_category": "FastGrower",
       "sector": "Technology"
     }
   ],
@@ -1312,6 +1312,30 @@
       "return_pct": 0.0,
       "transaction_cost": 5.96,
       "rationale": "Stalwart/FastGrower hybrid: 21% ROIC, 8.2% FCF yield, PEG 0.42 with +17% growth. Low enterprise software PEG (0.42) is genuinely rare. Workflow automation + low-code platform has secular tailwinds. NO"
+    },
+    {
+      "date": "2026-05-10",
+      "action": "SELL",
+      "ticker": "MNDY",
+      "company": "monday.com Ltd.",
+      "shares": 69,
+      "price": 72.07,
+      "value": 4966.86,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "Thesis broken on ROIC criteria. ROIC currently at 0% fails the >12% ROIC threshold required for all new buys. Purchased at 1d on turnaround/FastGrower hybrid assumption, but negative ROIC with execution risks in work-OS platform means thesis does not meet quality bar. Sell to free Lynch category slots (Turnaround currently 8/3 over cap). At breakeven price, exit has no regret value."
+    },
+    {
+      "date": "2026-05-10",
+      "action": "BUY",
+      "ticker": "PGY",
+      "company": "Pagaya Technologies",
+      "shares": 329,
+      "price": 15.19,
+      "value": 4997.51,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "After MNDY sale, opens 1 Turnaround slot. PGY is exceptional: ROIC 59%, FCF 18.6%, PEG 0.53, RG +26%. Quality Compounder + FastGrower + 10-bagger DNA. AI-powered credit platform with structural tailwi"
     }
   ],
   "last_updated": "2026-05-10"
