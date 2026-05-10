@@ -13103,13 +13103,17 @@ function showMacroDetail(el, id) {
             )
 
         _nav_grid = f"""
-<div style="margin-bottom:16px">
-  <div style="font-size:.68rem;color:#546e7a;text-transform:uppercase;letter-spacing:.06em;
-    margin-bottom:8px">↓ Jump to specialist</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">
+<details open style="margin-bottom:16px">
+  <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;
+    padding:5px 2px;font-size:.68rem;color:#546e7a;text-transform:uppercase;
+    letter-spacing:.06em;user-select:none">
+    ↓ Jump to specialist
+    <span style="margin-left:auto;font-size:.65rem">▼</span>
+  </summary>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:8px">
     {"".join(spec_nav_cards)}
   </div>
-</div>
+</details>
 <script>
 function openSpec(id){{
   var el=document.getElementById(id);
