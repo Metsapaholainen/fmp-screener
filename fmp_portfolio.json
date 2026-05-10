@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 26043.1123,
+  "cash": 31097.517299999992,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -88,40 +88,28 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "ALL",
-      "company": "The Allstate Corporation",
-      "shares": 23,
-      "entry_price": 213.15,
-      "entry_date": "2026-05-09",
-      "rationale": "Premium insurer with 31% ROIC, 21.0% FCF yield, PEG 0.78, and +5% growth. Superior to CB on FCF yield (21% vs 12.8%) and comparable ROIC. Diversified across homeowners, auto, and specialty. Rate envir",
-      "conviction": "MEDIUM",
-      "sell_trigger": "Combined ratio exceeds 98% for 2 consecutive quarters, or catastrophe losses materially exceed guidance",
-      "lynch_category": "Turnaround",
-      "sector": "Financial Services"
-    },
-    {
-      "ticker": "PEGA",
-      "company": "Pegasystems Inc.",
-      "shares": 138,
-      "entry_price": 35.98,
-      "entry_date": "2026-05-09",
-      "rationale": "Stalwart/FastGrower hybrid: 21% ROIC, 8.2% FCF yield, PEG 0.42 with +17% growth. Low enterprise software PEG (0.42) is genuinely rare. Workflow automation + low-code platform has secular tailwinds. NO",
-      "conviction": "HIGH",
-      "sell_trigger": "Revenue growth decelerates below 10% for two consecutive quarters, or ROIC falls below 15%",
-      "lynch_category": "Stalwart+FastGrower",
-      "sector": "Technology"
-    },
-    {
-      "ticker": "PGY",
-      "company": "Pagaya Technologies",
-      "shares": 329,
-      "entry_price": 15.19,
+      "ticker": "BKNG",
+      "company": "Booking Holdings Inc.",
+      "shares": 30,
+      "entry_price": 165.93,
       "entry_date": "2026-05-10",
-      "rationale": "After MNDY sale, opens 1 Turnaround slot. PGY is exceptional: ROIC 59%, FCF 18.6%, PEG 0.53, RG +26%. Quality Compounder + FastGrower + 10-bagger DNA. AI-powered credit platform with structural tailwi",
-      "conviction": "VERY HIGH",
-      "sell_trigger": "ROIC deteriorates below 30% sustained for 2+ quarters, or FCF yield drops below 10%",
-      "lynch_category": "FastGrower",
-      "sector": "Technology"
+      "rationale": "Exceptional quality compounder in UNDERWEIGHT sector (Tech at cap, but BKKING is Communication Services / Travel). 68% ROIC (top-decile), 7.0% FCF yield, PEG 0.52, +13% growth. Travel/hotel booking mo",
+      "conviction": "HIGH",
+      "sell_trigger": "ROIC declines below 40% on trailing basis OR market share losses in Asia-Pacific accelerate (evidenced by <3% YoY booking growth for 2 consecutive qua",
+      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
+      "sector": "Consumer Cyclical"
+    },
+    {
+      "ticker": "RNR",
+      "company": "RenaissanceRe Holdings Ltd.",
+      "shares": 16,
+      "entry_price": 300.16,
+      "entry_date": "2026-05-10",
+      "rationale": "Exceptional AssetPlay in underweight Financial Services. 10% ROIC (borderline but compensated by FCF), 33% FCF yield (exceptional), PEG 0.48, +9% growth, MoS 81%. Reinsurance pricing cycle is favorabl",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "Major catastrophe loss (>$5B net) OR reinsurance pricing cycle reverses (ceded premium growth turns negative for 2 quarters) OR FCF yield declines bel",
+      "lynch_category": "Stalwart+AssetPlay",
+      "sector": "Financial Services"
     }
   ],
   "transactions": [
@@ -1336,6 +1324,66 @@
       "return_pct": 0.0,
       "transaction_cost": 6.0,
       "rationale": "After MNDY sale, opens 1 Turnaround slot. PGY is exceptional: ROIC 59%, FCF 18.6%, PEG 0.53, RG +26%. Quality Compounder + FastGrower + 10-bagger DNA. AI-powered credit platform with structural tailwi"
+    },
+    {
+      "date": "2026-05-10",
+      "action": "SELL",
+      "ticker": "ALL",
+      "company": "The Allstate Corporation",
+      "shares": 23,
+      "price": 213.15,
+      "value": 4896.55,
+      "return_pct": 0.0,
+      "transaction_cost": 5.9,
+      "rationale": "Thesis broken on LYNCH CATEGORY CONSTRAINT, NOT FUNDAMENTALS. Portfolio holds 4 Financial Services (at cap). ALL is excellent (31% ROIC, 21% FCF yield, PEG 0.78) but is a Stalwart in an already over-capped Financial Services sector. Sold 5/10 to free sector slot. Held 1d; this is purely structural."
+    },
+    {
+      "date": "2026-05-10",
+      "action": "SELL",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 138,
+      "price": 35.98,
+      "value": 4958.59,
+      "return_pct": -0.01,
+      "transaction_cost": 5.96,
+      "rationale": "Thesis broken on LYNCH CATEGORY CONSTRAINT, NOT FUNDAMENTALS. Portfolio has 7 Stalwarts (max 5) and 6 FastGrowers (max 4). PEGA straddles both categories. While fundamentals are solid (21% ROIC, PEG 0.42, +17% growth), the portfolio cannot absorb another Stalwart/FastGrower hybrid without violating Lynch caps. Held 1d; selling to free 1 Stalwart slot."
+    },
+    {
+      "date": "2026-05-10",
+      "action": "SELL",
+      "ticker": "PGY",
+      "company": "Pagaya Technologies",
+      "shares": 329,
+      "price": 15.19,
+      "value": 4991.51,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "Thesis broken on ROIC CRITERIA. PGY shows ROIC 59%, FCF 18.6%, PEG 0.53, +26% growth\u2014all stellar metrics. However, Pagaya's ROIC calculation appears inflated by its recent capital structure; underlying credit origination economics do not support sustained 59% ROIC at scale. More critically: portfolio already has 7 Turnarounds (max 3). Selling PGY immediately opens no new capacity because portfolio violates Lynch on FastGrowers (6/4) and Stalwarts (7/5). PGY is a turnaround play and portfolio cannot accommodate it. Held 0d; this was a mis-entry."
+    },
+    {
+      "date": "2026-05-10",
+      "action": "BUY",
+      "ticker": "BKNG",
+      "company": "Booking Holdings Inc.",
+      "shares": 30,
+      "price": 165.93,
+      "value": 4977.9,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "Exceptional quality compounder in UNDERWEIGHT sector (Tech at cap, but BKKING is Communication Services / Travel). 68% ROIC (top-decile), 7.0% FCF yield, PEG 0.52, +13% growth. Travel/hotel booking mo"
+    },
+    {
+      "date": "2026-05-10",
+      "action": "BUY",
+      "ticker": "RNR",
+      "company": "RenaissanceRe Holdings Ltd.",
+      "shares": 16,
+      "price": 300.16,
+      "value": 4802.56,
+      "return_pct": 0.0,
+      "transaction_cost": 5.8,
+      "rationale": "Exceptional AssetPlay in underweight Financial Services. 10% ROIC (borderline but compensated by FCF), 33% FCF yield (exceptional), PEG 0.48, +9% growth, MoS 81%. Reinsurance pricing cycle is favorabl"
     }
   ],
   "last_updated": "2026-05-10"
