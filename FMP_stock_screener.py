@@ -12891,7 +12891,6 @@ function showMacroDetail(el, id) {
 <section id="ai" class="active">
   <div class="section-title">🤖 AI Analysis — Master Manager + {n_agents} Specialists</div>
   {strat_summary_html}
-  {consensus_wrapped}
   {wrapped_mall}
   {wrapped_mm}
   <details style="margin-bottom:6px">
@@ -13696,7 +13695,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
     <h1>📈 FMP Stock Screener</h1>
     <small>{now} · {len(stocks):,} stocks · {fmp_call_count} API calls</small>
   </div>
-  <small style="color:#9fa8da">12 Specialists · Master Manager</small>
+  <small style="color:#9fa8da">12 Specialists</small>
 </div>
 {_spinoff_html}
 <nav class="nav">{nav_html}</nav>
