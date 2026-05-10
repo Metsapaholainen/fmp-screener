@@ -12729,10 +12729,11 @@ function showMacroDetail(el, id) {
 
 
         # ── Wrap major AI blocks in collapsible <details> ─────────────────
-        def _collapsible(title, subtitle, content, open_by_default=True, accent="#42a5f5"):
+        def _collapsible(title, subtitle, content, open_by_default=True, accent="#42a5f5", elem_id=""):
             _open = "open" if open_by_default else ""
+            _id   = f'id="{elem_id}"' if elem_id else ""
             return f"""
-<details {_open} style="margin-bottom:14px">
+<details {_open} {_id} style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid {accent}33;
     font-size:.8rem;font-weight:700;color:{accent};user-select:none">
@@ -12778,6 +12779,21 @@ function showMacroDetail(el, id) {
 
         # Build specialist collapsibles directly from _sp iteration order
         spec_collapsibles = []
+        spec_nav_cards    = []
+        _NAV_TAGLINES = {
+            "WallStBlind":  "Small-cap hidden gems",
+            "LynchBWYK":    "Buy what you know",
+            "SocialArb":    "Viral trends early",
+            "Mayer100x":    "100-bagger potential",
+            "CathieWood":   "Disruptive innovation",
+            "MagicFormula": "Quality + cheap screen",
+            "Pabrai":       "Asymmetric bets",
+            "HowardMarks":  "Second-level contrarian",
+            "NickSleep":    "Scale economics shared",
+            "Burry":        "Catalyst deep value",
+            "InsiderTrack": "Smart money signals",
+            "BuffettQ":     "Quality compounders",
+        }
         for ak in _AGENT_ORDER:
             if ak not in _sp:
                 continue
@@ -13063,26 +13079,50 @@ function showMacroDetail(el, id) {
             )
             spec_collapsibles.append(
                 _collapsible(lbl, f"— {len(ap)} picks", inner_html,
-                             open_by_default=False, accent=f"#{chx}")
+                             open_by_default=False, accent=f"#{chx}",
+                             elem_id=f"spec-{ak}")
             )
+            # Nav card for the quick-access grid
+            _tl  = _NAV_TAGLINES.get(ak, "")
+            _cnt = len(ap)
+            _badge_col = f"#{chx}"
+            spec_nav_cards.append(
+                f'<div onclick="openSpec(\'spec-{ak}\')" '
+                f'style="cursor:pointer;border-left:3px solid {_badge_col};'
+                f'background:#161b22;border-radius:6px;padding:9px 12px;'
+                f'transition:background .15s;user-select:none" '
+                f'onmouseover="this.style.background=\'#1e2535\'" '
+                f'onmouseout="this.style.background=\'#161b22\'">'
+                f'<div style="font-weight:700;font-size:.8rem;color:{_badge_col}">{lbl}</div>'
+                f'<div style="font-size:.67rem;color:#546e7a;margin-top:2px">{_tl}</div>'
+                f'<div style="margin-top:6px">'
+                f'<span style="background:{_badge_col}22;color:{_badge_col};'
+                f'padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">'
+                f'{_cnt} pick{"s" if _cnt != 1 else ""}</span>'
+                f'</div></div>'
+            )
+
+        _nav_grid = f"""
+<div style="margin-bottom:16px">
+  <div style="font-size:.68rem;color:#546e7a;text-transform:uppercase;letter-spacing:.06em;
+    margin-bottom:8px">↓ Jump to specialist</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">
+    {"".join(spec_nav_cards)}
+  </div>
+</div>
+<script>
+function openSpec(id){{
+  var el=document.getElementById(id);
+  if(el){{el.open=true;setTimeout(function(){{el.scrollIntoView({{behavior:'smooth',block:'start'}});}},50);}}
+}}
+</script>"""
 
         return f"""
 <section id="ai" class="active">
   <div class="section-title">🤖 AI Analysis — {n_agents} Specialists</div>
   {strat_summary_html}
-  <details open style="margin-bottom:6px">
-    <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
-      padding:8px 12px;background:#161b22;border-radius:6px;border:1px solid #ffffff18;
-      font-size:.75rem;font-weight:700;color:#78909c;text-transform:uppercase;letter-spacing:.05em;
-      user-select:none">
-      <span>📋 {n_agents} Specialist Reports</span>
-      <span style="font-size:.65rem;font-weight:400;text-transform:none;color:#546e7a">
-        — click any specialist to expand
-      </span>
-      <span style="margin-left:auto;font-size:.7rem;color:#546e7a">▼</span>
-    </summary>
-    <div style="margin-top:8px">{"".join(spec_collapsibles)}</div>
-  </details>
+  {_nav_grid}
+  {"".join(spec_collapsibles)}
 </section>"""
 
     # ── MERGED SECTOR SECTION ─────────────────────────────────────────────
