@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 31097.517299999992,
+  "cash": 26100.826599999993,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -109,6 +109,18 @@
       "conviction": "MEDIUM-HIGH",
       "sell_trigger": "Major catastrophe loss (>$5B net) OR reinsurance pricing cycle reverses (ceded premium growth turns negative for 2 quarters) OR FCF yield declines bel",
       "lynch_category": "Stalwart+AssetPlay",
+      "sector": "Financial Services"
+    },
+    {
+      "ticker": "PYPL",
+      "company": "PayPal Holdings, Inc.",
+      "shares": 110,
+      "entry_price": 45.37,
+      "entry_date": "2026-05-10",
+      "rationale": "IV Discount + Turnaround: 15% ROIC, 13.8% FCF yield, PEG 0.62, +4% RG, 58% MoS. Digital payments secular tailwind; operational deleveraging underway. Fills final portfolio slot in underweighted Consum",
+      "conviction": "HIGH",
+      "sell_trigger": "ROIC declines below 12% for 2 consecutive quarters OR FCF yield falls below 10% AND RG remains <5%",
+      "lynch_category": "Turnaround",
       "sector": "Financial Services"
     }
   ],
@@ -1384,6 +1396,18 @@
       "return_pct": 0.0,
       "transaction_cost": 5.8,
       "rationale": "Exceptional AssetPlay in underweight Financial Services. 10% ROIC (borderline but compensated by FCF), 33% FCF yield (exceptional), PEG 0.48, +9% growth, MoS 81%. Reinsurance pricing cycle is favorabl"
+    },
+    {
+      "date": "2026-05-10",
+      "action": "BUY",
+      "ticker": "PYPL",
+      "company": "PayPal Holdings, Inc.",
+      "shares": 110,
+      "price": 45.37,
+      "value": 4990.7,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "IV Discount + Turnaround: 15% ROIC, 13.8% FCF yield, PEG 0.62, +4% RG, 58% MoS. Digital payments secular tailwind; operational deleveraging underway. Fills final portfolio slot in underweighted Consum"
     }
   ],
   "last_updated": "2026-05-10"
