@@ -84,6 +84,12 @@ GITHUB_REPO   = os.environ.get("GITHUB_REPO",   "")  # "username/repo" for GitHu
 GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN",  "")  # GitHub Personal Access Token
 FMP_BASE = "https://financialmodelingprep.com/stable"
 
+# ── FMP Tool Use flag — set USE_FMP_TOOLS=1 in .env to enable ──────────────
+# When ON: AI specialist and judge agents can call live FMP endpoints mid-reasoning
+# (earnings transcripts, SEC filings, insider trades, news, analyst estimates, financials).
+# Default OFF → identical behaviour to previous runs. Clean 1-line rollback.
+USE_FMP_TOOLS = os.environ.get("USE_FMP_TOOLS", "0") == "1"
+
 CACHE_FILE = "fmp_screener_cache.json"
 CACHE_DAYS = 1
 PICKS_LOG    = "fmp_picks_log.csv"
@@ -1558,6 +1564,285 @@ def fmp_get_batch(tickers: list, endpoint_template: str, batch_size: int = 5,
         if done % 50 == 0 or done == len(tickers):
             print(f"    [{done}/{len(tickers)}] fetched...")
     return results
+
+
+# ─────────────────────────────────────────────
+# FMP TOOL USE — tool definitions + executor for AI agent live lookups
+# Active only when USE_FMP_TOOLS=1. Zero code runs when flag is off.
+# ─────────────────────────────────────────────
+FMP_AGENT_TOOLS = [
+    {
+        "name": "get_earnings_transcript",
+        "description": (
+            "Fetch the most recent earnings call transcript for a stock. "
+            "Use this to hear what management said about revenue growth, margins, "
+            "guidance, competitive dynamics, or strategic pivots. "
+            "Truncated to ~3000 chars per transcript."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL)"},
+                "limit":  {"type": "integer", "description": "Number of recent transcripts (default 1)", "default": 1},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_sec_filings",
+        "description": (
+            "Fetch a list of recent SEC filings for a stock (8-K, 10-K, 10-Q). "
+            "Use this to check for restructurings, material events, M&A, CEO changes, "
+            "or strategic announcements that may not yet be in the candidate data."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "limit":  {"type": "integer", "default": 5},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_insider_trades",
+        "description": (
+            "Fetch recent insider buy/sell transactions for a stock. "
+            "Use this to verify a cluster buying signal or discover fresh buying "
+            "not yet captured in the pre-screened candidate data."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "limit":  {"type": "integer", "default": 10},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_company_news",
+        "description": (
+            "Fetch recent news headlines for a stock. "
+            "Use this to check for catalysts, analyst upgrades/downgrades, M&A activity, "
+            "regulatory events, or product launches."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "limit":  {"type": "integer", "default": 8},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_analyst_estimates",
+        "description": (
+            "Fetch analyst consensus price targets and EPS/revenue estimates for a stock. "
+            "Use this to check the gap between current price and consensus target, "
+            "and to see if estimates are being revised up or down."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_financial_statements",
+        "description": (
+            "Fetch recent annual income statement and balance sheet data for a stock. "
+            "Use this to verify revenue trend, margin trajectory, debt levels, or FCF "
+            "when the candidate block summary is insufficient."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "limit":  {"type": "integer", "default": 4, "description": "Number of annual periods"},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_senate_trades",
+        "description": (
+            "Fetch recent US senate/congress trading disclosures for a stock. "
+            "Use this as a supplementary smart-money signal — congressional members "
+            "sometimes act on non-public industry knowledge."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "limit":  {"type": "integer", "default": 5},
+            },
+            "required": ["ticker"],
+        },
+    },
+]
+
+
+def _execute_fmp_tool(tool_name: str, tool_input: dict) -> str:
+    """Execute one FMP agent tool call. Returns a JSON string result.
+    Called from the _post_with_tools() loop inside call_claude_analysis.
+    """
+    ticker = (tool_input.get("ticker") or "").upper().strip()
+    limit  = int(tool_input.get("limit", 5))
+    try:
+        if tool_name == "get_earnings_transcript":
+            data = fmp_get("earning-call-transcript", {"symbol": ticker, "limit": limit})
+            if not data:
+                return json.dumps({"error": "No transcript data available"})
+            out = []
+            for item in (data if isinstance(data, list) else [data])[:limit]:
+                d = dict(item)
+                if "content" in d and len(str(d["content"])) > 3000:
+                    d["content"] = str(d["content"])[:3000] + "... [truncated]"
+                out.append(d)
+            return json.dumps(out, default=str)
+
+        elif tool_name == "get_sec_filings":
+            data = fmp_get("sec-filings", {"symbol": ticker, "limit": limit})
+            if not data:
+                # fallback endpoint
+                data = fmp_get("sec-filings-latest", {"symbol": ticker, "limit": limit})
+            if not data:
+                return json.dumps({"error": "No SEC filings available"})
+            items = data if isinstance(data, list) else [data]
+            compact = [
+                {
+                    "type":        d.get("type") or d.get("formType"),
+                    "date":        d.get("fillingDate") or d.get("date"),
+                    "description": (str(d.get("description") or d.get("title") or ""))[:250],
+                    "url":         d.get("finalLink") or d.get("link") or "",
+                }
+                for d in items[:limit]
+            ]
+            return json.dumps(compact, default=str)
+
+        elif tool_name == "get_insider_trades":
+            data = fmp_get("insider-trading", {"symbol": ticker, "limit": limit})
+            if not data:
+                return json.dumps({"error": "No insider trade data available"})
+            items = data if isinstance(data, list) else [data]
+            compact = [
+                {
+                    "name":   d.get("reportingName") or d.get("insiderName"),
+                    "type":   d.get("transactionType"),
+                    "shares": d.get("securitiesTransacted"),
+                    "price":  d.get("price"),
+                    "value":  d.get("value"),
+                    "date":   d.get("transactionDate") or d.get("date"),
+                }
+                for d in items[:limit]
+            ]
+            return json.dumps(compact, default=str)
+
+        elif tool_name == "get_company_news":
+            data = fmp_get("news", {"symbol": ticker, "limit": limit})
+            if not data:
+                data = fmp_get("stock-news", {"tickers": ticker, "limit": limit})
+            if not data:
+                return json.dumps({"error": "No news available"})
+            items = data if isinstance(data, list) else [data]
+            compact = [
+                {
+                    "title":   d.get("title"),
+                    "date":    d.get("publishedDate") or d.get("date"),
+                    "source":  d.get("site") or d.get("source"),
+                    "summary": (str(d.get("text") or d.get("summary") or ""))[:350],
+                }
+                for d in items[:limit]
+            ]
+            return json.dumps(compact, default=str)
+
+        elif tool_name == "get_analyst_estimates":
+            estimates = fmp_get("analyst-estimates", {"symbol": ticker, "limit": 4})
+            pt_cons   = fmp_get("price-target-consensus", {"symbol": ticker})
+            result: dict = {}
+            if estimates and isinstance(estimates, list) and estimates:
+                latest = estimates[0]
+                result["estimates_latest"] = {
+                    "date":           latest.get("date"),
+                    "rev_avg_est":    latest.get("estimatedRevenueAvg"),
+                    "eps_avg_est":    latest.get("estimatedEpsAvg"),
+                    "num_analysts":   latest.get("numberAnalystEstimatedRevenue"),
+                }
+                # Trend: compare two most recent periods for revision direction
+                if len(estimates) >= 2:
+                    prev = estimates[1]
+                    rev_delta = None
+                    if estimates[0].get("estimatedEpsAvg") and prev.get("estimatedEpsAvg"):
+                        rev_delta = round(
+                            (estimates[0]["estimatedEpsAvg"] - prev["estimatedEpsAvg"])
+                            / abs(prev["estimatedEpsAvg"]) * 100, 1
+                        ) if prev["estimatedEpsAvg"] != 0 else None
+                    result["estimate_trend"] = {"eps_revision_pct": rev_delta}
+            if pt_cons:
+                pt = pt_cons[0] if isinstance(pt_cons, list) else pt_cons
+                result["price_target"] = {
+                    "consensus": pt.get("targetConsensus"),
+                    "high":      pt.get("targetHigh"),
+                    "low":       pt.get("targetLow"),
+                    "median":    pt.get("targetMedian"),
+                }
+            return json.dumps(result, default=str) if result else json.dumps({"error": "No analyst data"})
+
+        elif tool_name == "get_financial_statements":
+            income  = fmp_get("income-statement",        {"symbol": ticker, "limit": limit})
+            balance = fmp_get("balance-sheet-statement", {"symbol": ticker, "limit": limit})
+            result: dict = {}
+            if income and isinstance(income, list):
+                result["income"] = [
+                    {
+                        "date":            d.get("date"),
+                        "revenue":         d.get("revenue"),
+                        "grossProfit":     d.get("grossProfit"),
+                        "operatingIncome": d.get("operatingIncome"),
+                        "netIncome":       d.get("netIncome"),
+                        "ebitda":          d.get("ebitda"),
+                    }
+                    for d in income[:limit]
+                ]
+            if balance and isinstance(balance, list):
+                result["balance"] = [
+                    {
+                        "date":   d.get("date"),
+                        "totalDebt":              d.get("totalDebt"),
+                        "cash":                   d.get("cashAndCashEquivalents"),
+                        "totalEquity":            d.get("totalStockholdersEquity"),
+                        "netDebt":                d.get("netDebt"),
+                    }
+                    for d in balance[:limit]
+                ]
+            return json.dumps(result, default=str) if result else json.dumps({"error": "No financial data"})
+
+        elif tool_name == "get_senate_trades":
+            data = fmp_get("senate-trading", {"symbol": ticker})
+            if not data:
+                return json.dumps({"error": "No senate trade data available"})
+            items = data if isinstance(data, list) else [data]
+            compact = [
+                {
+                    "senator":    d.get("senator") or d.get("firstName", "") + " " + d.get("lastName", ""),
+                    "type":       d.get("type") or d.get("transactionType"),
+                    "amount":     d.get("amount"),
+                    "date":       d.get("transactionDate") or d.get("disclosureDate"),
+                    "asset":      d.get("assetDescription") or d.get("ticker"),
+                }
+                for d in items[:limit]
+            ]
+            return json.dumps(compact, default=str)
+
+        else:
+            return json.dumps({"error": f"Unknown FMP tool: {tool_name}"})
+
+    except Exception as exc:
+        return json.dumps({"error": f"Tool execution error: {str(exc)[:300]}"})
 
 
 # ─────────────────────────────────────────────
@@ -4838,6 +5123,99 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
             timeout=timeout_s,
         )
 
+    # Tool-use telemetry — mutable list so nested closures can increment
+    _tool_calls_made = [0]    # total FMP tool calls fired across all agents this run
+    _tool_agents_used = [0]   # agents that actually called at least one tool
+
+    def _post_with_tools(sys_p, usr_p, max_tok, timeout_s, model=None, max_rounds=4):
+        """Like _post but supports multi-turn tool use when USE_FMP_TOOLS=1.
+
+        If USE_FMP_TOOLS is off → falls back to plain _post (zero behaviour change).
+        Otherwise runs a tool-use loop:
+          1. Send message with FMP_AGENT_TOOLS attached.
+          2. If response stop_reason == 'tool_use': execute each tool via _execute_fmp_tool,
+             append results, and loop.
+          3. On 'end_turn' or after max_rounds: return the final Response object.
+        The returned object is compatible with plain _post callers (.status_code, .json()).
+        """
+        if not USE_FMP_TOOLS:
+            return _post(sys_p, usr_p, max_tok, timeout_s, model)
+
+        _hdrs = {
+            "x-api-key":          ANTHROPIC_KEY,
+            "anthropic-version":  "2023-06-01",
+            "content-type":       "application/json",
+        }
+        _messages = [{"role": "user", "content": usr_p}]
+        _agent_used_tool = False
+
+        for _round in range(max_rounds):
+            _payload = {
+                "model":      model or _JUDGE_MODEL,
+                "max_tokens": max_tok,
+                "system":     sys_p,
+                "messages":   _messages,
+                "tools":      FMP_AGENT_TOOLS,
+            }
+            resp = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=_hdrs,
+                json=_payload,
+                timeout=timeout_s,
+            )
+            if resp.status_code != 200:
+                return resp   # pass error back to caller unchanged
+
+            rj          = resp.json()
+            stop_reason = rj.get("stop_reason", "end_turn")
+            content     = rj.get("content", [])
+
+            if stop_reason != "tool_use":
+                # Finished — 'end_turn' or other terminal reason
+                if _agent_used_tool:
+                    _tool_agents_used[0] += 1
+                return resp
+
+            # ── Tool-use round ────────────────────────────────────────────
+            _messages.append({"role": "assistant", "content": content})
+            _tool_results = []
+            for blk in content:
+                if blk.get("type") != "tool_use":
+                    continue
+                _tid   = blk.get("id", "")
+                _tname = blk.get("name", "")
+                _tinp  = blk.get("input", {})
+                _tool_calls_made[0] += 1
+                _agent_used_tool = True
+                print(f"      🔧 FMP tool: {_tname}({_tinp.get('ticker','?')}) [round {_round+1}]")
+                _result_str = _execute_fmp_tool(_tname, _tinp)
+                _tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": _tid,
+                    "content":     _result_str,
+                })
+            _messages.append({"role": "user", "content": _tool_results})
+            # loop back — get Claude's next response
+
+        # max_rounds exhausted — force a text response with tool_choice=none
+        _payload_final = {
+            "model":       model or _JUDGE_MODEL,
+            "max_tokens":  max_tok,
+            "system":      sys_p,
+            "messages":    _messages,
+            "tools":       FMP_AGENT_TOOLS,
+            "tool_choice": {"type": "none"},
+        }
+        resp_final = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=_hdrs,
+            json=_payload_final,
+            timeout=timeout_s,
+        )
+        if _agent_used_tool:
+            _tool_agents_used[0] += 1
+        return resp_final
+
     candidates_block = (
         "Legend: RG=RevGrowth, RGprev=prior yr RevGrowth (trend), MoS=DCF margin of safety, "
         "NetCash=net cash/price, 52wPos=price vs 52wk high, ★×N=appears in N strategies\n"
@@ -5591,11 +5969,34 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
 
     from concurrent.futures import ThreadPoolExecutor, as_completed as _as_completed
 
+    # Tool-use preamble injected into specialist system prompts when USE_FMP_TOOLS=1
+    _TOOL_PREAMBLE = (
+        "\n\nLIVE FMP DATA TOOLS AVAILABLE — use these to deepen analysis mid-reasoning:\n"
+        "  • get_earnings_transcript(ticker) — most recent earnings call (hear management directly)\n"
+        "  • get_sec_filings(ticker)         — recent 8-K/10-K/10-Q filings (restructurings, M&A, pivots)\n"
+        "  • get_insider_trades(ticker)      — recent buy/sell transactions (verify cluster signals)\n"
+        "  • get_company_news(ticker)        — recent headlines (catalysts, upgrades, regulatory events)\n"
+        "  • get_analyst_estimates(ticker)   — consensus price targets + EPS revisions\n"
+        "  • get_financial_statements(ticker)— income + balance sheet detail (verify revenue/debt trends)\n"
+        "  • get_senate_trades(ticker)       — congressional trading disclosures\n"
+        "Tool budget: ≤4 total calls. Use tools when a thesis depends on something not confirmed in the\n"
+        "candidate block — e.g. what management said about margins, or a catalyst you want to verify.\n"
+        "One targeted transcript call beats five speculative ones. Only call tools for stocks you are\n"
+        "seriously considering picking — not to browse the universe.\n"
+    ) if USE_FMP_TOOLS else ""
+
+    # Token and timeout budgets — doubled when tools are on (multi-round calls consume budget)
+    _SPEC_MAX_TOKENS = 5000 if USE_FMP_TOOLS else 2500
+    _SPEC_TIMEOUT    = 180  if USE_FMP_TOOLS else 90
+
     def _call_specialist(cfg):
         name, label, sys_p, usr_p = cfg
+        # Inject tool preamble when USE_FMP_TOOLS is on
+        _sys = sys_p + _TOOL_PREAMBLE if _TOOL_PREAMBLE else sys_p
         for attempt in range(2):
             try:
-                resp = _post(sys_p, usr_p, 2500, 90, model=_SPECIALIST_MODEL)
+                resp = _post_with_tools(_sys, usr_p, _SPEC_MAX_TOKENS, _SPEC_TIMEOUT,
+                                        model=_SPECIALIST_MODEL)
                 if resp.status_code == 200:
                     raw = resp.json()["content"][0]["text"]
                     data = _parse_response(raw)
@@ -5811,9 +6212,30 @@ Respond with ONLY valid JSON (no markdown, no preamble):
 Position tier guide: CORE=3+ specialists endorse OR 2 specialists + exceptional quality; SATELLITE=1-2 specialists + quality pass; WATCH=Master Manager view only, no specialist endorsement.
 Urgency guide: ACT NOW=catalyst imminent + entry compelling today; WITHIN WEEKS=good entry window 1-4wks; WITHIN MONTHS=patient accumulation thesis; WATCH=wait for confirmation signal; AVOID=thesis broken or kill criterion fires."""
 
+    # Judge token/timeout budget — larger when tools are on
+    _JUDGE_MAX_TOKENS = 18000 if USE_FMP_TOOLS else 12000
+    _JUDGE_TIMEOUT    = 480   if USE_FMP_TOOLS else 300
+
+    # Judge tool preamble — allows targeted lookups on top consensus picks
+    _JUDGE_TOOL_PREAMBLE = (
+        "\n\nLIVE FMP DATA TOOLS AVAILABLE — use sparingly for targeted verification:\n"
+        "  • get_earnings_transcript(ticker) — hear management directly on the 1-2 picks you're least certain about\n"
+        "  • get_sec_filings(ticker)         — verify a claimed catalyst (restructuring, spinoff, M&A)\n"
+        "  • get_insider_trades(ticker)      — verify or challenge an InsiderTrack specialist nomination\n"
+        "  • get_company_news(ticker)        — check for breaking news that would break a thesis\n"
+        "  • get_analyst_estimates(ticker)   — verify consensus gap before setting a price target\n"
+        "  • get_financial_statements(ticker)— deep-dive a balance sheet when a kill criterion is in doubt\n"
+        "  • get_senate_trades(ticker)       — supplement insider signals on key picks\n"
+        "Tool budget: ≤6 total calls. Prioritise the 2-3 consensus picks you need to verify — "
+        "do NOT use tools to browse; use them to confirm or reject before committing a pick to CORE tier.\n"
+    ) if USE_FMP_TOOLS else ""
+
+    _judge_sys_final = judge_system + _JUDGE_TOOL_PREAMBLE
+
     try:
         print("    Calling judge agent for final synthesis...")
-        resp = _post(judge_system, judge_user, 12000, 300)
+        resp = _post_with_tools(_judge_sys_final, judge_user, _JUDGE_MAX_TOKENS, _JUDGE_TIMEOUT,
+                                max_rounds=6)
         if resp.status_code != 200:
             print(f"  ⚠️ Judge agent error {resp.status_code}: {resp.text[:200]}")
             if resp.status_code in (503, 529, 502, 524):
@@ -5852,6 +6274,10 @@ Urgency guide: ACT NOW=catalyst imminent + entry compelling today; WITHIN WEEKS=
         n_picks = len(result.get("picks", []))
         n_consensus = len(consensus_note)
         print(f"  ✅ Multi-agent analysis complete — {n_picks} picks ({n_consensus} cross-specialist consensus)")
+        # ── Tool-use telemetry ───────────────────────────────────────────────
+        if USE_FMP_TOOLS and _tool_calls_made[0] > 0:
+            print(f"  📡 FMP tool calls this run: {_tool_calls_made[0]} "
+                  f"(across {_tool_agents_used[0]} agents)")
         result["_specialist_picks"] = specialist_results   # for performance tracking
         return result
 
@@ -6051,17 +6477,61 @@ YOUR TASK:
 
 JSON only. No markdown, no preamble."""
 
+    # Mall Manager tool preamble (lightweight — consumer lens doesn't need heavy FMP use)
+    _mall_tool_preamble = (
+        "\n\nLIVE FMP DATA TOOLS AVAILABLE (optional): get_company_news(ticker), "
+        "get_earnings_transcript(ticker). Use only if you need to verify a specific "
+        "consumer trend claim — e.g. confirm a product launch date or a management quote "
+        "about user growth. Budget: ≤3 tool calls. Default: skip and rely on candidate data.\n"
+    ) if USE_FMP_TOOLS else ""
+
+    _mall_sys_final   = sys_prompt + _mall_tool_preamble
+    _mall_max_tokens  = 8000 if USE_FMP_TOOLS else 6000
+    _mall_timeout     = 300  if USE_FMP_TOOLS else 240
+
     try:
-        resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": ANTHROPIC_KEY,
-                     "anthropic-version": "2023-06-01",
-                     "content-type": "application/json"},
-            json={"model": _MODEL, "max_tokens": 6000,
-                  "system": sys_prompt,
-                  "messages": [{"role": "user", "content": user_prompt}]},
-            timeout=240,
-        )
+        if USE_FMP_TOOLS:
+            # Use tool-capable POST (defined inside call_claude_analysis context is not available
+            # here — mall manager is a separate function, so we do the loop inline)
+            _m_hdrs = {"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
+                       "content-type": "application/json"}
+            _m_msgs = [{"role": "user", "content": user_prompt}]
+            _m_resp = None
+            for _m_round in range(4):
+                _m_resp = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers=_m_hdrs,
+                    json={"model": _MODEL, "max_tokens": _mall_max_tokens,
+                          "system": _mall_sys_final, "messages": _m_msgs,
+                          "tools": FMP_AGENT_TOOLS},
+                    timeout=_mall_timeout,
+                )
+                if _m_resp.status_code != 200 or _m_resp.json().get("stop_reason") != "tool_use":
+                    break
+                _m_content = _m_resp.json().get("content", [])
+                _m_msgs.append({"role": "assistant", "content": _m_content})
+                _m_tool_results = []
+                for _blk in _m_content:
+                    if _blk.get("type") != "tool_use":
+                        continue
+                    print(f"      🔧 Mall FMP tool: {_blk['name']}({_blk.get('input',{}).get('ticker','?')})")
+                    _m_tool_results.append({
+                        "type": "tool_result", "tool_use_id": _blk["id"],
+                        "content": _execute_fmp_tool(_blk["name"], _blk.get("input", {}))
+                    })
+                _m_msgs.append({"role": "user", "content": _m_tool_results})
+            resp = _m_resp
+        else:
+            resp = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={"x-api-key": ANTHROPIC_KEY,
+                         "anthropic-version": "2023-06-01",
+                         "content-type": "application/json"},
+                json={"model": _MODEL, "max_tokens": _mall_max_tokens,
+                      "system": _mall_sys_final,
+                      "messages": [{"role": "user", "content": user_prompt}]},
+                timeout=_mall_timeout,
+            )
         if resp.status_code != 200:
             print(f"  ⚠️ Mall Manager error {resp.status_code}: {resp.text[:200]}")
             return {}
