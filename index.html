@@ -169,7 +169,7 @@ tr.alt td { background: #161622; }
 <div class="header">
   <div>
     <h1>📈 FMP Stock Screener</h1>
-    <small>2026-05-10 13:38 · 9,156 stocks · 679 API calls</small>
+    <small>2026-05-10 13:41 · 9,156 stocks · 678 API calls</small>
   </div>
   <small style="color:#9fa8da">12 Specialists</small>
 </div>
@@ -339,19 +339,22 @@ tr.alt td { background: #161622; }
     </table>
   </div>
 </details>
-  <details open style="margin-bottom:6px">
-    <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
-      padding:8px 12px;background:#161b22;border-radius:6px;border:1px solid #ffffff18;
-      font-size:.75rem;font-weight:700;color:#78909c;text-transform:uppercase;letter-spacing:.05em;
-      user-select:none">
-      <span>📋 12 Specialist Reports</span>
-      <span style="font-size:.65rem;font-weight:400;text-transform:none;color:#546e7a">
-        — click any specialist to expand
-      </span>
-      <span style="margin-left:auto;font-size:.7rem;color:#546e7a">▼</span>
-    </summary>
-    <div style="margin-top:8px">
-<details  style="margin-bottom:14px">
+  
+<div style="margin-bottom:16px">
+  <div style="font-size:.68rem;color:#546e7a;text-transform:uppercase;letter-spacing:.06em;
+    margin-bottom:8px">↓ Jump to specialist</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">
+    <div onclick="openSpec('spec-WallStBlind')" style="cursor:pointer;border-left:3px solid #00695C;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#00695C">🛰️ Wall Street Blindspot Hunter</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Small-cap hidden gems</div><div style="margin-top:6px"><span style="background:#00695C22;color:#00695C;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">5 picks</span></div></div><div onclick="openSpec('spec-LynchBWYK')" style="cursor:pointer;border-left:3px solid #880E4F;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#880E4F">🛒 Lynch Buy What You Know</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Buy what you know</div><div style="margin-top:6px"><span style="background:#880E4F22;color:#880E4F;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">3 picks</span></div></div><div onclick="openSpec('spec-SocialArb')" style="cursor:pointer;border-left:3px solid #AD1457;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#AD1457">📱 Camillo Social Arbitrage</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Viral trends early</div><div style="margin-top:6px"><span style="background:#AD145722;color:#AD1457;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">2 picks</span></div></div><div onclick="openSpec('spec-Mayer100x')" style="cursor:pointer;border-left:3px solid #BF360D;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#BF360D">💯 Mayer 100-Bagger</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">100-bagger potential</div><div style="margin-top:6px"><span style="background:#BF360D22;color:#BF360D;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">1 pick</span></div></div><div onclick="openSpec('spec-CathieWood')" style="cursor:pointer;border-left:3px solid #0D47A1;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#0D47A1">🚀 Wood Disruptive Innovation</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Disruptive innovation</div><div style="margin-top:6px"><span style="background:#0D47A122;color:#0D47A1;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">3 picks</span></div></div><div onclick="openSpec('spec-MagicFormula')" style="cursor:pointer;border-left:3px solid #1565C0;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#1565C0">🔢 Greenblatt Magic Formula</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Quality + cheap screen</div><div style="margin-top:6px"><span style="background:#1565C022;color:#1565C0;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">0 picks</span></div></div><div onclick="openSpec('spec-Pabrai')" style="cursor:pointer;border-left:3px solid #33691E;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#33691E">🎲 Pabrai Asymmetric Bet</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Asymmetric bets</div><div style="margin-top:6px"><span style="background:#33691E22;color:#33691E;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">3 picks</span></div></div><div onclick="openSpec('spec-HowardMarks')" style="cursor:pointer;border-left:3px solid #827717;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#827717">🔄 Marks Second-Level</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Second-level contrarian</div><div style="margin-top:6px"><span style="background:#82771722;color:#827717;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">3 picks</span></div></div><div onclick="openSpec('spec-NickSleep')" style="cursor:pointer;border-left:3px solid #4527A0;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#4527A0">🌀 Sleep Scale Economics Shared</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Scale economics shared</div><div style="margin-top:6px"><span style="background:#4527A022;color:#4527A0;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">3 picks</span></div></div><div onclick="openSpec('spec-Burry')" style="cursor:pointer;border-left:3px solid #3E2723;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#3E2723">🕳️ Burry Catalyst Deep Value</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Catalyst deep value</div><div style="margin-top:6px"><span style="background:#3E272322;color:#3E2723;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">3 picks</span></div></div><div onclick="openSpec('spec-InsiderTrack')" style="cursor:pointer;border-left:3px solid #263238;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#263238">👁️ Insider & 13F Tracker</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Smart money signals</div><div style="margin-top:6px"><span style="background:#26323822;color:#263238;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">5 picks</span></div></div><div onclick="openSpec('spec-BuffettQ')" style="cursor:pointer;border-left:3px solid #2E7D32;background:#161b22;border-radius:6px;padding:9px 12px;transition:background .15s;user-select:none" onmouseover="this.style.background='#1e2535'" onmouseout="this.style.background='#161b22'"><div style="font-weight:700;font-size:.8rem;color:#2E7D32">🏰 Buffett Quality Compounder</div><div style="font-size:.67rem;color:#546e7a;margin-top:2px">Quality compounders</div><div style="margin-top:6px"><span style="background:#2E7D3222;color:#2E7D32;padding:2px 8px;border-radius:10px;font-size:.65rem;font-weight:600">4 picks</span></div></div>
+  </div>
+</div>
+<script>
+function openSpec(id){
+  var el=document.getElementById(id);
+  if(el){el.open=true;setTimeout(function(){el.scrollIntoView({behavior:'smooth',block:'start'});},50);}
+}
+</script>
+  
+<details  id="spec-WallStBlind" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #00695C33;
     font-size:.8rem;font-weight:700;color:#00695C;user-select:none">
@@ -486,7 +489,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-LynchBWYK" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #880E4F33;
     font-size:.8rem;font-weight:700;color:#880E4F;user-select:none">
@@ -571,7 +574,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-SocialArb" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #AD145733;
     font-size:.8rem;font-weight:700;color:#AD1457;user-select:none">
@@ -631,7 +634,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-Mayer100x" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #BF360D33;
     font-size:.8rem;font-weight:700;color:#BF360D;user-select:none">
@@ -666,7 +669,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-CathieWood" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #0D47A133;
     font-size:.8rem;font-weight:700;color:#0D47A1;user-select:none">
@@ -751,7 +754,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-MagicFormula" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #1565C033;
     font-size:.8rem;font-weight:700;color:#1565C0;user-select:none">
@@ -761,7 +764,7 @@ tr.alt td { background: #161622; }
   </summary>
   <div style="margin-top:6px"><div class="agent-section" style="margin-bottom:0"><div class="agent-hdr" style="background:#1565C0"><div class="ag-title">🔢 Greenblatt Magic Formula</div><div class="ag-desc">Joel Greenblatt's two-factor screen: ROIC >20% AND earnings yield >10%. Pre-filtered candidate pool; agent secondarily filters for sustainability and earnings quality.</div></div><details style="margin:0 0 4px"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;padding:5px 12px;background:#1a2035;font-size:.7rem;color:#546e7a;border-bottom:1px solid #ffffff10;user-select:none">📖 <span>Strategy details</span><span style="margin-left:auto;font-size:.65rem">▼</span></summary><div style="padding:10px 16px 12px;font-size:.73rem;color:#b0bec5;line-height:1.65;background:#111827"><p><b>Joel Greenblatt's Magic Formula</b> — the two-factor screen generating 30%+ annual returns over 20 years by finding companies that are simultaneously high-quality AND cheap.</p><ul><li><b>ROIC above 20%:</b> high-quality business generating strong returns on every dollar invested</li><li><b>Earnings yield above 10%:</b> cheap relative to earnings (inverse of P/E) — the 'cheap' gate</li><li><b>Combined ranking:</b> companies score best when BOTH metrics rank highly — quality + cheap together</li><li><b>Size filter:</b> $50M–$10B to exclude illiquid micro-caps and already-covered mega-caps</li><li><b>Sector exclusions:</b> skip financials, utilities, and REITs (different capital structures distort the formula)</li><li><b>Debt check:</b> high ROIC shouldn't be mere financial leverage — verify balance sheet is clean</li><li><b>Earnings quality:</b> free cash flow should match net income — flag accounting-driven earnings</li><li><b>Temporary vs permanent:</b> is the stock cheap due to a fixable problem, or is the business structurally declining?</li></ul></div></details><div class="agent-picks-grid"></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-Pabrai" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #33691E33;
     font-size:.8rem;font-weight:700;color:#33691E;user-select:none">
@@ -846,7 +849,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-HowardMarks" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #82771733;
     font-size:.8rem;font-weight:700;color:#827717;user-select:none">
@@ -931,7 +934,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-NickSleep" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #4527A033;
     font-size:.8rem;font-weight:700;color:#4527A0;user-select:none">
@@ -1016,7 +1019,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-Burry" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #3E272333;
     font-size:.8rem;font-weight:700;color:#3E2723;user-select:none">
@@ -1101,7 +1104,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-InsiderTrack" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #26323833;
     font-size:.8rem;font-weight:700;color:#263238;user-select:none">
@@ -1236,7 +1239,7 @@ tr.alt td { background: #161622; }
   </div>
 </div></div></div></div>
 </details>
-<details  style="margin-bottom:14px">
+<details  id="spec-BuffettQ" style="margin-bottom:14px">
   <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     padding:9px 14px;background:#161b22;border-radius:6px;border:1px solid #2E7D3233;
     font-size:.8rem;font-weight:700;color:#2E7D32;user-select:none">
@@ -1345,8 +1348,7 @@ tr.alt td { background: #161622; }
     <div class="mm-meta"><span><b>Price</b> $64</span> <span><b>P/E</b> 23.8</span> <span><b>PEG</b> 0.6</span> <span><b>ROIC</b> 23.6%</span> <span><b>MktCap</b> $7.6B</span></div>
   </div>
 </div></div></div></div>
-</details></div>
-  </details>
+</details>
 </section>
 
 <section id="macro">
@@ -1903,7 +1905,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
 </div>
 </section>
 <footer style="padding:16px;color:#555;font-size:.72rem;text-align:center">
-  FMP Screener · 2026-05-10 13:38 · Not investment advice.
+  FMP Screener · 2026-05-10 13:41 · Not investment advice.
 </footer>
 <script>
 function showTab(id, btn) {
