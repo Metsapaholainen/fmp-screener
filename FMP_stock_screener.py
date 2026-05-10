@@ -12889,11 +12889,9 @@ function showMacroDetail(el, id) {
 
         return f"""
 <section id="ai" class="active">
-  <div class="section-title">🤖 AI Analysis — Master Manager + {n_agents} Specialists</div>
+  <div class="section-title">🤖 AI Analysis — {n_agents} Specialists</div>
   {strat_summary_html}
-  {wrapped_mall}
-  {wrapped_mm}
-  <details style="margin-bottom:6px">
+  <details open style="margin-bottom:6px">
     <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
       padding:8px 12px;background:#161b22;border-radius:6px;border:1px solid #ffffff18;
       font-size:.75rem;font-weight:700;color:#78909c;text-transform:uppercase;letter-spacing:.05em;
