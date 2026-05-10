@@ -1588,6 +1588,70 @@ FMP_AGENT_TOOLS = [
             "required": ["ticker"],
         },
     },
+    {
+        "name": "get_company_news",
+        "description": (
+            "Fetch the latest news articles for a stock ticker. "
+            "Use this to check for recent catalysts, earnings beats/misses, M&A rumours, "
+            "management changes, or negative developments not yet reflected in fundamentals. "
+            "Returns up to 6 recent headlines with summaries."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL)"},
+                "limit":  {"type": "integer", "default": 6, "description": "Number of news items"},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_insider_trades",
+        "description": (
+            "Fetch recent insider transactions (purchases and sales by executives/directors) "
+            "for a stock. Cluster buying by multiple insiders is a strong bullish signal. "
+            "Returns transaction type, shares, price, and insider role."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL)"},
+                "limit":  {"type": "integer", "default": 8, "description": "Number of transactions"},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_sec_filings",
+        "description": (
+            "Fetch recent SEC filings (10-Q, 10-K, 8-K, etc.) for a stock. "
+            "Use this to verify a recent material event, check for going-concern language, "
+            "or confirm a catalyst mentioned in a thesis. Returns filing type, date, and link."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL)"},
+                "limit":  {"type": "integer", "default": 5, "description": "Number of filings"},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "get_analyst_estimates",
+        "description": (
+            "Fetch analyst consensus estimates (revenue, EPS, EBITDA) and price target consensus "
+            "for a stock. Use this to check analyst coverage count, estimate revision direction, "
+            "and upside to consensus price target."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL)"},
+            },
+            "required": ["ticker"],
+        },
+    },
 ]
 
 
@@ -1611,10 +1675,11 @@ def _execute_fmp_tool(tool_name: str, tool_input: dict) -> str:
             return json.dumps(out, default=str)
 
         elif tool_name == "get_sec_filings":
-            data = fmp_get("sec-filings", {"symbol": ticker, "limit": limit})
-            if not data:
-                # fallback endpoint
-                data = fmp_get("sec-filings-latest", {"symbol": ticker, "limit": limit})
+            import datetime as _dt
+            _today = _dt.date.today().isoformat()
+            _from  = (_dt.date.today() - _dt.timedelta(days=365)).isoformat()
+            data = fmp_get("sec-filings-search/symbol",
+                           {"symbol": ticker, "limit": limit, "from": _from, "to": _today})
             if not data:
                 return json.dumps({"error": "No SEC filings available"})
             items = data if isinstance(data, list) else [data]
@@ -1630,7 +1695,7 @@ def _execute_fmp_tool(tool_name: str, tool_input: dict) -> str:
             return json.dumps(compact, default=str)
 
         elif tool_name == "get_insider_trades":
-            data = fmp_get("insider-trading", {"symbol": ticker, "limit": limit})
+            data = fmp_get("insider-trading/search", {"symbol": ticker, "limit": limit})
             if not data:
                 return json.dumps({"error": "No insider trade data available"})
             items = data if isinstance(data, list) else [data]
@@ -1648,9 +1713,7 @@ def _execute_fmp_tool(tool_name: str, tool_input: dict) -> str:
             return json.dumps(compact, default=str)
 
         elif tool_name == "get_company_news":
-            data = fmp_get("news", {"symbol": ticker, "limit": limit})
-            if not data:
-                data = fmp_get("stock-news", {"tickers": ticker, "limit": limit})
+            data = fmp_get("news/stock", {"symbols": ticker, "limit": limit})
             if not data:
                 return json.dumps({"error": "No news available"})
             items = data if isinstance(data, list) else [data]
@@ -1666,27 +1729,26 @@ def _execute_fmp_tool(tool_name: str, tool_input: dict) -> str:
             return json.dumps(compact, default=str)
 
         elif tool_name == "get_analyst_estimates":
-            estimates = fmp_get("analyst-estimates", {"symbol": ticker, "limit": 4})
+            estimates = fmp_get("analyst-estimates", {"symbol": ticker, "period": "annual", "limit": 4})
             pt_cons   = fmp_get("price-target-consensus", {"symbol": ticker})
             result: dict = {}
             if estimates and isinstance(estimates, list) and estimates:
-                latest = estimates[0]
-                result["estimates_latest"] = {
-                    "date":           latest.get("date"),
-                    "rev_avg_est":    latest.get("estimatedRevenueAvg"),
-                    "eps_avg_est":    latest.get("estimatedEpsAvg"),
-                    "num_analysts":   latest.get("numberAnalystEstimatedRevenue"),
-                }
-                # Trend: compare two most recent periods for revision direction
-                if len(estimates) >= 2:
-                    prev = estimates[1]
-                    rev_delta = None
-                    if estimates[0].get("estimatedEpsAvg") and prev.get("estimatedEpsAvg"):
-                        rev_delta = round(
-                            (estimates[0]["estimatedEpsAvg"] - prev["estimatedEpsAvg"])
-                            / abs(prev["estimatedEpsAvg"]) * 100, 1
-                        ) if prev["estimatedEpsAvg"] != 0 else None
-                    result["estimate_trend"] = {"eps_revision_pct": rev_delta}
+                # Return next 2 forward periods
+                fwd = [e for e in estimates if e.get("date", "") >= str(datetime.date.today().year)][:2]
+                result["forward_estimates"] = [
+                    {
+                        "year":         e.get("date", "")[:4],
+                        "rev_avg":      e.get("revenueAvg"),
+                        "rev_low":      e.get("revenueLow"),
+                        "rev_high":     e.get("revenueHigh"),
+                        "eps_avg":      e.get("epsAvg"),
+                        "eps_low":      e.get("epsLow"),
+                        "eps_high":     e.get("epsHigh"),
+                        "ebitda_avg":   e.get("ebitdaAvg"),
+                        "num_analysts": e.get("numAnalystsRevenue"),
+                    }
+                    for e in (fwd or estimates[:2])
+                ]
             if pt_cons:
                 pt = pt_cons[0] if isinstance(pt_cons, list) else pt_cons
                 result["price_target"] = {
