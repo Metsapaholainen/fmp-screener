@@ -1572,113 +1572,18 @@ def fmp_get_batch(tickers: list, endpoint_template: str, batch_size: int = 5,
 # ─────────────────────────────────────────────
 FMP_AGENT_TOOLS = [
     {
-        "name": "get_earnings_transcript",
+        "name": "get_financial_statements",
         "description": (
-            "Fetch the most recent earnings call transcript for a stock. "
-            "Use this to hear what management said about revenue growth, margins, "
-            "guidance, competitive dynamics, or strategic pivots. "
-            "Truncated to ~3000 chars per transcript."
+            "Fetch recent annual income statement and balance sheet data for a stock. "
+            "Use this to verify revenue trend, margin trajectory, debt levels, net debt, "
+            "or FCF when the candidate block summary is insufficient. "
+            "Returns up to 4 annual periods of income + balance sheet data."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL)"},
-                "limit":  {"type": "integer", "description": "Number of recent transcripts (default 1)", "default": 1},
-            },
-            "required": ["ticker"],
-        },
-    },
-    {
-        "name": "get_sec_filings",
-        "description": (
-            "Fetch a list of recent SEC filings for a stock (8-K, 10-K, 10-Q). "
-            "Use this to check for restructurings, material events, M&A, CEO changes, "
-            "or strategic announcements that may not yet be in the candidate data."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "ticker": {"type": "string"},
-                "limit":  {"type": "integer", "default": 5},
-            },
-            "required": ["ticker"],
-        },
-    },
-    {
-        "name": "get_insider_trades",
-        "description": (
-            "Fetch recent insider buy/sell transactions for a stock. "
-            "Use this to verify a cluster buying signal or discover fresh buying "
-            "not yet captured in the pre-screened candidate data."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "ticker": {"type": "string"},
-                "limit":  {"type": "integer", "default": 10},
-            },
-            "required": ["ticker"],
-        },
-    },
-    {
-        "name": "get_company_news",
-        "description": (
-            "Fetch recent news headlines for a stock. "
-            "Use this to check for catalysts, analyst upgrades/downgrades, M&A activity, "
-            "regulatory events, or product launches."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "ticker": {"type": "string"},
-                "limit":  {"type": "integer", "default": 8},
-            },
-            "required": ["ticker"],
-        },
-    },
-    {
-        "name": "get_analyst_estimates",
-        "description": (
-            "Fetch analyst consensus price targets and EPS/revenue estimates for a stock. "
-            "Use this to check the gap between current price and consensus target, "
-            "and to see if estimates are being revised up or down."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "ticker": {"type": "string"},
-            },
-            "required": ["ticker"],
-        },
-    },
-    {
-        "name": "get_financial_statements",
-        "description": (
-            "Fetch recent annual income statement and balance sheet data for a stock. "
-            "Use this to verify revenue trend, margin trajectory, debt levels, or FCF "
-            "when the candidate block summary is insufficient."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "ticker": {"type": "string"},
                 "limit":  {"type": "integer", "default": 4, "description": "Number of annual periods"},
-            },
-            "required": ["ticker"],
-        },
-    },
-    {
-        "name": "get_senate_trades",
-        "description": (
-            "Fetch recent US senate/congress trading disclosures for a stock. "
-            "Use this as a supplementary smart-money signal — congressional members "
-            "sometimes act on non-public industry knowledge."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "ticker": {"type": "string"},
-                "limit":  {"type": "integer", "default": 5},
             },
             "required": ["ticker"],
         },
@@ -5971,18 +5876,11 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
 
     # Tool-use preamble injected into specialist system prompts when USE_FMP_TOOLS=1
     _TOOL_PREAMBLE = (
-        "\n\nLIVE FMP DATA TOOLS AVAILABLE — use these to deepen analysis mid-reasoning:\n"
-        "  • get_earnings_transcript(ticker) — most recent earnings call (hear management directly)\n"
-        "  • get_sec_filings(ticker)         — recent 8-K/10-K/10-Q filings (restructurings, M&A, pivots)\n"
-        "  • get_insider_trades(ticker)      — recent buy/sell transactions (verify cluster signals)\n"
-        "  • get_company_news(ticker)        — recent headlines (catalysts, upgrades, regulatory events)\n"
-        "  • get_analyst_estimates(ticker)   — consensus price targets + EPS revisions\n"
-        "  • get_financial_statements(ticker)— income + balance sheet detail (verify revenue/debt trends)\n"
-        "  • get_senate_trades(ticker)       — congressional trading disclosures\n"
-        "Tool budget: ≤4 total calls. Use tools when a thesis depends on something not confirmed in the\n"
-        "candidate block — e.g. what management said about margins, or a catalyst you want to verify.\n"
-        "One targeted transcript call beats five speculative ones. Only call tools for stocks you are\n"
-        "seriously considering picking — not to browse the universe.\n"
+        "\n\nLIVE FMP DATA TOOL AVAILABLE — use when the candidate block summary is insufficient:\n"
+        "  • get_financial_statements(ticker) — annual income statement + balance sheet (4 years)\n"
+        "    Use this to verify: revenue trend, gross/operating margin trajectory, net debt,\n"
+        "    FCF direction, or equity base when you need more detail than the summary provides.\n"
+        "Tool budget: ≤2 calls total. Only call for stocks you are seriously considering picking.\n"
     ) if USE_FMP_TOOLS else ""
 
     # Token and timeout budgets — doubled when tools are on (multi-round calls consume budget)
@@ -6216,18 +6114,13 @@ Urgency guide: ACT NOW=catalyst imminent + entry compelling today; WITHIN WEEKS=
     _JUDGE_MAX_TOKENS = 18000 if USE_FMP_TOOLS else 12000
     _JUDGE_TIMEOUT    = 480   if USE_FMP_TOOLS else 300
 
-    # Judge tool preamble — allows targeted lookups on top consensus picks
+    # Judge tool preamble — targeted balance sheet / revenue verification on top consensus picks
     _JUDGE_TOOL_PREAMBLE = (
-        "\n\nLIVE FMP DATA TOOLS AVAILABLE — use sparingly for targeted verification:\n"
-        "  • get_earnings_transcript(ticker) — hear management directly on the 1-2 picks you're least certain about\n"
-        "  • get_sec_filings(ticker)         — verify a claimed catalyst (restructuring, spinoff, M&A)\n"
-        "  • get_insider_trades(ticker)      — verify or challenge an InsiderTrack specialist nomination\n"
-        "  • get_company_news(ticker)        — check for breaking news that would break a thesis\n"
-        "  • get_analyst_estimates(ticker)   — verify consensus gap before setting a price target\n"
-        "  • get_financial_statements(ticker)— deep-dive a balance sheet when a kill criterion is in doubt\n"
-        "  • get_senate_trades(ticker)       — supplement insider signals on key picks\n"
-        "Tool budget: ≤6 total calls. Prioritise the 2-3 consensus picks you need to verify — "
-        "do NOT use tools to browse; use them to confirm or reject before committing a pick to CORE tier.\n"
+        "\n\nLIVE FMP DATA TOOL AVAILABLE — use for targeted verification before finalising picks:\n"
+        "  • get_financial_statements(ticker) — annual income statement + balance sheet (4 years)\n"
+        "    Use this to deep-dive revenue trajectory, debt levels, or FCF for the 1-3 consensus\n"
+        "    picks you want to confirm before assigning CORE tier. Do NOT call for every pick.\n"
+        "Tool budget: ≤3 calls total.\n"
     ) if USE_FMP_TOOLS else ""
 
     _judge_sys_final = judge_system + _JUDGE_TOOL_PREAMBLE
@@ -6477,12 +6370,11 @@ YOUR TASK:
 
 JSON only. No markdown, no preamble."""
 
-    # Mall Manager tool preamble (lightweight — consumer lens doesn't need heavy FMP use)
+    # Mall Manager tool preamble (lightweight — consumer lens rarely needs financials)
     _mall_tool_preamble = (
-        "\n\nLIVE FMP DATA TOOLS AVAILABLE (optional): get_company_news(ticker), "
-        "get_earnings_transcript(ticker). Use only if you need to verify a specific "
-        "consumer trend claim — e.g. confirm a product launch date or a management quote "
-        "about user growth. Budget: ≤3 tool calls. Default: skip and rely on candidate data.\n"
+        "\n\nLIVE FMP DATA TOOL AVAILABLE (optional): get_financial_statements(ticker). "
+        "Use only if you need to verify a revenue or balance sheet claim before picking. "
+        "Budget: ≤1 tool call. Default: skip and rely on candidate data.\n"
     ) if USE_FMP_TOOLS else ""
 
     _mall_sys_final   = sys_prompt + _mall_tool_preamble
@@ -16014,14 +15906,29 @@ def main():
         "Lynch 10-Baggers": ten_baggers,
         "Off-the-Radar":    off_the_radar,   # Pre-discovery blindspot setups feed all specialists
     }
-    # ── Daily AI result cache — skip Claude calls if already run today ──
-    _AI_CACHE_KEY = "_ai_result"
-    _today_str    = datetime.date.today().isoformat()
-    _cached_ai    = _cache.get(_AI_CACHE_KEY, {})
+    # ── Weekly AI result cache — skip Claude calls if already run within 7 days ──
+    # Set USE_FMP_TOOLS=1 to enable live financial statement lookups during reasoning.
+    # Use --force-fresh-ai to bypass the weekly cache and re-run immediately.
+    _AI_CACHE_KEY  = "_ai_result"
+    _AI_CACHE_DAYS = 7          # run agents once per week; daily runs reuse the result
+    _today_str     = datetime.date.today().isoformat()
+    _cached_ai     = _cache.get(_AI_CACHE_KEY, {})
+
+    def _ai_cache_age_days(cached: dict) -> int:
+        """Return age of cached AI result in days, or 999 if missing/invalid."""
+        d = cached.get("date", "")
+        if not d:
+            return 999
+        try:
+            return (datetime.date.today() - datetime.date.fromisoformat(d)).days
+        except ValueError:
+            return 999
+
+    _ai_age_days   = _ai_cache_age_days(_cached_ai)
     _ai_from_cache = (
-        not args.force_fresh_ai      # C2: --force-fresh-ai bypasses the daily cache
+        not args.force_fresh_ai           # --force-fresh-ai bypasses the weekly cache
         and isinstance(_cached_ai, dict)
-        and _cached_ai.get("date") == _today_str
+        and _ai_age_days < _AI_CACHE_DAYS
         and isinstance(_cached_ai.get("result"), dict)
         and _cached_ai["result"].get("picks")
     )
@@ -16033,7 +15940,9 @@ def main():
         n_specs = len(ai_result.get("_specialist_picks", {}))
         n_mall  = len(mall_result.get("picks", []))
         mall_note = f" + {n_mall} mall" if n_mall else ""
-        print(f"\n  📦 Using cached AI analysis ({n_picks} judge picks, {n_specs} specialists{mall_note} — already run today)")
+        _cache_date = _cached_ai.get("date", "?")
+        print(f"\n  📦 Using cached AI analysis ({n_picks} judge picks, {n_specs} specialists{mall_note}"
+              f" — from {_cache_date}, {_ai_age_days}d ago — next refresh in {_AI_CACHE_DAYS - _ai_age_days}d)")
     else:
         if args.force_fresh_ai and _cached_ai.get("date") == _today_str:
             print("\n  🔄 --force-fresh-ai: bypassing today's AI cache, re-running all specialists + judge + mall manager")
