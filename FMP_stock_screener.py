@@ -8016,19 +8016,68 @@ Respond ONLY with valid JSON (no markdown):
                          headers=headers, json=body, timeout=120)
         if resp.status_code == 200:
             raw = resp.json()["content"][0]["text"]
-            # Strip markdown fences if present
-            raw = raw.strip()
-            if raw.startswith("```"):
-                raw = "\n".join(raw.split("\n")[1:])
-            if raw.endswith("```"):
-                raw = "\n".join(raw.split("\n")[:-1])
-            # Extract just the JSON object — discard any trailing text Haiku
-            # appends after the closing brace ("Extra data" parse error)
-            start = raw.find("{")
-            end   = raw.rfind("}") + 1
-            if start != -1 and end > start:
-                raw = raw[start:end]
-            result = json.loads(raw)
+
+            def _extract_json(text: str) -> dict:
+                """Return parsed dict from text, trying progressively looser methods."""
+                import re as _re, tempfile as _tf, os as _os
+
+                # 1. Strip markdown fences (```json ... ``` or ``` ... ```)
+                text = text.strip()
+                text = _re.sub(r'^```[a-zA-Z]*\n?', '', text)
+                text = _re.sub(r'\n?```$', '', text)
+                text = text.strip()
+
+                # 2. Fast path: direct parse
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError:
+                    pass
+
+                # 3. Slice from first '{' to last '}' and retry
+                start = text.find("{")
+                end   = text.rfind("}") + 1
+                if start != -1 and end > start:
+                    candidate = text[start:end]
+                    try:
+                        return json.loads(candidate)
+                    except json.JSONDecodeError:
+                        pass
+
+                # 4. Regex: find the outermost balanced {...} block
+                for m in _re.finditer(r'\{', text):
+                    depth, pos = 0, m.start()
+                    in_str, escape = False, False
+                    for i, ch in enumerate(text[pos:]):
+                        if escape:
+                            escape = False
+                            continue
+                        if ch == '\\' and in_str:
+                            escape = True
+                            continue
+                        if ch == '"':
+                            in_str = not in_str
+                        elif not in_str:
+                            if ch == '{':
+                                depth += 1
+                            elif ch == '}':
+                                depth -= 1
+                                if depth == 0:
+                                    try:
+                                        return json.loads(text[pos: pos + i + 1])
+                                    except json.JSONDecodeError:
+                                        break
+                    break
+
+                # 5. Give up — dump raw response for debugging
+                tmp = _tf.NamedTemporaryFile(
+                    mode='w', suffix='_pm_raw.txt',
+                    dir=_tf.gettempdir(), delete=False, encoding='utf-8'
+                )
+                tmp.write(text)
+                tmp.close()
+                raise ValueError(f"Cannot parse PM JSON; raw saved to {tmp.name}")
+
+            result = _extract_json(raw)
             print(f"  ✅ Portfolio manager done — "
                   f"{len(result.get('review',[]))} holdings reviewed, "
                   f"{len(result.get('buys',[]))} buys proposed")
@@ -8036,7 +8085,7 @@ Respond ONLY with valid JSON (no markdown):
         else:
             print(f"  ⚠️ Portfolio manager HTTP {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
-        print(f"  ⚠️ Portfolio manager error: {str(e)[:80]}")
+        print(f"  ⚠️ Portfolio manager error: {str(e)[:120]}")
     return {}
 
 
@@ -13647,7 +13696,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
     <h1>📈 FMP Stock Screener</h1>
     <small>{now} · {len(stocks):,} stocks · {fmp_call_count} API calls</small>
   </div>
-  <small style="color:#9fa8da">17 Specialists · Master Manager</small>
+  <small style="color:#9fa8da">12 Specialists · Master Manager</small>
 </div>
 {_spinoff_html}
 <nav class="nav">{nav_html}</nav>
