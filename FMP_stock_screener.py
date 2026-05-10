@@ -12873,12 +12873,191 @@ function showMacroDetail(el, id) {
   </div>
 </div>""")
 
+            # ── Full strategy description (collapsible, hidden by default) ──
+            _AGENT_FULL_DESC = {
+                "WallStBlind": (
+                    "<p><b>Goldman Sachs small-cap research lens combined with a systematic Wall Street blindspot scanner.</b> "
+                    "Targets companies <em>before</em> mainstream coverage arrives — by the time 20+ analysts cover a stock, the easy money is gone.</p>"
+                    "<ul>"
+                    "<li><b>Size:</b> $100M–$2B market cap — big enough to be legitimate, small enough to still multiply</li>"
+                    "<li><b>Coverage:</b> 0–5 analysts covering the stock (≥20 = already discovered)</li>"
+                    "<li><b>Revenue growth:</b> minimum 25% YoY for 3+ consecutive quarters</li>"
+                    "<li><b>Insider ownership:</b> founders/executives holding 15%+ of shares (skin in the game)</li>"
+                    "<li><b>Structural tailwinds:</b> AI, cybersecurity, energy transition, aging demographics, automation</li>"
+                    "<li><b>Unit economics:</b> improving gross margins and positive operating leverage (revenue growing faster than costs)</li>"
+                    "<li><b>Balance sheet:</b> 18+ months cash runway without needing profitability</li>"
+                    "<li><b>Blindspot channels:</b> spinoffs from S&P 500 companies, foreign listings overlooked by US investors, "
+                    "orphaned small-caps that fell below $500M and lost analyst coverage, post-bankruptcy equities with clean balance sheets</li>"
+                    "<li><b>Near-term catalysts:</b> specific re-rating events within 6–12 months (earnings beats, product launches, regulatory approvals)</li>"
+                    "</ul>"
+                ),
+                "LynchBWYK": (
+                    "<p><b>Peter Lynch's everyday-life observation framework.</b> Simple, understandable consumer and workplace businesses "
+                    "growing 15–25%/yr at PEG &lt;1.0. The best investments hide in plain sight — find them before Wall Street does.</p>"
+                    "<ul>"
+                    "<li><b>Daily life inventory:</b> products, apps, or services you're using more this year than last year</li>"
+                    "<li><b>Emerging behaviour patterns:</b> what friends, family, and colleagues are doing differently than 2 years ago</li>"
+                    "<li><b>Workplace intelligence:</b> what tools or software your company is buying or switching to</li>"
+                    "<li><b>Kids' trends:</b> products and brands teenagers are obsessed with that parents haven't noticed yet</li>"
+                    "<li><b>Retail observation:</b> which stores have lines, which brands are sold out, what everyone is talking about</li>"
+                    "<li><b>Lynch category:</b> classify each as Fast Grower (20%+ growth), Stalwart, Cyclical, Turnaround, or Asset Play</li>"
+                    "<li><b>The 'so what' test:</b> a popular product doesn't automatically make a great stock — always check valuation and fundamentals</li>"
+                    "</ul>"
+                ),
+                "SocialArb": (
+                    "<p><b>Chris Camillo's social arbitrage approach</b> — spotting consumer trends on social media months before "
+                    "Wall Street analysts notice, finding what's viral before it shows up in earnings reports.</p>"
+                    "<ul>"
+                    "<li><b>TikTok / Reddit / X:</b> products and brands going viral with millions of views that analysts haven't quantified yet</li>"
+                    "<li><b>Google Trends divergence:</b> search terms spiking while stock prices haven't moved yet (early signal)</li>"
+                    "<li><b>YouTube review velocity:</b> products suddenly accumulating dozens of review videos with high engagement</li>"
+                    "<li><b>App Store rankings:</b> apps climbing free and paid charts that belong to investable companies</li>"
+                    "<li><b>Amazon bestsellers:</b> products climbing rankings that belong to public companies</li>"
+                    "<li><b>Lead time:</b> social signals typically precede earnings impact by 6–12 months — the arbitrage window</li>"
+                    "<li><b>Public company linkage:</b> for each trend, identify the specific public company that captures the economic benefit</li>"
+                    "</ul>"
+                ),
+                "Mayer100x": (
+                    "<p><b>Christopher Mayer's 100-Bagger framework</b> — the research methodology identifying stocks with potential "
+                    "to return 100x, based on patterns observed across 365 historical 100-baggers.</p>"
+                    "<ul>"
+                    "<li><b>Small starting cap:</b> ideally under $1B — 100x must be mathematically possible</li>"
+                    "<li><b>Long runway:</b> serves a market large enough to support decades of revenue growth</li>"
+                    "<li><b>ROIC above 20%:</b> Mayer's single most predictive metric — the engine of compounding</li>"
+                    "<li><b>Earnings growth:</b> 20%+ annual earnings growth sustained for many years</li>"
+                    "<li><b>Owner-operator:</b> CEO and management with 10%+ personal stock ownership</li>"
+                    "<li><b>Reinvestment runway:</b> profits redeployed into new growth at high returns (not paid out as dividends)</li>"
+                    "<li><b>No dilution:</b> the company isn't issuing large amounts of new shares that erode long-term returns</li>"
+                    "<li><b>Twin engines test:</b> can earnings grow 10x AND the P/E multiple also expand to compound into 100x?</li>"
+                    "<li><b>Time horizon reality:</b> 100-baggers typically take 20–25 years — patience is the edge</li>"
+                    "</ul>"
+                ),
+                "CathieWood": (
+                    "<p><b>ARK Invest's disruptive innovation framework</b> — identifying companies at the centre of major technological "
+                    "platforms that could produce exponential returns over the next decade via Wright's Law cost curves.</p>"
+                    "<ul>"
+                    "<li><b>Five platforms:</b> AI, robotics, energy storage, blockchain, and multiomics (genomics + proteomics)</li>"
+                    "<li><b>Wright's Law:</b> every doubling of production cuts costs predictably — ride the exponential adoption curve</li>"
+                    "<li><b>Pure-plays only:</b> 80%+ of revenue from the disruptive technology (not legacy businesses with a small AI division)</li>"
+                    "<li><b>Convergence opportunities:</b> companies at the intersection of 2+ platforms (AI + healthcare, AI + robotics)</li>"
+                    "<li><b>TAM expansion:</b> the total addressable market is itself growing as the technology matures</li>"
+                    "<li><b>Network effects / data moats:</b> companies that get stronger as they scale — more users, more data, better products</li>"
+                    "<li><b>5-year scenario:</b> bull case (technology adopted as projected), base case, bear case (technology stalls)</li>"
+                    "</ul>"
+                ),
+                "MagicFormula": (
+                    "<p><b>Joel Greenblatt's Magic Formula</b> — the two-factor screen generating 30%+ annual returns over 20 years "
+                    "by finding companies that are simultaneously high-quality AND cheap.</p>"
+                    "<ul>"
+                    "<li><b>ROIC above 20%:</b> high-quality business generating strong returns on every dollar invested</li>"
+                    "<li><b>Earnings yield above 10%:</b> cheap relative to earnings (inverse of P/E) — the 'cheap' gate</li>"
+                    "<li><b>Combined ranking:</b> companies score best when BOTH metrics rank highly — quality + cheap together</li>"
+                    "<li><b>Size filter:</b> $50M–$10B to exclude illiquid micro-caps and already-covered mega-caps</li>"
+                    "<li><b>Sector exclusions:</b> skip financials, utilities, and REITs (different capital structures distort the formula)</li>"
+                    "<li><b>Debt check:</b> high ROIC shouldn't be mere financial leverage — verify balance sheet is clean</li>"
+                    "<li><b>Earnings quality:</b> free cash flow should match net income — flag accounting-driven earnings</li>"
+                    "<li><b>Temporary vs permanent:</b> is the stock cheap due to a fixable problem, or is the business structurally declining?</li>"
+                    "</ul>"
+                ),
+                "Pabrai": (
+                    "<p><b>Mohnish Pabrai's Dhandho framework</b> — combining LOW RISK (limited downside) with HIGH UNCERTAINTY "
+                    "(Wall Street can't value it) for asymmetric bets where heads I win big, tails I don't lose much.</p>"
+                    "<ul>"
+                    "<li><b>Asymmetry ratio:</b> upside potential ÷ downside risk must be 3:1 or better</li>"
+                    "<li><b>Downside protection:</b> what specifically limits the loss — asset value, cash, acquisition target, recurring revenue</li>"
+                    "<li><b>Upside catalyst:</b> the specific event that could drive 3–10x returns over 3–5 years</li>"
+                    "<li><b>Temporary distress:</b> markets treating a short-term problem (lawsuit, earnings miss, sector rotation) as permanent</li>"
+                    "<li><b>Special situations:</b> spinoffs, post-bankruptcy equities, rights offerings that create pricing inefficiencies</li>"
+                    "<li><b>Hated industries:</b> entire sectors abandoned by investors where survivors trade at distressed multiples</li>"
+                    "<li><b>Margin of safety:</b> gap between current price and conservative intrinsic value — the buffer against being wrong</li>"
+                    "</ul>"
+                ),
+                "HowardMarks": (
+                    "<p><b>Howard Marks' second-level thinking</b> — first-level thinking gets average returns; "
+                    "second-level thinking ('the company is great BUT priced for perfection') finds the real opportunities.</p>"
+                    "<ul>"
+                    "<li><b>Consensus audit:</b> what is the mainstream view, and is it based on sound analysis or herd mentality?</li>"
+                    "<li><b>Second-level question:</b> what do I know or see that the consensus is missing?</li>"
+                    "<li><b>Oversold opportunities:</b> stocks down 50%+ where the negative narrative has become excessive vs fundamentals</li>"
+                    "<li><b>Sentiment extremes:</b> sectors at multi-year sentiment lows (rare to be wrong buying) or highs (rare to be right buying)</li>"
+                    "<li><b>Narrative vs numbers gap:</b> where does the market story ('this industry is dying') contradict the actual data?</li>"
+                    "<li><b>Time horizon arbitrage:</b> quarterly-focused Wall Street missing a multi-year thesis</li>"
+                    "<li><b>Insider buying signal:</b> executives aggressively buying when the market is selling — the strongest bullish insider indicator</li>"
+                    "</ul>"
+                ),
+                "NickSleep": (
+                    "<p><b>Nick Sleep's Scale Economics Shared framework</b> — the methodology that identified Amazon, Costco, and "
+                    "Berkshire decades early, based on companies that share their scale advantages with customers to build a self-reinforcing flywheel.</p>"
+                    "<ul>"
+                    "<li><b>Core test:</b> does the company get MORE efficient and offer BETTER prices as it grows? (opposite of most businesses)</li>"
+                    "<li><b>Customer obsession:</b> willing to take short-term margin hits to give customers more value (Costco 15% margin discipline)</li>"
+                    "<li><b>Flywheel:</b> lower prices → more customers → more scale → lower costs → even lower prices (self-reinforcing loop)</li>"
+                    "<li><b>Long-term thinking evidence:</b> quarterly earnings suppressed for multi-year investment; founder letters emphasise decades</li>"
+                    "<li><b>Customer lifetime value:</b> expanding over time as the business creates more value per customer</li>"
+                    "<li><b>Non-obvious moat:</b> the advantage isn't patents or brand — it's a culture and business model the organisation embodies</li>"
+                    "<li><b>Capital allocation:</b> cash flow reinvested into high-return opportunities rather than buybacks at peak prices</li>"
+                    "</ul>"
+                ),
+                "Burry": (
+                    "<p><b>Michael Burry's catalyst-driven deep value approach</b> — finding mispriced assets where specific, "
+                    "identifiable catalysts will force the market to recognise hidden value within a defined timeframe.</p>"
+                    "<ul>"
+                    "<li><b>Hidden assets:</b> companies trading below the value of real estate, cash, or investments on the balance sheet</li>"
+                    "<li><b>Sum-of-parts:</b> conglomerates where individual divisions are worth more than the combined market cap</li>"
+                    "<li><b>Activist catalyst:</b> stocks where an activist could force a spinoff, sale, or restructuring to unlock value</li>"
+                    "<li><b>Regulatory / legal catalysts:</b> upcoming court cases or policy decisions that will materially reprice the stock</li>"
+                    "<li><b>Balance sheet transformation:</b> companies paying down debt aggressively — will re-rate once leverage drops below key thresholds</li>"
+                    "<li><b>Accounting normalisation:</b> one-time write-downs or unusual items temporarily depressing reported earnings</li>"
+                    "<li><b>Catalyst timeline:</b> each idea must have a specific catalyst with 6–18 month resolution — no 'cheap forever' open-ended theses</li>"
+                    "</ul>"
+                ),
+                "InsiderTrack": (
+                    "<p><b>Insider buying and 13F tracker</b> — the only people with BOTH material information AND capital at stake. "
+                    "Cluster insider purchases and smart-money positioning are among the highest-conviction signals available.</p>"
+                    "<ul>"
+                    "<li><b>Cluster buying:</b> 3+ different insiders (CEO, CFO, board members) buying simultaneously within 30 days</li>"
+                    "<li><b>Purchase size:</b> buys above $100K from executives who already hold significant positions signal strongest conviction</li>"
+                    "<li><b>First-time buyers:</b> insiders making their first-ever open-market purchase often precede major positive developments</li>"
+                    "<li><b>13F smart money:</b> Berkshire, Pershing Square, Third Point — recent initiations or meaningful position increases</li>"
+                    "<li><b>Concentration signal:</b> when a top fund puts 5%+ of their portfolio into one stock, that's conviction worth following</li>"
+                    "<li><b>Combined signal:</b> stocks showing BOTH insider buying AND smart-money accumulation — the highest-conviction setup</li>"
+                    "<li><b>Red flags:</b> cluster insider SELLING is equally informative — flag heavily selling insiders in holdings</li>"
+                    "</ul>"
+                ),
+                "BuffettQ": (
+                    "<p><b>Warren Buffett's quality compounder framework</b> — buying extraordinary businesses at fair prices and "
+                    "holding indefinitely. The goal is owning durable franchises that compound intrinsic value for decades.</p>"
+                    "<ul>"
+                    "<li><b>Durable moat:</b> brand loyalty, switching costs, network effects, or structural cost advantages protecting returns</li>"
+                    "<li><b>ROIC above 15% sustained:</b> high returns on capital maintained for 5+ years signal a real moat, not luck</li>"
+                    "<li><b>Gross margin above 40%:</b> wide gross margins indicate pricing power and products customers must have</li>"
+                    "<li><b>Predictable earnings:</b> consistent, recurring revenue with low cyclicality — Buffett can project 10 years out</li>"
+                    "<li><b>Conservative balance sheet:</b> low debt, strong free cash flow, self-funding growth without capital markets</li>"
+                    "<li><b>Owner-operator mindset:</b> management that thinks like long-term owners, not empire-builders</li>"
+                    "<li><b>Fair price for quality:</b> willing to pay a premium P/E for a business that will compound at 15%+ for decades</li>"
+                    "</ul>"
+                ),
+            }
+            _full_desc = _AGENT_FULL_DESC.get(ak, "")
+            _full_desc_html = (
+                f'<details style="margin:0 0 4px">'
+                f'<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;'
+                f'padding:5px 12px;background:#1a2035;font-size:.7rem;color:#546e7a;'
+                f'border-bottom:1px solid #ffffff10;user-select:none">'
+                f'📖 <span>Strategy details</span>'
+                f'<span style="margin-left:auto;font-size:.65rem">▼</span></summary>'
+                f'<div style="padding:10px 16px 12px;font-size:.73rem;color:#b0bec5;line-height:1.65;'
+                f'background:#111827">{_full_desc}</div>'
+                f'</details>'
+            ) if _full_desc else ""
+
             inner_html = (
                 f'<div class="agent-section" style="margin-bottom:0">'
                 f'<div class="agent-hdr" style="background:#{chx}">'
                 f'<div class="ag-title">{lbl}</div>'
                 f'<div class="ag-desc">{dsc}</div>'
                 f'</div>'
+                f'{_full_desc_html}'
                 f'<div class="agent-picks-grid">{"".join(_pkc)}</div>'
                 f'</div>'
             )
