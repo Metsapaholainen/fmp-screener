@@ -5162,40 +5162,75 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
                "★×N=appears in N strategies — list pre-ranked for YOUR strategy lens\n")
         return hdr + chr(10).join(lines)
 
-    # Quality Growth — rank by ROE + gross margin + FCF quality + Piotroski
-    def _sc_quality_growth(m):
-        return ((_sv(m,"roe") or 0)*25 + (_sv(m,"grossMargin") or 0)*20
-                + (_sv(m,"operatingMargin") or 0)*15 + (_rv(m,"Rev Growth 5Y") or 0)*15
-                + (_rv(m,"Piotroski") or 0)*2.5 + (_sv(m,"fcfConversion") or 0)*10
-                + (_sv(m,"roic") or 0)*20)
+    # ════════════════════════════════════════════════════════════════════════
+    # NEW SPECIALIST POOL FUNCTIONS — 12 framework-anchored agents (2026-05-10)
+    # ════════════════════════════════════════════════════════════════════════
 
-    # Special Situation — rank by beaten-down + improving + catalyst signals
-    def _sc_special_sit(m):
-        pvs = _sv(m,"priceVs52H") or 0.8
-        rg  = (_rv(m,"Rev Growth") or 0)*100
-        rgp = (_rv(m,"Rev Gr Prev") or 0)*100
-        de  = _sv(m,"de") or 3.0
-        return ((1.0-pvs)*35 + (_rv(m,"MoS") or 0)*25
-                + max(0, rg-rgp)*0.25 + max(0, 30-de*5)*0.15)
+    # Wall Street Blindspot — consolidated Goldman SC + Wall St Blindspot Hunter.
+    # Pre-discovery small-mid caps under-followed by sell-side, often with narrative pivot.
+    # Profile: $100M-$3B sweet spot, ≤5 analysts, base-building, insider conviction.
+    def _sc_wall_st_blindspot(m):
+        mc_b = _sv(m, "mktCapB") or 50
+        mc   = mc_b * 1e9
+        # Size tier — $100M to $3B is the institutional blindspot zone
+        if   mc < 100e6:   sz = 5    # too small (illiquid)
+        elif mc < 300e6:   sz = 28
+        elif mc < 600e6:   sz = 32
+        elif mc < 1_000e6: sz = 28
+        elif mc < 1_500e6: sz = 22
+        elif mc < 2_000e6: sz = 16
+        elif mc < 3_000e6: sz = 10
+        else:              sz = 2    # outside sweet spot
+        # Analyst coverage gap penalty
+        ac = _sv(m, "analystCount")
+        cov_adj = -min((ac or 0) * 4, 24)
+        # Base-building (52W position 50-85% = pre-rerating zone)
+        pvs = _sv(m, "priceVs52H")
+        if pvs is None:               base = -5
+        elif 0.50 <= pvs <= 0.75:     base = 22
+        elif 0.38 <= pvs <= 0.85:     base = 12
+        elif pvs > 0.92:              base = -18  # already rerated, missed it
+        elif pvs > 0.85:              base = -8
+        else:                         base = 0
+        # Insider conviction
+        n_buys = _sv(m, "insiderBuys") or 0
+        ins    = 28 if n_buys >= 5 else 20 if n_buys >= 3 else 8 if n_buys >= 1 else 0
+        burst  = 15 if _sv(m, "insiderBurst") else 0
+        # Revenue acceleration / narrative pivot signal
+        rg   = _rv(m, "Rev Growth") or 0
+        rgp  = _rv(m, "Rev Gr Prev") or 0
+        accel = 14 if (rg > 0.15 and rgp and rg > rgp * 1.20) else 0
+        # Hidden gem flag (insider buying + Street rated Hold/Sell)
+        gem  = 12 if _sv(m, "divergence") == "hidden_gem" else 0
+        # Estimate revision momentum
+        er = _sv(m, "estRevision30d")
+        rev_bonus = 12 if (er and er > 0.10) else 7 if (er and er > 0.05) else 0
+        # Survival floor — must not be cash-burning shell
+        fcfy = _sv(m, "fcfYield") or 0
+        survival = 8 if fcfy > 0 else 0
+        return sz + cov_adj + base + ins + burst + accel + gem + rev_bonus + survival
 
-    # Capital Appreciation — rank by momentum (near 52w high = uptrend) + rev acceleration
-    def _sc_cap_appreciation(m):
-        pvs = (_sv(m,"priceVs52H") or 0)*100
-        rg  = (_rv(m,"Rev Growth") or 0)*100
-        rgp = (_rv(m,"Rev Gr Prev") or 0)*100
-        fpe = _sv(m,"fwdPE") or 0
-        fv  = max(0, 50-fpe) if fpe and 0 < fpe < 50 else 0
-        br  = (_sv(m,"beatRate") or 0)*100
-        return pvs*0.30 + rg*0.20 + max(0,rg-rgp)*0.20 + fv*0.15 + br*0.15
-
-    # Emerging Growth — rank by highest revenue growth + small/mid-cap preference
-    def _sc_emerging_growth(m):
-        mc  = _sv(m,"mktCapB") or 50
-        sz  = 20 if mc < 2 else 10 if mc < 5 else 5 if mc < 15 else 0
-        peg = _rv(m,"PEG") or _sv(m,"peg") or 99
-        pk  = max(0, 30-peg*5) if 0 < peg < 6 else 0
-        return ((_rv(m,"Rev Growth") or 0)*35 + (_rv(m,"Rev Growth 5Y") or 0)*25
-                + (_rv(m,"EPS Growth 5Y") or 0)*15 + sz + pk*0.25)
+    # Mayer 100-Bagger — STRICT: must clear hard ROIC/size gates.
+    # Returns None for any stock failing thresholds → excluded from pool.
+    def _sc_mayer_100x(m):
+        mc   = _sv(m, "mktCapB") or 99
+        roic = (_sv(m, "roic") or 0) * 100
+        # HARD GATES per Mayer's 365 100-bagger study:
+        #   - Small cap (rare to 100x above $5B; sweet spot under $2B)
+        #   - High ROIC (Mayer's single most predictive metric: 15%+ floor, 20%+ ideal)
+        if mc > 2.0:   return None
+        if mc < 0.05:  return None  # too small to be legitimate
+        if roic < 15:  return None
+        # Among qualifying stocks, rank by 100-bagger pattern strength
+        rg5  = (_rv(m, "Rev Growth 5Y") or 0) * 100
+        rg   = (_rv(m, "Rev Growth") or 0) * 100
+        eps5 = (_rv(m, "EPS Growth 5Y") or 0) * 100
+        gm   = (_sv(m, "grossMargin") or 0) * 100
+        # Owner-operator proxy: insider buying activity (true ownership data not in row)
+        owner = 15 if (_sv(m, "insiderBuys") or 0) >= 1 else 0
+        # Reinvestment runway: rev growth + EPS growth still strong = long runway left
+        runway = min(rg5, 60) * 0.4 + min(eps5, 60) * 0.3
+        return roic * 0.6 + runway + gm * 0.15 + owner
 
     # Lynch BWYK — rank by PEG (lowest = best) + consumer sector + real earnings
     def _sc_lynch(m):
@@ -5278,70 +5313,45 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         return (has_ins + (_sv(m,"roic") or 0)*25 + (_rv(m,"MoS") or 0)*20
                 + max(_sv(m,"fcfYield") or 0, 0)*15 + (_rv(m,"Piotroski") or 0)*2.0)
 
-    # Off-the-Radar — rank by institutional blindspot signals (size tier + base-building + insider)
-    # Specifically designed for the IREN/Nokia profile: pre-discovery, narrative pivot in progress.
-    # Uses size tier (not analystCount) as primary blindspot proxy — FMP returns 0 for ~90% of small caps.
-    def _sc_off_radar(m):
-        mc_b = _sv(m, "mktCapB") or 50
-        mc   = mc_b * 1e9
-        # Size tier: smaller = more structurally invisible to institutions
-        if   mc < 350e6:   sz = 32
-        elif mc < 600e6:   sz = 26
-        elif mc < 1_000e6: sz = 20
-        elif mc < 1_500e6: sz = 14
-        elif mc < 2_000e6: sz = 9
-        else:              sz = 4
-        # Confirmed analyst count as a penalty on the blindspot score
-        ac = _sv(m, "analystCount")
-        cov_adj = -min((ac or 0) * 4, 20)
-        # 52w position: base-building is the sweet spot
-        pvs  = _sv(m, "priceVs52H")
-        if pvs is None:                  base = -5   # unknown = mild penalty
-        elif 0.50 <= pvs <= 0.75:        base = 20   # deep base — best pre-discovery setup
-        elif 0.38 <= pvs <= 0.85:        base = 10   # wider base zone
-        elif pvs > 0.88:                 base = -15  # near highs — re-rating already underway
-        elif pvs > 0.82:                 base = -8   # fading blindspot
-        else:                            base = 0
-        # Insider conviction
-        n_buys = _sv(m, "insiderBuys") or 0
-        ins    = 28 if n_buys >= 5 else 20 if n_buys >= 3 else 8 if n_buys >= 1 else 0
-        # Insider burst (Tier 2.5): concentrated buying in last 30d = urgency signal
-        burst = 15 if _sv(m, "insiderBurst") else 0
-        # Revenue acceleration = narrative shift in progress
-        rg   = _rv(m, "Rev Growth") or 0
-        rgp  = _rv(m, "Rev Gr Prev") or 0
-        accel = 12 if (rg > 0 and rgp and rg > rgp * 1.20) else 0
-        # Hidden gem flag
-        gem  = 10 if _sv(m, "divergence") == "hidden_gem" else 0
-        # Estimate revision momentum (Tier 3.8)
-        er = _sv(m, "estRevision30d")
-        rev_bonus = 12 if (er and er > 0.10) else 7 if (er and er > 0.05) else 0
-        return sz + cov_adj + base + ins + burst + accel + gem + rev_bonus
+    # Buffett Quality Compounder — durable moat + predictable earnings.
+    # Pure quality: high ROIC sustained, fat margins, low debt, consistent revenue.
+    def _sc_buffett_quality(m):
+        roic = (_sv(m, "roic") or 0) * 100
+        gm   = (_sv(m, "grossMargin") or 0) * 100
+        om   = (_sv(m, "operatingMargin") or 0) * 100
+        fcc  = (_sv(m, "fcfConversion") or 0) * 100
+        de   = _sv(m, "de") or 3.0
+        pio  = _rv(m, "Piotroski") or 0
+        # Quality core: ROIC + margin profile + earnings quality
+        quality = roic * 0.5 + gm * 0.25 + om * 0.15 + fcc * 0.10
+        # Debt penalty: Buffett hates leverage
+        debt_pen = max(0, de - 1.0) * -8
+        # Predictability bonus: high Piotroski = consistent profitable years
+        predict = pio * 4
+        # Mild size preference for established names (the moat has been tested)
+        mc = _sv(m, "mktCapB") or 50
+        size_b = 6 if mc > 5 else 0
+        return quality + debt_pen + predict + size_b
 
     # Pre-build all per-agent blocks (done once, before parallel launch)
-    _pool_quality_growth   = _agent_pool(_sc_quality_growth)
-    _pool_special_sit      = _agent_pool(_sc_special_sit)
-    _pool_cap_appreciation = _agent_pool(_sc_cap_appreciation)
-    _pool_emerging_growth  = _agent_pool(_sc_emerging_growth)
-    _pool_lynch            = _agent_pool(_sc_lynch)
-    _pool_cathie_wood      = _agent_pool(_sc_cathie_wood)
-    _pool_pabrai           = _agent_pool(_sc_pabrai)
-    _pool_howard_marks     = _agent_pool(_sc_howard_marks)
-    _pool_burry            = _agent_pool(_sc_burry)
-    _pool_insider          = _agent_pool(_sc_insider)
-    _pool_off_radar        = _agent_pool(_sc_off_radar)
+    # 11 pool builders for 12 agents — Mayer100x uses sc_candidates_block directly (size-constrained).
+    _pool_wall_st_blindspot = _agent_pool(_sc_wall_st_blindspot)
+    _pool_lynch             = _agent_pool(_sc_lynch)
+    _pool_social_arb        = _agent_pool(_sc_social_arb)
+    _pool_cathie_wood       = _agent_pool(_sc_cathie_wood)
+    _pool_magic_formula     = _agent_pool(_sc_magic_formula, top_n=40, strict=True)
+    _pool_pabrai            = _agent_pool(_sc_pabrai)
+    _pool_howard_marks      = _agent_pool(_sc_howard_marks)
+    _pool_nick_sleep        = _agent_pool(_sc_nick_sleep)
+    _pool_burry             = _agent_pool(_sc_burry)
+    _pool_insider           = _agent_pool(_sc_insider)
+    _pool_buffett_quality   = _agent_pool(_sc_buffett_quality)
+    # Mayer100x — hard <$2B + ROIC >15% gates, returns None to exclude
+    _pool_mayer_100x        = _agent_pool(_sc_mayer_100x, top_n=40, strict=True)
 
-    # ── Special Situation: extract top-15 tickers and fetch company-specific news ──
-    _ss_top_tickers = [
-        m["row"].get("Ticker", "")
-        for _, m in sorted(
-            [((_sc_special_sit(m) if _sc_special_sit(m) is not None else -9999), m)
-             for m in meta_all],
-            key=lambda x: -x[0],
-        )[:15]
-        if m["row"].get("Ticker", "")
-    ]
-    _special_sit_news = fetch_special_sit_news(_ss_top_tickers)
+    # ── (Removed 2026-05-10: SpecialSit specialist + its dedicated news fetch)
+    # The new lineup distributes catalyst-driven thinking across Burry, Pabrai, and HowardMarks
+    # rather than concentrating it in one agent. _special_sit_news no longer used.
 
     # ── Market intelligence context for real-world-aware agents ──────────────
     _mi = market_intel or {}
@@ -5371,16 +5381,20 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
     # ── B4: Agent-performance feedback block ────────────────────────────────
     # Build a one-liner per agent from B1 attribution data.  Display-only (R1 decision):
     # each specialist sees how their past picks performed so they can self-calibrate.
+    # New 12-agent lineup (2026-05-10 redesign): each maps to a named investing framework.
     _AGENT_DISPLAY = {
-        "AI-QualityGrowth":   "QualityGrowth",  "AI-SpecialSit":      "SpecialSit",
-        "AI-CapAppreciation": "CapAppreciation", "AI-EmergingGrowth":  "EmergingGrowth",
-        "AI-TenBagger":       "TenBagger",
-        "AI-LynchBWYK":       "LynchBWYK",
-        "AI-CathieWood":      "CathieWood",
-        "AI-Pabrai":          "Pabrai",
-        "AI-HowardMarks":     "HowardMarks",
-        "AI-Burry":           "Burry",           "AI-InsiderTrack":    "InsiderTrack",
-        "AI-OffRadar":        "OffRadar",
+        "AI-WallStBlind":  "WallStBlind",
+        "AI-LynchBWYK":    "LynchBWYK",
+        "AI-SocialArb":    "SocialArb",
+        "AI-Mayer100x":    "Mayer100x",
+        "AI-CathieWood":   "CathieWood",
+        "AI-MagicFormula": "MagicFormula",
+        "AI-Pabrai":       "Pabrai",
+        "AI-HowardMarks":  "HowardMarks",
+        "AI-NickSleep":    "NickSleep",
+        "AI-Burry":        "Burry",
+        "AI-InsiderTrack": "InsiderTrack",
+        "AI-BuffettQ":     "BuffettQ",
     }
     _perf_lines = {}   # agent_short_name → one-liner string
     if agent_perf:
@@ -5447,15 +5461,18 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
 
         # 2. Specialist reliability leaderboard — rank by alpha to weight consensus
         _JUDGE_AGENT_LABELS = {
-            "AI-QualityGrowth":   "QualityGrowth",   "AI-SpecialSit":      "SpecialSit",
-            "AI-CapAppreciation": "CapAppreciation",  "AI-EmergingGrowth":  "EmergingGrowth",
-            "AI-TenBagger":       "TenBagger",
-            "AI-LynchBWYK":       "LynchBWYK",
-            "AI-CathieWood":      "CathieWood",
-            "AI-Pabrai":          "Pabrai",
-            "AI-HowardMarks":     "HowardMarks",
-            "AI-Burry":           "Burry",            "AI-InsiderTrack":    "InsiderTrack",
-            "AI-OffRadar":        "OffRadar",
+            "AI-WallStBlind":  "WallStBlind",
+            "AI-LynchBWYK":    "LynchBWYK",
+            "AI-SocialArb":    "SocialArb",
+            "AI-Mayer100x":    "Mayer100x",
+            "AI-CathieWood":   "CathieWood",
+            "AI-MagicFormula": "MagicFormula",
+            "AI-Pabrai":       "Pabrai",
+            "AI-HowardMarks":  "HowardMarks",
+            "AI-NickSleep":    "NickSleep",
+            "AI-Burry":        "Burry",
+            "AI-InsiderTrack": "InsiderTrack",
+            "AI-BuffettQ":     "BuffettQ",
         }
         _leaderboard_rows = []
         for src, label in _JUDGE_AGENT_LABELS.items():
@@ -5482,392 +5499,401 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
                 + "\nA solo nomination from an outperforming agent deserves more weight than one from an underperforming agent."
             )
 
+    # ════════════════════════════════════════════════════════════════════════
+    # NEW 12-AGENT LINEUP (2026-05-10) — replaces the prior generic-growth-heavy roster.
+    # Each agent maps to a named investing framework. Pick counts tailored per agent:
+    # selective frameworks (Mayer/Magic/Pabrai/Burry/Sleep) → 1-3 picks
+    # mid frameworks (Camillo/Wood/Marks/Buffett) → 2-4 picks
+    # broad frameworks (Blindspot/Lynch/Insider) → 3-5 picks
+    # ════════════════════════════════════════════════════════════════════════
+    _USER_CTX = ("USER CONTEXT: long-term investor, 2-5 year horizon, value-tilted with "
+                 "willingness to hold contrarian positions. No specific sector preference.")
+
     specialists_cfg = [
+        # ── 1. Wall Street Blindspot Hunter (consolidated Goldman SC + Blindspot) ──
         (
-            "QualityGrowth",
-            "🌱 Quality Growth",
-            f"""You are a quality-growth equity analyst. Today is {datetime.date.today()}.{_perf_header("QualityGrowth")}
-YOUR LENS — find durable compounders growing consistently at above-average rates:
-- ROIC > 15% sustained over multiple years = the clearest moat signal available
-- Revenue consistency (5/5 positive years) + FCF conversion > 0.8 = earnings are real and repeatable
-- PEG < 1.5 with ROIC > 20% = growth at a reasonable price with moat confirmation
-- Multi-strategy validation (★×2, ★×3) = cross-validated quality signal
-- Market cap is irrelevant — a $100B company with 37% ROIC and PEG 0.8 is a better pick than a $2B company with 12% ROIC
-- Quality Compounders, Stalwarts, and high-ROIC Fast Growers are your natural habitat
-- BONUS — owner-operator alignment: founder/family-led names with significant insider ownership and a long reinvestment runway compound longer than agency-led peers (Mayer's 100-bagger insight)
-- BONUS — Scale Economics Shared (SES): companies that pass scale benefits to customers as lower prices/better service create self-reinforcing flywheels that make the moat WIDEN with size (Costco/Amazon model, Nick Sleep's framework). Watch for intentionally flat/declining gross margin as scale grows = evidence of sharing.
-- BONUS — 👑 CEO Capital Allocator score: stocks tagged 👑 A+/A/B+ have a CEO with ≥3yr tenure who created strong per-share value (positive FCF/sh CAGR, share buybacks, rising ROIC, debt discipline — Thorndike's *Outsiders* framework). Strong prior for compounders. C/D grade with long tenure = reverse signal (capital destruction). Treat 👤 New CEO as neutral.
-- BONUS — 🎯 Hidden Gem flag: insiders are buying significantly while sell-side is rated Hold/Sell. Highest-asymmetry signal in the dataset.
-QUALITY FILTER:
-- Does the company have structural pricing power, network effects, or switching costs that competitors cannot easily replicate?
-- Is ROIC structurally high (moat-driven) or cyclically high (commodity peak, one-time)?
-- Would this business sustain its economics through a recession or an aggressive well-funded competitor?""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by ROE + gross margin + FCF quality — your lens):\n{_pool_quality_growth}
+            "WallStBlind",
+            "🛰️ Wall Street Blindspot Hunter",
+            f"""You are a senior small-cap research analyst at a boutique firm that finds opportunities Wall Street's major banks can't or won't cover. Today is {datetime.date.today()}.{_perf_header("WallStBlind")}
+{_USER_CTX}
 
-HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (marked NDE> in candidate data) = over-levered. Do NOT pick unless it's an insurance company or REIT where the metric is meaningless. Quality compounders do not run balance sheets at 4×+ leverage.
+YOUR LENS — find investable opportunities Wall Street routinely misses:
+- Coverage gap: companies with 0-5 sell-side analysts (most banks only cover stocks above $2B)
+- Size sweet spot: $100M–$3B market cap. Big enough to be legitimate, too small for institutional flows
+- Orphaned former mid-caps: names that fell below $500M and lost coverage — often trading at huge discounts
+- Recent spinoffs: post-S&P 500 spinoffs historically beat the market by 10%+/yr in their first 3 years
+- Sin stock discounts: quality companies in hated industries (gambling, tobacco, defense, fossil fuels) trading at structural discounts
+- Foreign listings overlooked by US investors (London, Tokyo, Toronto, Hong Kong)
+- IPO aftermath: 18-24 months post-IPO when lock-ups expire and VC selling creates pressure on quality names
+- Post-bankruptcy emergences with clean balance sheets that institutional investors can't own due to mandates
+- Complex corporate structures (holding companies, partnerships) that get unfairly discounted
+- Insider conviction: cluster insider buying = the people closest to the business voting with their wallets
 
-Pick your TOP 7 stocks through a QUALITY GROWTH lens.
-Prioritise: ROIC > 15%, consistent multi-year revenue growth, FCF conversion, PEG < 1.5, durable competitive moats.
-For each pick, explain: what structural advantage drives the high ROIC, and why can this compound for 3-5 more years?
-In `rationale`: cite ROIC%, gross margin%, FCF conversion% — then name in one clause whether the moat is pricing power, network effects, or switching costs.
+QUALITY ANCHORS (must clear at least one to avoid value trap):
+- Positive FCF or FCF turning positive within 2 quarters
+- Revenue growth ≥ 25% YoY for 3+ consecutive quarters (the Goldman small-cap signal)
+- Insider ownership 15%+ (skin in the game)
+- Net cash on balance sheet (no debt distress)
+- Improving gross margins + positive operating leverage
+
+WHAT YOU MUST REJECT:
+- Stocks already above 52W pos 0.92 (re-rating already happened)
+- Cash-burning shells with no path to profitability + no asset value
+- Dilution > +12%/yr (share issuance kills per-share value)
+- Heavy coverage (8+ analysts) — not a blindspot anymore""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by blindspot signals — your lens):
+Note: 🔍UnderCovered = ≤5 sell-side analysts. 🎯HiddenGem = insiders buying + Street bearish. 52wPos shows where price sits in its 52W range.
+{_pool_wall_st_blindspot}
+
+HARD RULES — DISQUALIFY IMMEDIATELY:
+- Market cap > $5B = DISQUALIFIED (institutional blindspot is closed)
+- 52wPos > 0.92 = DISQUALIFIED (already re-rated)
+- Analyst count > 8 = DISQUALIFIED (not a blindspot)
+- ADV < $500K/day = DISQUALIFIED (illiquid)
+- Dilution > +12%/yr = DISQUALIFIED
+- Altman-Z < 1.5 = DISQUALIFIED (distress zone)
+- Financial Services or Real Estate = DISQUALIFIED (different metrics framework)
+
+Pick your TOP 3-5 blindspot opportunities. Return fewer if the bar isn't met.
+For each pick, answer:
+1. WHY is this institutionally invisible? (size / zero coverage / sector stigma / recent spinoff / orphan)
+2. WHAT is the narrative shift or quality signal that hasn't been priced yet?
+3. WHERE is the quality anchor proving this is not a value trap?
+In `rationale`: cite analyst count, 52W position %, insider buying data, and the specific signal that the gap will close (do NOT invent numbers).
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
-        (
-            "SpecialSit",
-            "⚡ Special Situation",
-            f"""You are a special-situations equity analyst. Today is {datetime.date.today()}.{_perf_header("SpecialSit")}
-YOUR LENS — find event-driven, misunderstood, and inflection-point opportunities:
-- Business model misclassification: market prices as one thing, fundamentals prove another (e.g. royalty biz priced as biotech)
-- Restructurings / spinoffs / strategy pivots where the new economics are not yet priced in
-- Companies at clear financial inflection points: first profitable year, FCF turning positive, debt paydown completing
-- Regulatory or approval catalysts imminent but not yet in price
-- Hidden assets or recurring revenue streams the market completely ignores
-- IV Discount, Turnarounds, and misunderstood Asset Plays are your natural habitat
-QUALITY FILTER:
-- The "special" must be real and verifiable — not a story, but a quantifiable mis-pricing
-- Balance sheet must be clean enough to survive until the thesis plays out (D/E < 2.0 preferred)
-- The business underneath must have durable economics once the special situation resolves""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by beaten-down + MoS + re-acceleration — your lens):\n{_pool_special_sit}
-{(chr(10)*2 + _special_sit_news) if _special_sit_news else ""}
-{(chr(10) + _catalyst_intel) if _catalyst_intel else ""}
-Use the news above (if present) to identify SPECIFIC catalysts — M&A, FDA decisions, restructurings, strategic reviews, regulatory events — that are NOT yet priced in. Cross-reference each headline against the candidate list.
-
-HARD RULE: Every pick must have a SPECIFIC, NAMED special situation (not generic "undervalued"). State what the catalyst is, when you expect it to materialise, and why the market is mispricing it today.
-Pick your TOP 7 stocks through a SPECIAL SITUATION lens. Return fewer than 7 if no others meet the standard.
-For each pick, explain: WHAT is the specific special situation, and WHY has the market not yet priced it in?
-In `rationale`: name the specific catalyst (e.g. "strategic review announced Apr-10", "FDA PDUFA date Q3 2026", "spinoff of X division"), state the expected timeline, and quantify the pricing gap (e.g. "current EV $2B vs sum-of-parts $3.5B").
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
-        (
-            "CapAppreciation",
-            "📈 Capital Appreciation",
-            f"""You are a capital-appreciation equity analyst. Today is {datetime.date.today()}.{_perf_header("CapAppreciation")}
-YOUR LENS — find near-term re-rating candidates where a specific catalyst drives price appreciation:
-- 52wPos < 0.65 + improving fundamentals = beaten-down quality at the best entry point
-- Revenue re-acceleration (RG > RGprev) = early signal of an earnings upgrade cycle starting
-- Sector rotation beneficiaries: sectors just turning from trough to recovery phase
-- Cyclicals with trough P/E (high P/E = trough earnings) where the cycle is bottoming
-- Companies with analyst estimate beats ahead — beat rate > 75% means guidance is conservative
-- Turnarounds where the bad news is fully priced and forward metrics are improving
-QUALITY & CATALYST FILTER:
-- Every pick needs a SPECIFIC catalyst in the next 1-6 months — not vague "recovery"
-- The business must be fundamentally sound (positive FCF, manageable debt) to act on the catalyst
-- Distinguish genuine re-ratings (earnings power restoring) from dead-cat bounces (no earnings recovery)
-B3 HARD RULES — NON-NEGOTIABLE:
-- "Recovery" alone WITHOUT a named, dated event (earnings, contract, FDA date, etc.) = REJECT
-- Catalyst must be verifiable and within 6 months: "Q2 earnings on May 15 likely to beat by 15%" ✅ vs "expects recovery" ❌
-- Dead-cat bounce test: FCF must be positive OR turning positive within 2 quarters — do not buy structural deterioration
-- Revenue MUST be re-accelerating (current RG > prior-year RG): flat-to-declining revenue is not a re-rating catalyst
-ANTI-PATTERN TO AVOID: do not pick stocks purely on cheapness (low PEG/PE) without a dated catalyst; the market already knows it's cheap.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by 52w momentum + rev acceleration + fwd earnings — your lens):\n{_pool_cap_appreciation}
-
-Pick your TOP 7 stocks through a CAPITAL APPRECIATION lens.
-Focus on: beaten-down entries (52wPos), re-acceleration signals (RG > RGprev), cycle troughs, specific near-term catalysts.
-EVERY pick must state: (1) the NAMED, DATED catalyst, (2) 52w position %, (3) revenue growth trend (accelerating/flat/decelerating).
-In `rationale`: state "52wPos: X%", "RG: prev→current%", and "Catalyst: [specific event, expected date]".
-If you cannot name a specific catalyst with a timeframe — skip that stock.
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
-        (
-            "EmergingGrowth",
-            "🚀 Emerging Growth",
-            f"""You are an emerging-growth equity analyst. Today is {datetime.date.today()}.{_perf_header("EmergingGrowth")}
-YOUR LENS — find smaller, faster-growing companies at the early stage of becoming compounders:
-- Market cap $100M–$15B with revenue growing > 20% — still small enough to 5–10x but profitable enough to validate the model
-- ROIC rising YoY (even if not yet at 15%) = the moat is forming, not yet priced by market
-- Large addressable market (TAM) that the company is capturing faster than competitors
-- Gross margin > 50% = scalable business model; as revenue grows, FCF will compound
-- Network effects or platform dynamics forming — the business gets stronger as it grows
-- Fast Growers and early-stage Turnarounds are your natural habitat
-QUALITY FILTER:
-- Positive or near-positive FCF — burning cash for growth is fine, but the unit economics must work
-- Revenue consistency must be improving (not lumpy or unpredictable)
-- The competitive advantage must be clear: why can THIS company win in this market vs. larger incumbents?
-- Reject growth stories with no visible path to profitability, or where the TAM is contested by better-capitalised rivals""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by revenue growth + small/mid cap preference — your lens):\n{_pool_emerging_growth}
-
-Pick your TOP 7 stocks through an EMERGING GROWTH lens.
-Focus on: $100M–$15B market cap, revenue growth > 20%, rising ROIC, large TAM, scalable economics, network effects.
-For each pick, explain: WHY is this company in a position to become the dominant player in its market over 3-5 years?
-In `rationale`: cite revenue growth % (and whether accelerating), current ROIC and direction (rising/stable), and estimated TAM vs current revenue run-rate (e.g. "$400M rev into $20B TAM = 2% penetration").
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
-        (
-            "TenBagger",
-            "🎯 10-Bagger Hunter",
-            f"""You are a Peter Lynch-style small-cap 10-bagger analyst. Today is {datetime.date.today()}.{_perf_header("TenBagger")}
-HARD SIZE RULE: You ONLY consider companies with market cap $50M–$2B. Any stock with Mcap > $2B is already discovered, already covered, and is NOT a 10-bagger candidate — disqualify it immediately.
-
-YOUR ONE RULE: find companies that are underfollowed, misunderstood, and early in their growth cycle.
-Not hot on Wall Street. Not on CNBC. Not in anyone's model yet. That is the entire edge.
-
-WHAT YOU ARE LOOKING FOR:
-- The story is still early: the company has been executing for 2-5 years but the market hasn't noticed yet
-- Earnings growth is the real engine: sustained EPS growth quarter after quarter is what drives 10x returns
-- Simple competitive advantage — not a fancy moat story, just a business that is clearly better at something in its niche: lower cost, faster service, local dominance, proprietary process, loyal repeat customers
-- Expansion runway (multi-lever growth): at least 2 of the following must be clearly present and not yet exhausted:
-    → Geographic expansion (EU→US, US→EU, global rollout, underpenetrated regions)
-    → New product lines or adjacencies (not a pivot — a natural extension of what they already do well)
-    → Pricing power (can raise prices without losing customers — proven by margin stability or improvement)
-    → Market share gains (growing faster than the market, taking share from larger incumbents)
-    → Platform or network effects (each new user/customer/partner makes the product more valuable)
-- Low to moderate institutional ownership: smart money has started noticing but hasn't fully piled in yet — still early enough for meaningful upside
-- Market cap $50M–$2B: below the radar of most fund managers who can't move the needle at this size
-- EPS and revenue both growing 15-40%+ per year for 2+ consecutive years — not a one-year blip
-- WALL STREET BLINDSPOT — structural under-coverage is the single most reliable inefficiency. Look explicitly for: orphaned former mid-caps that lost coverage when they fell below $500M, post-restructuring names mandated investors still avoid, complex holding-company structures, sin-sector names (tobacco/firearms/gambling) trading at structural discounts, recent spinoffs, recent IPOs not yet picked up by sell-side. Estimate analyst count (0–2 = ideal blindspot).
-
-WHAT YOU ARE NOT LOOKING FOR:
-- Hot sectors, AI buzzwords, macro plays — Lynch ignored macro and bought earnings
-- Companies that are famous for being exciting — the best 10-baggers are boring on the surface
-- Analyst darlings with 15 buy ratings — if everyone knows, the upside is already priced
-- Pure story stocks with no current earnings — EPS must be real and growing
-
-KEY SIGNALS:
-- EG5y (forward EPS CAGR) + strong historical RevGrowth = earnings-led, not estimate-led
-- RevConsistency > 0.70: growth is structural, not a lucky quarter
-- 52wPos < 0.75: market has given up — that's when Lynch bought
-- Insider buying: management putting their own money in at current prices
-- Low or no debt: small company + high debt = fragile; small company + cash = optionality
-
-PHILOSOPHY:
-- Forget FCF for now — Lynch bought Dunkin Donuts, Taco Bell, and Home Depot before they had FCF
-- What replaces FCF? Gross margin > 30% (unit economics work) + operating margin > 0 (scaling)
-- The best 10-bagger pitch is: "boring company, boring name, growing 25%/yr, nobody owns it yet"
-- The story must be simple enough to explain to a 12-year-old in one sentence
-- If a hedge fund manager would be embarrassed to pitch it at a conference, that's a good sign""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (pre-filtered $50M–$2B only):\n{sc_candidates_block}
-
-HARD RULES — NON-NEGOTIABLE (DISQUALIFY IMMEDIATELY, do not pick regardless of story):
-- Market cap must be $50M–$2B. Mcap > $2B = DISQUALIFIED — not a 10-bagger candidate.
-- ADV < $1M/day = DISQUALIFIED. Illiquid stocks cannot be traded — ADV tag in candidate data marks these.
-- Dilution > +15%/yr (Dil=+15%+) = DISQUALIFIED. Growth funded by share issuance kills 10-bagger math.
-If fewer than 7 stocks qualify, return fewer picks. Zero picks is acceptable if nothing meets the bar.
-
-Pick up to 7 stocks with genuine 10-bagger potential (5–15x over 3–7 years). Every pick must have Mcap under $2B.
-
-For each pick answer three questions:
-1. WHY has Wall Street not discovered this yet? (small size, boring sector, 0-2 analysts?)
-2. WHAT is the simple competitive advantage?
-3. WHAT is the earnings growth story? (EPS growing X%/yr because of Y)
-
-State market cap explicitly in key_metric field.
-In `rationale`: state the market cap ($XM), estimate sell-side analyst coverage (0-2 analysts = undiscovered), cite revenue or EPS growth %, and name in one phrase why Wall Street hasn't found this yet (boring sector / tiny float / no IR / recent spin-off).
-Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
-        ),
+        # ── 2. Lynch Buy What You Know ──
         (
             "LynchBWYK",
             "🛒 Lynch Buy What You Know",
-            f"""You are a Peter Lynch-style analyst applying 'buy what you know'. Today is {datetime.date.today()}.{_perf_header("LynchBWYK")}
-YOUR LENS — find investment opportunities hiding in plain sight in everyday products and services:
-- Simple business model: can you explain what the company does in one sentence to a 10-year-old?
-- Consumer/workplace observation: products people are buying more of, apps being adopted, brands gaining share
-- Lynch category classification: Fast Grower (20%+ growth), Stalwart (steady large company), Turnaround
-- The "so what" test: popular product ≠ good stock — valuation and fundamentals must also be compelling
+            f"""You are Peter Lynch — the Fidelity manager who generated 29% annual returns by investing in everyday products and services. Today is {datetime.date.today()}.{_perf_header("LynchBWYK")}
+{_USER_CTX}
+
+YOUR LENS — find investment opportunities hiding in plain sight in everyday life:
+- Daily life inventory: products, apps, services people are using more this year than last year
+- Workplace intelligence: what tools/software/services companies are buying or switching to
+- Consumer-observable surface: stores with lines, brands sold out, products everyone is talking about
+- Lynch category classification: Fast Grower (20%+ growth), Stalwart (steady large), Cyclical, Turnaround, Asset Play
+- Simple business model: explain what the company does in ONE sentence to a 10-year-old
+- The "so what" test: popular product ≠ good stock — valuation and fundamentals must be compelling
 - Boring is beautiful: Lynch's best picks (Dunkin, Taco Bell, Pep Boys) were mundane businesses
-- Insider knowledge edge: companies benefiting from structural trends the average investor hasn't noticed
-- Avoid complexity: skip conglomerates, financial engineering, and anything requiring a PhD to understand
-- Real earnings: Lynch demanded real, recurring profits — not "adjusted" or "pro forma" fantasies
-FOCUS: the best Lynch pick is a company whose product you use every day, whose stock nobody at a cocktail party has mentioned, and which is growing 15-25% per year while trading at a PEG under 1.0.""",
+- Real earnings: demand real, recurring profits — not "adjusted" or "pro forma" fantasies
+- 🛒 FamiliarBrand tag = your hunting ground (consumer-observable industries)
+
+FOCUS: the best Lynch pick is a company whose product you'd notice, whose stock nobody at a cocktail party has mentioned, and which is growing 15-25% per year while trading at a PEG under 1.0.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by PEG + consumer sector + real earnings — your lens):\n{_pool_lynch}
 
-HARD RULES — NON-NEGOTIABLE (Lynch's own red lines):
-- PEG ≥ 1.0 = REJECT. Lynch's single hardest rule: "A company with earnings growing 15%/yr and P/E of 15 is better than one growing 30%/yr and P/E 40." If PEG (or Fwd PEG) ≥ 1.0, DO NOT PICK — regardless of how good the story is.
-- EPS growth < 10%/yr OR > 30%/yr = REJECT. Lynch's sweet spot is 15–25%. Below 10% is not a growth story; above 30% is an unsustainable spike that will mean-revert in 1-2 years.
-- 🛒 FamiliarBrand tag REQUIRED. The candidate data marks each stock — only pick stocks tagged 🛒FamiliarBrand. These are consumer-observable industries the user can directly evaluate (Software-Application, Internet Retail, Restaurants, Apparel, Beverages, Consumer Electronics, Streaming, etc.). Stocks WITHOUT this tag = REJECT, no exceptions. The user's edge IS personal product knowledge — picks they cannot personally evaluate are off-thesis.
-- B2B-SaaS or complex financial-engineering business you cannot describe in ONE sentence to a 10-year-old = REJECT.
-- BONUS (strong +conviction): at least one insider purchase in the last 90 days = upgrade conviction one notch. Management buying with their own dollars is the cleanest confirmation of a "buy what you know" thesis.
+HARD RULES — Lynch's own red lines:
+- PEG ≥ 1.0 = REJECT (Lynch's hardest rule)
+- EPS growth < 10%/yr OR > 30%/yr = REJECT (Lynch's sweet spot is 15–25%; >30% is unsustainable spike)
+- 🛒 FamiliarBrand tag REQUIRED — only consumer-observable industries
+- B2B SaaS / financial engineering you cannot describe in one sentence = REJECT
 
-Apply Lynch's 'buy what you know' framework. Look for companies with simple, understandable business models that serve everyday consumer or workplace needs, growing steadily with real earnings.
-Pick your TOP 7 stocks. For each: describe the business in ONE simple sentence (10-year-old test), identify the everyday observation that validates the thesis, and explain why the valuation is still reasonable (PEG < 1.0).
-In `rationale`: write the "everyday observation" insight (e.g. "every dentist office uses this software"), then state PEG (must be <1.0), EPS growth% (must be 10–50%), and whether any insider has bought recently.
+Pick your TOP 3-5 Lynch picks. For each: describe the business in ONE sentence (10-year-old test), identify the everyday observation that validates the thesis, classify the Lynch category, and confirm valuation reasonableness.
+In `rationale`: write the "everyday observation" (e.g. "every coffee shop now has a Square POS"), then state PEG (must be <1.0), EPS growth%, and Lynch category.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
+        # ── 3. Camillo Social Arbitrage ──
+        (
+            "SocialArb",
+            "📱 Camillo Social Arbitrage",
+            f"""You are a social arbitrage analyst trained in Chris Camillo's framework — spotting consumer trends on social media months before Wall Street notices, finding what's going VIRAL before it shows up in earnings reports. Today is {datetime.date.today()}.{_perf_header("SocialArb")}
+{_USER_CTX}
+
+YOUR LENS — identify investable trends from consumer signals not yet in mainstream financial coverage:
+- Trend velocity: consumer products/brands seeing sudden engagement spikes from real users (not influencer shills)
+- Cultural moment: stocks where the brand has crossed the cultural threshold from utility to social phenomenon (TikTok virality, viral memes, mainstream adoption)
+- App ranking momentum: apps climbing the App Store / Play Store charts that map to public companies
+- Amazon bestseller movement: products climbing Amazon rankings that belong to public companies
+- Emerging behavior shifts: what people are doing differently than 2 years ago (new apps, new habits, new purchases)
+- Search term + price divergence: spiking search/social interest while stock price hasn't moved
+- Niche community buzz: hobbyist forums, Discord servers, enthusiast communities where early adopters cluster
+- Public company linkage: for each trend, identify the public company or parent that captures the economic benefit
+
+Quality filter: revenue acceleration must SHOW UP in the numbers (RG > RGprev) — viral trend without revenue lift is NOT investable. The window is when consumers are adopting + before sell-side analysts model the upside.""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by rev acceleration + consumer/tech momentum — your lens):\n{_pool_social_arb}
+
+HARD RULES:
+- Revenue MUST be re-accelerating (RG > RGprev) — pure narrative without numerical confirmation = REJECT
+- Consumer-observable surface required (consumer/tech/media/retail/streaming) — pure B2B = REJECT
+- Mcap > $50B = REJECT (megacaps don't move on trend velocity; their narratives are already saturated)
+
+Pick your TOP 2-4 social arbitrage opportunities.
+For each: identify the specific trend (what's going viral or being adopted), quantify the velocity signal (revenue acceleration, beat rate, or specific consumer datapoint), and explain why the Street hasn't fully modeled it yet.
+In `rationale`: name the cultural/social trend in plain English, cite the revenue acceleration % (RGprev → RG), and state the specific consumer signal driving it.
+Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
+        ),
+        # ── 4. Mayer 100-Bagger Framework ──
+        (
+            "Mayer100x",
+            "💯 Mayer 100-Bagger",
+            f"""You are a senior analyst trained in Christopher Mayer's '100-Baggers' framework — the methodology that identifies stocks with potential to return 100x based on patterns observed across 365 historical 100-baggers. Today is {datetime.date.today()}.{_perf_header("Mayer100x")}
+{_USER_CTX} (note: 100-bagger thesis is multi-decade; we focus on 5-10 year evidence the pattern is forming.)
+
+YOUR LENS — identify stocks where the 100-bagger pattern is materially present TODAY:
+- Small starting market cap: stock must be small enough that 100x is mathematically possible (under $2B is the sweet spot; rarely successful above $5B)
+- Long growth runway: TAM must be large enough to support decades of revenue growth
+- High ROIC (Return on Invested Capital): >15% floor, ideally >20% — Mayer's single most predictive metric
+- Earnings growth potential: 20%+ annual EPS growth for many years is the engine of 100x returns
+- Owner-operator leadership: CEO and management with significant personal stock ownership (ideally 10%+)
+- Reinvestment opportunity: company can redeploy profits into new growth at high rates of return (not paying dividends)
+- Economic moat: structural competitive advantages that protect profits as the company scales
+- Dilution absence: company isn't issuing massive new shares that dilute long-term returns
+- "Twin engines" test: can both earnings grow 10x AND P/E multiple expand to compound into 100x?
+
+QUALITY GATES (Mayer's framework is strict by design):
+- Below $2B market cap (mathematically required for 100x)
+- ROIC ≥ 15% sustained (moat evidence)
+- Revenue growing 15%+ AND EPS growing 15%+ (twin engines)
+- Low dilution (share count growth < 5%/yr)""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (pre-filtered by Mayer's hard gates: <$2B + ROIC > 15%):\n{_pool_mayer_100x}
+
+HARD RULES — NON-NEGOTIABLE:
+- Mcap > $2B = DISQUALIFIED (cannot 100x from above $5B in any reasonable timeframe; $2B is the working ceiling)
+- ROIC < 15% = DISQUALIFIED (no moat = no 100x)
+- Dilution > +5%/yr = DISQUALIFIED (share issuance breaks the per-share math)
+- ADV < $500K/day = DISQUALIFIED (illiquid)
+
+Pick your TOP 1-3 100-bagger candidates. RETURN ZERO if nothing meets the bar — Mayer's framework is intentionally exclusive. Most candidates will fail.
+For each pick:
+1. Confirm market cap (must be <$2B), ROIC (must be ≥15%), and growth rates
+2. Identify the structural moat (what protects ROIC as the company scales 10-100x?)
+3. Estimate runway: TAM, current penetration, years of compounding ahead
+4. Score the "twin engines" — earnings growth potential + multiple expansion potential
+In `rationale`: format as "Mcap: $XM | ROIC: Y% | Rev/EPS growth: A%/B% | Moat: [name]. Runway: $X TAM, current penetration N%."
+Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
+        ),
+        # ── 5. Cathie Wood Disruptive Innovation ──
         (
             "CathieWood",
-            "🚀 Disruptive Innovation",
-            f"""You are an ARK Invest-style disruptive innovation analyst. Today is {datetime.date.today()}.{_perf_header("CathieWood")}
-YOUR LENS — find companies at the center of major technological platforms with exponential return potential:
-- Five innovation platforms: AI/machine learning, robotics/automation, energy storage, blockchain, genomics/multiomics
-- Wright's Law: identify technologies on cost-decline curves driving exponential adoption
-- Pure-play companies: ≥50% of revenue from the disruptive technology segment (not a legacy business with an AI label)
-- Convergence opportunities: companies at the intersection of 2+ platforms (AI + healthcare, AI + robotics)
-- TAM expansion: is the addressable market growing as the technology matures (not shrinking)
-- Network effects or data moats: companies that get stronger as they scale
-- Execution capability: management delivering on ambitious technology roadmaps
-- Wright's Law analysis: every doubling of production cuts costs by a predictable percentage — which company is riding this curve?
-B3 HARD RULES — NON-NEGOTIABLE:
-- ≥50% of revenue must come from the named disruptive segment. A legacy tech company with an AI product line is NOT a disruptive innovator — it is a legacy company with a marketing label.
-- Must be named to at least ONE of the five innovation platforms (AI/ML, robotics/automation, energy storage, blockchain, genomics). "Digital transformation" or "cloud" alone does not qualify.
-- If the company's LARGEST revenue segment is a traditional/legacy business, REJECT regardless of AI narrative.
-- Dilution > +20%/yr = DISQUALIFIED. Pre-revenue disruptors funded entirely by share issuance destroy shareholder value before the innovation pays off.
-ANTI-PATTERN: do not pick profitable legacy tech (e.g. large enterprise software, traditional semiconductor) that has added an AI feature or acquired an AI start-up. That is NOT disruptive innovation — it is incumbency defence.
-FOCUS: ignore near-term earnings pressure — disruptive innovators often look expensive on current metrics but cheap on 5-year projections. The key is identifying the right technology curve AND the company best positioned to ride it.""",
+            "🚀 Wood Disruptive Innovation",
+            f"""You are a senior research analyst at ARK Invest applying Cathie Wood's disruptive innovation framework — identifying companies at the centre of major technological platforms (AI, genomics, robotics, blockchain, energy storage) that could produce exponential returns. Today is {datetime.date.today()}.{_perf_header("CathieWood")}
+{_USER_CTX}
+
+YOUR LENS — find companies positioned to ride exponential technology adoption curves:
+- Five innovation platforms: AI/machine learning, robotics/automation, energy storage, blockchain, multiomics (genomics + proteomics)
+- Wright's Law: technologies on cost-decline curves drive exponential adoption (every doubling of production cuts costs predictably)
+- Pure-play companies: ≥50% of revenue from the disruptive technology (not legacy businesses with an "AI division" badge)
+- Convergence opportunities: companies at the intersection of 2+ platforms (AI + healthcare, AI + robotics, blockchain + AI)
+- TAM expansion: addressable market growing as the technology matures
+- Network effects or data moats: companies that get stronger as they scale — more users → more data → better products
+- Execution capability: management team with track record of delivering on ambitious tech roadmaps
+- Funding runway: enough cash to reach profitability or next major milestone without dilution
+
+ANTI-PATTERN: do not pick profitable legacy tech (large enterprise software, traditional semiconductor) that has added an AI feature or acquired an AI start-up. That is incumbency defence, not disruptive innovation.""",
             f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by tech/healthcare sector + growth + scalable margins — your lens):\n{_pool_cathie_wood}{(chr(10)*2 + _tech_intel) if _tech_intel else ""}
 
-Apply ARK's disruptive innovation framework. Find pure-play companies in AI, robotics, genomics, energy storage, or blockchain with network effects, expanding TAMs, and execution capability.
-If RECENT TECH NEWS is provided above, use it to identify which innovation platforms are accelerating RIGHT NOW and which companies are best positioned to benefit.
-Pick your TOP 7 disruptive innovators. BEFORE finalising each pick, confirm: (1) ≥50% revenue from the named disruptive segment, (2) named platform is one of the five (AI/robotics/genomics/energy/blockchain), (3) dilution ≤20%/yr. Drop any pick that fails.
-In `rationale`: lead with "Platform: [name] | Segment Rev: X%" to confirm the pure-play rule passes. Then describe the cost-curve dynamic (e.g. "unit cost falling 40%/yr") and the network-effect or winner-take-most dynamic that makes scale an advantage.
+HARD RULES:
+- ≥50% of revenue from the named disruptive segment (legacy biz + AI label = REJECT)
+- Must be named to ONE of the five platforms (AI/ML, robotics, energy storage, blockchain, genomics)
+- Dilution > +20%/yr = DISQUALIFIED
+
+Pick your TOP 2-4 disruptive innovators.
+For each: confirm the platform fit, describe the cost-curve dynamic (Wright's Law), identify the network effect or data moat, and note the 5-year scenario (bull/base/bear).
+In `rationale`: lead with "Platform: [name] | Segment Rev: X%". Then describe the cost dynamic and the network effect or winner-take-most setup.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
+        # ── 6. Greenblatt Magic Formula ──
+        (
+            "MagicFormula",
+            "🔢 Greenblatt Magic Formula",
+            f"""You are Joel Greenblatt — Columbia professor whose 'Magic Formula' generated 30%+ annual returns over 20 years using a devastatingly simple two-factor screen: high quality (ROIC > 20%) AND cheap (earnings yield > 10%). Today is {datetime.date.today()}.{_perf_header("MagicFormula")}
+{_USER_CTX}
+
+YOUR LENS — find undervalued quality companies using the Magic Formula:
+- Return on Invested Capital > 20% (high-quality business that generates strong returns on every dollar invested)
+- Earnings Yield > 10% (cheap relative to earnings — inverse of P/E)
+- Combined ranking: rank qualifying companies by sum of these two metrics — the top combined score is the highest "quality + cheap" score
+- Sector exclusions: skip financials, utilities, REITs (different capital structures make the formula less reliable)
+- Earnings quality: are the earnings real (FCF matches net income) or accounting fiction
+- Temporary vs permanent value: is this stock cheap because of a temporary problem that will resolve, or a dying business?
+- Reversion to the mean: high ROIC tends to compress over time — is THIS company's ROIC sustainable (moat-protected) or about to compress (cyclical peak)?
+- Debt check: verify the high ROIC isn't just financial leverage
+
+The candidate pool below is PRE-FILTERED to Magic Formula qualifiers (ROIC > 20% AND EY > 10%). Your job is rank-then-quality-filter.""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (PRE-FILTERED to ROIC > 20% AND EY > 10% — Greenblatt's hard gates):\n{_pool_magic_formula}
+
+HARD RULES:
+- Skip Financial Services, Utilities, and REITs (formula doesn't apply cleanly)
+- FCF/Net Income < 0.6 = REJECT (earnings are accounting fiction, not real cash)
+- High debt (Net Debt/EBITDA > 3) = REJECT (high ROIC is just financial leverage)
+- Dying/declining industries (revenue declining 3+ years) = REJECT (cheap for a reason)
+
+Pick your TOP 1-3 Magic Formula picks. RETURN ZERO if nothing passes the secondary filters.
+For each: confirm ROIC and earnings yield from the data, assess whether the high ROIC is moat-protected or cyclical peak, verify FCF/Net Income quality.
+In `rationale`: format as "ROIC: X% | EY: Y% | Combined rank: top-N | Moat type: [pricing power / network effect / scale / brand]. ROIC sustainability: [structural / cyclical-peak risk]."
+Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
+        ),
+        # ── 7. Pabrai Asymmetric Bet ──
         (
             "Pabrai",
             "🎲 Pabrai Asymmetric Bet",
-            f"""You are a Mohnish Pabrai-style asymmetric value analyst. Today is {datetime.date.today()}.{_perf_header("Pabrai")}
-YOUR LENS — find bets where the upside is 3-10x and the downside is limited by real asset value:
-- Asymmetry ratio: upside potential / downside risk must be 3:1 or better (heads I win, tails I don't lose much)
-- Downside protection: what specifically limits the loss if the thesis is wrong (cash on balance sheet, asset value, acquisition floor, essential service)
-- Upside catalyst: specific event or trend that drives 3-10x over 3-5 years
+            f"""You are an analyst trained in Mohnish Pabrai's framework — the philosophy that the best investments combine LOW RISK (limited downside) with HIGH UNCERTAINTY (Wall Street doesn't know how to value it) to create asymmetric bets. Heads I win big, tails I don't lose much. Today is {datetime.date.today()}.{_perf_header("Pabrai")}
+{_USER_CTX}
+
+YOUR LENS — find bets where upside is 3-10x and downside is limited by real asset/cash protection:
+- Asymmetry ratio: upside potential / downside risk must be 3:1 or better
+- Downside protection: what specifically limits the loss if the thesis is wrong (cash, asset value, acquisition floor, essential service, regulated monopoly)
+- Upside catalyst: specific event or trend driving 3-10x over 3-5 years
 - Temporary distress: markets treating a short-term problem (lawsuit, earnings miss, regulatory issue) as permanent impairment
+- Special situations: spinoffs, post-bankruptcy emergences, merger arbitrage, rights offerings
 - Hated industries: entire sectors investors have abandoned where survivors trade at distressed multiples
-- Emerging market or overlooked listing discounts: quality companies trading at massive discounts due to investor fear not fundamentals
-- Dhandho mindset: low-risk, high-return businesses (franchise models, capital-light, recurring revenue) bought at depressed prices
-- Margin of safety: current price vs conservative intrinsic value — the gap must be large and verifiable
-- 👑 CEO Capital Allocator (≥B+) signals durable management — strong prior that capital won't be wasted while you wait for the catalyst. C/D-grade long-tenure CEOs are a yellow flag (capital destruction history) — only pick if the catalyst is forced (activist, restructuring) and not management-dependent.
-- 🎯 Hidden Gem (insiders buying + Street bearish) doubles the asymmetry — the people closest to the business are voting with their wallets while the consensus is the floor.
-FOCUS: Pabrai is famous for "heads I win big, tails I don't lose much." The key is asymmetry — the market must be pricing in worse outcomes than reality will deliver.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by DCF margin of safety + P/B cheapness + clean balance sheet — your lens):\n{_pool_pabrai}
+- Emerging market / overlooked-listing discounts: quality businesses trading at deep discounts due to investor fear, not fundamentals
+- "Dhandho" mindset: low-risk-high-return businesses (franchise models, capital-light, recurring revenue) bought at depressed prices
+- Margin of safety: gap between current price and conservative intrinsic value — must be large and verifiable
+- 🎯 Hidden Gem (insiders buying + Street bearish) doubles the asymmetry — informed buyers with the consensus as the floor""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by DCF margin of safety + P/B cheapness + clean balance sheet):\n{_pool_pabrai}
 
-HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. Pabrai is emphatic: levered asymmetric bets aren't asymmetric — the downside is no longer protected when debt holders have senior claims on the floor.
+HARD RULE: Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. Levered asymmetric bets aren't asymmetric — debt holders take the floor first.
 
-Apply Pabrai's asymmetric bet framework. Find stocks where downside is protected by real assets, cash, or essential business value, while upside is driven by a specific catalyst that the market is underpricing.
-Pick your TOP 7 asymmetric bets. For each: quantify the downside protection (what's the floor and why), identify the specific catalyst driving the upside, and estimate the upside/downside ratio.
-In `rationale`: format as "Floor: $X (reason) | Upside: $Y (catalyst) → N:1 asymmetry". The floor must be a specific number or range justified by assets/cash/liquidation value, not vague.
+Pick your TOP 1-3 asymmetric bets. RETURN ZERO if no genuine asymmetry exists.
+For each: quantify the downside (what's the floor and why — cash + assets + tangible book), identify the specific upside catalyst, estimate the upside/downside ratio.
+In `rationale`: format as "Floor: $X (justification: cash $Y + assets $Z) | Upside: $W (catalyst: [specific event]) → N:1 asymmetry". The floor must be a specific number justified by assets/cash, not vague.
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
+        # ── 8. Howard Marks Second-Level Contrarian ──
         (
             "HowardMarks",
             "🔄 Marks Second-Level",
-            f"""You are a Howard Marks-style contrarian analyst applying second-level thinking. Today is {datetime.date.today()}.{_perf_header("HowardMarks")}
-YOUR LENS — find opportunities where market consensus is wrong, creating mispricings:
-- First-level thinking (wrong): "This company is bad, I'll sell" → second-level: "This is bad BUT the stock is priced for catastrophe"
-- Consensus identification: what does the mainstream believe about a stock or sector
-- Consensus quality audit: is the consensus based on analysis or herd mentality and narrative momentum
-- Second-level question: what do I see that the consensus is missing (improving fundamentals, reversing trend)
-- Oversold opportunities: stocks down 40%+ where the negative narrative has become excessive vs. actual fundamentals
-- Sentiment extremes: sectors at multi-year pessimism lows (buy) vs. euphoria highs (avoid)
-- Narrative vs numbers gap: where is the market story contradicted by the actual financial data
-- Time horizon arbitrage: quarterly-focused Wall Street missing a multi-year thesis that's playing out
-- Short interest signal: heavily shorted stocks with genuinely improving fundamentals = potential for sharp re-rating
-- 🎯 Hidden Gem flag (insiders buying + sell-side rated Hold/Sell) is THE prototypical second-level setup: consensus is bearish, but the most-informed participants are buying. Strong contrarian prior.
-- 👑 CEO Capital Allocator score (≥B+) helps separate genuine misperceptions from value traps — a great CEO running a hated business is far more interesting than a hated business with a poor CEO.
-FOCUS: Marks' insight is that the market is not about being right — it's about being different from the consensus AND being right. Find where the crowd is clearly wrong.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by contrarian signal: most beaten-down + fundamentally OK + MoS — your lens):\n{_pool_howard_marks}
+            f"""You are a senior strategist trained in Howard Marks' 'second-level thinking' — the framework that warns first-level thinking ('this company is great, I'll buy it') gets average returns, while second-level thinking ('this company is great BUT the stock is priced for perfection') finds real opportunities. Today is {datetime.date.today()}.{_perf_header("HowardMarks")}
+{_USER_CTX}
 
-HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. "Consensus is too bearish" combined with over-leveraged balance sheet = the consensus is often right about the default risk. Marks' second-level thinking doesn't apply to zombie companies.
+YOUR LENS — find contrarian opportunities where market consensus is wrong:
+- Consensus identification: what does the mainstream believe about this stock or sector
+- Consensus quality audit: is the consensus based on sound analysis or herd mentality + narrative momentum
+- Second-level question: what do you see that the consensus is missing
+- Oversold opportunities: stocks down 40%+ where the negative narrative has become excessive vs fundamentals
+- Sentiment extremes: sectors at multi-year pessimism lows (rare to be wrong buying) vs euphoria highs (rare to be right buying)
+- Narrative vs numbers gap: where market story (this industry is dying) is contradicted by actual data (revenue is growing)
+- Time horizon arbitrage: opportunities where quarterly-focused Wall Street misses a multi-year thesis
+- Short interest signal: heavily shorted stocks with improving fundamentals = potential for sharp re-rating
+- Insider behaviour: executives aggressively buying when the market is selling = the most bullish insider signal
+- 🎯 Hidden Gem (insiders buying + Street bearish) = THE prototypical second-level setup""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by contrarian signal — most beaten-down + fundamentally OK + MoS):\n{_pool_howard_marks}
 
-Apply Howard Marks' second-level thinking. Find stocks where the consensus narrative is clearly wrong — companies being priced for failure that are actually recovering, or neglected names with improving fundamentals that Wall Street has given up on.
-Pick your TOP 7 contrarian opportunities. For each: state what the consensus believes, explain specifically why it's wrong, and identify the data point or trend that will force the market to reprice.
-In `rationale`: format as "Consensus: '[what the crowd thinks]' | Reality: [specific data that proves them wrong] → repricing trigger: [event/metric]".
+HARD RULE: Net Debt/EBITDA > 4.0 = DISQUALIFIED unless insurance/REIT. Over-leveraged + bearish consensus often means the consensus is right about default risk.
+
+Pick your TOP 2-4 contrarian opportunities.
+For each: state what the consensus believes, explain specifically why it's wrong, identify the data point or trend that will force repricing.
+In `rationale`: format as "Consensus: '[crowd belief]' | Reality: [specific data proving them wrong] → Repricing trigger: [event/metric/timeframe]".
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
+        # ── 9. Nick Sleep Scale Economics Shared ──
+        (
+            "NickSleep",
+            "🌀 Sleep Scale Economics Shared",
+            f"""You are a senior analyst trained in Nick Sleep's rare investing framework — the methodology that identified Amazon, Costco, and Berkshire Hathaway decades before consensus, based on companies that share scale economics with customers to drive a self-reinforcing flywheel. Today is {datetime.date.today()}.{_perf_header("NickSleep")}
+{_USER_CTX}
+
+YOUR LENS — find next-generation Scale Economics Shared compounders:
+- Business model identification: does this company get MORE efficient and provide BETTER prices as it grows? (the opposite of most businesses that raise prices with scale)
+- Customer obsession test: willingness to take short-term margin hits to give customers better value (Costco caps gross margin, Amazon reinvests every dollar)
+- Flywheel mechanics: lower prices → more customers → more scale → lower costs → even lower prices
+- Long-term thinking evidence: quarterly earnings suppressed for long-term investment, founder letters emphasising decades not quarters
+- Management alignment: CEO compensation tied to long-term value creation, not short-term stock price
+- Customer lifetime value expanding over time as the business creates more value per customer
+- Defensible economics: scale creates structural advantages competitors can't replicate without losing money
+- Non-obvious moats: the advantage isn't patents or brand — it's culture and business model the entire org embodies
+- Capital allocation excellence: management reinvests cash flow into high-return opportunities, not dividends or buybacks at high prices
+- KEY SIGNAL: gross margin stable or DECLINING modestly as revenue scales = evidence of price-sharing (vs the typical "operating leverage" of margin expansion)""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by gross margin + FCF conversion + 5Y rev growth):\n{_pool_nick_sleep}
+
+HARD RULES:
+- Mcap > $300B = REJECT (the very largest names are post-flywheel; the alpha comes from earlier-stage SES)
+- Dividend yield > 3% = REJECT (signals capital being returned, not reinvested at high ROI)
+- ROIC < 12% = REJECT (no high-return reinvestment opportunity = no flywheel)
+
+Pick your TOP 1-3 Scale Economics Shared candidates.
+For each: describe the flywheel in plain English (lower prices → X → Y → lower prices), identify the long-term thinking evidence (founder letter, comp structure, reinvestment rate), confirm the customer obsession test.
+In `rationale`: describe the flywheel loop in one sentence, cite ROIC and reinvestment rate, name the long-term thinking signal.
+Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
+        ),
+        # ── 10. Burry Catalyst Deep Value ──
         (
             "Burry",
-            "🕳️ Burry Deep Value",
-            f"""You are a Michael Burry-style deep value analyst. Today is {datetime.date.today()}.{_perf_header("Burry")}
-YOUR LENS — find hidden value with specific catalysts that will force market repricing:
-- Hidden asset identification: companies trading below replacement value, cash, or investment value on balance sheet
-- Sum-of-parts analysis: businesses where individual divisions are worth more than the combined market cap
-- Catalyst specificity: vague "value unlock" is not enough — identify THE specific event that forces repricing
-- Activist catalyst: stocks where shareholder activism could force spinoff, sale, or restructuring
-- Regulatory/legal catalyst: decisions, court cases, or policy changes that will significantly change economics
-- Balance sheet transformation: companies paying down debt aggressively that will re-rate when leverage drops
-- Accounting normalization: companies where write-downs or one-time items have temporarily depressed reported earnings
-- Structural shift beneficiaries: positioned to benefit from a major trend the market hasn't recognized
-- Catalyst timeline: when does the catalyst play out — 6 months, 1 year, 3 years — and how certain is the timing
-- 👑 CEO Capital Allocator signal: a deep-value name with a 👑 A/B+ CEO is a far stronger setup than the same multiple with a D-grade CEO — when value finally re-rates, you want a competent capital allocator at the wheel. C/D long-tenure CEOs in deep-value names = activist catalyst is preferred (forced repricing > management-dependent repricing).
-- 5Y per-share trends (FCF/sh, BV/sh CAGRs) reveal whether the "deep value" is real cheapness or persistent destruction.
-FOCUS: Burry's edge was doing deep quantitative work that others avoided — reading 10-Ks in detail, identifying specific structural mispricings, and waiting for a defined catalyst. The market must be forced to reprice, not just discover the value organically.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by cheapest EV/EBITDA + P/B + DCF discount — your lens):\n{_pool_burry}
+            "🕳️ Burry Catalyst Deep Value",
+            f"""You are an analyst trained in Michael Burry's deep value framework — the methodology that famously profited from the 2008 housing crash by finding mispriced assets where specific catalysts would force the market to recognize hidden value. Today is {datetime.date.today()}.{_perf_header("Burry")}
+{_USER_CTX}
 
-HARD RULE — DISQUALIFY IMMEDIATELY: Net Debt/EBITDA > 4.0 (NDE tag) = DISQUALIFIED unless insurance/REIT. A deep-value thesis with excessive leverage is not deep value — it's a zero-option trade. Burry's winning plays had the balance sheet to survive until the catalyst hit.
+YOUR LENS — find deep value with identifiable catalysts that will force repricing:
+- Hidden asset identification: companies trading below the value of real estate, cash, investments on the balance sheet
+- Sum-of-the-parts: conglomerates where individual divisions are worth more than the combined market cap
+- Activist catalyst: stocks where an activist could force a spinoff, sale, or restructuring that unlocks value
+- Regulatory catalyst: upcoming regulatory decisions, court cases, or policy changes that materially shift economics
+- Structural shift beneficiaries: companies positioned to benefit from a major trend the market hasn't recognized
+- Balance sheet transformations: companies paying down debt aggressively that will re-rate once leverage drops
+- Dividend or buyback catalysts: companies about to initiate or dramatically increase shareholder returns
+- Contract renewal cycles: businesses with predictable contract renewals that will demonstrate pricing power
+- Accounting normalization: companies where one-time write-downs or unusual items have temporarily depressed reported earnings
+- Catalyst timeline: vague "value will be recognized" is NOT enough — must name THE specific event with timeline (6mo / 1yr / 3yr) and confidence level""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by cheapest EV/EBITDA + P/B + DCF discount):\n{_pool_burry}
 
-Apply Burry's deep value + catalyst framework. Find stocks with hidden assets, temporary earnings distortions, or specific upcoming catalysts that will force the market to reprice.
-Pick your TOP 7 catalyst-driven deep value plays. For each: identify the hidden asset or earnings normalization opportunity, name the SPECIFIC catalyst and its estimated timeline, and explain why the market has mispriced this.
-In `rationale`: cite EV/EBITDA or P/B multiple, name the specific hidden asset or earnings distortion (e.g. "one-time write-down suppressed EPS", "real estate on balance sheet at cost"), and name the catalyst with timeline (e.g. "asset sale expected H2 2026").
+HARD RULE: Net Debt/EBITDA > 4.0 = DISQUALIFIED unless insurance/REIT. Deep value with excessive leverage is a zero-option trade.
+
+Pick your TOP 1-3 catalyst-driven deep value plays.
+For each: identify the hidden asset / SOTP gap / earnings normalization opportunity, name the SPECIFIC catalyst (event + estimated timeline), explain why the market has mispriced this.
+In `rationale`: cite EV/EBITDA or P/B multiple, name the specific hidden asset or catalyst (e.g. "real estate on balance sheet at cost = $XB vs market value $YB"), and state catalyst timeline (e.g. "asset sale expected H2 2026").
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
+        # ── 11. Insider & 13F Tracker ──
         (
             "InsiderTrack",
-            "👁️ Insider & Smart Money",
-            f"""You are a senior insider buying and institutional accumulation analyst. Today is {datetime.date.today()}.{_perf_header("InsiderTrack")}
-YOUR LENS — follow executives and smart money buying their own stock:
-- Cluster buying detection: multiple different insiders (CEO, CFO, board) buying simultaneously within 30-60 days = highest conviction signal
-- Purchase size significance: insider buys > $100K from executives with already significant existing ownership
-- New buying: first-time insider purchases often precede major positive developments
-- Smart money confirmation: institutional accumulation at low prices before a re-rating
-- Insider buying as a contrarian signal: executives almost never buy when the outlook is poor — they're the most informed buyers
-- Sector rotation signals: which sectors are accumulating insider buying (leading indicator of recovery)
-- Combined signal: stocks with BOTH insider buying AND improving fundamental momentum
-- Reject insider noise: open market purchases are meaningful; option exercises and scheduled 10b5-1 plans are less so
-- Balance sheet context: insider buying means more when the company has no obvious financial stress
-- 🎯 Hidden Gem flag (cluster insider buying + Street rated Hold/Sell) — pre-computed for you in the candidate data. This is your highest-priority setup: insider conviction in a name the consensus has given up on.
-- 🔥 Conviction Stack flag (cluster insider + Street bullish) — both signals agree, lower contrarian edge but high-conviction setup that you cross-validate when both insiders AND fundamental momentum align.
-- 👑 CEO grade: an insider-bought name with an A/B+ capital allocator at the helm is a much higher-quality signal than the same insider buying at a chronically capital-destroying company.
-FOCUS: insider buying is one of the most reliable signals in markets — these are the people who know the business best, buying with their own after-tax dollars. When the CEO spends $1M buying stock in a down market, pay attention.""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (stocks with insider buying flagged first, then ranked by quality — your lens):\n{_pool_insider}{(chr(10)*2 + _insider_intel) if _insider_intel else ""}
+            "👁️ Insider & 13F Tracker",
+            f"""You are a senior analyst who tracks insider buying (executives purchasing their own stock) and 13F filings (what billionaire fund managers are buying) — the only people on Wall Street with BOTH information and capital at stake. Today is {datetime.date.today()}.{_perf_header("InsiderTrack")}
+{_USER_CTX}
 
-Apply insider buying and smart money tracking. Focus on stocks with cluster insider buying signals, significant purchase sizes relative to insider net worth, and confirmation from improving fundamental trends.
-If RECENT INSIDER NEWS is provided above, cross-reference it with the candidate list — stocks appearing in both the candidate pool AND recent insider news are your highest-priority targets.
-Pick your TOP 7 stocks with the strongest insider/smart money signals. For each: describe the specific buying pattern (who, how much, timing), explain what the insiders likely know that the market doesn't, and confirm with the fundamental data.
-In `rationale`: state who bought (CEO/CFO/Director/10%+ holder), the dollar amount and approximate date, whether it's cluster (multiple insiders) or single buyer, and one fundamental data point confirming the signal. Format: "[Role] $X (~date) — [cluster/single]. Confirmation: [data point]."
+YOUR LENS — identify opportunities from insider buying + smart money positioning:
+- Cluster buying detection: stocks where 3+ different insiders (CEO, CFO, board) buying simultaneously within 30 days
+- Size of purchases: insider buys above $100K from executives with already significant ownership = highest conviction
+- New insider buying: first-time insider purchases often precede major positive developments
+- Smart money 13F tracking: hedge funds (Berkshire, Pershing Square, Third Point, Tiger Global) recently initiating or increasing positions
+- 13F timing: positions appear 45 days after quarter-end — which positions are still early enough to follow?
+- Concentration signals: when a top fund puts 5%+ of their portfolio into one stock = conviction worth investigating
+- Sector rotation: which sectors are accumulating insider buying / smart money purchases (leading indicator)
+- Combined signals: stocks with BOTH insider buying AND smart money accumulation (highest conviction)
+- Reject insider noise: open market purchases meaningful; option exercises and 10b5-1 plans less so
+- Balance sheet context: insider buying means more when no obvious financial stress
+- 🎯 Hidden Gem (cluster insider buying + Street rated Hold/Sell) = highest-priority setup
+- 🔥 Conviction Stack (cluster insider + Street bullish) = both signals agree, lower contrarian edge but high quality""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (insider-flagged first, then ranked by quality):\n{_pool_insider}{(chr(10)*2 + _insider_intel) if _insider_intel else ""}
+
+If RECENT INSIDER NEWS is provided above, cross-reference with the candidate list — stocks in BOTH are highest priority.
+
+Pick your TOP 3-5 stocks with strongest insider/smart money signals.
+For each: describe the buying pattern (who, how much, when), explain what the insiders likely know that the market doesn't, confirm with one fundamental data point.
+In `rationale`: state who bought (CEO/CFO/Director/10%+ holder), $ amount + approximate date, cluster vs single, and one fundamental confirmation. Format: "[Role] $X (~date) — [cluster/single]. Confirmation: [data point]."
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
+        # ── 12. Buffett Quality Compounder ──
         (
-            "OffRadar",
-            "🛰️ Off-the-Radar",
-            f"""You are a pre-discovery institutional arbitrageur. Today is {datetime.date.today()}.{_perf_header("OffRadar")}
-YOUR SINGLE MANDATE: find stocks that are structurally invisible to institutions — and will be re-rated once the blindspot closes.
+            "BuffettQ",
+            "🏰 Buffett Quality Compounder",
+            f"""You are a Warren Buffett-style quality analyst — find businesses with durable competitive moats, predictable earnings, and exceptional capital allocation that compound at high rates of return for decades. Today is {datetime.date.today()}.{_perf_header("BuffettQ")}
+{_USER_CTX}
 
-This is NOT about finding cheap stocks. This is about finding stocks where the MARKET STRUCTURE prevents institutions from owning them — and identifying the moment that changes.
+YOUR LENS — find durable compounders, the bedrock of long-term wealth:
+- Durable competitive moat: structural advantage that protects pricing power and ROIC against well-funded competitors (network effects, switching costs, brand, low-cost producer, scale)
+- Predictable earnings: revenue growth without massive volatility — Buffett wants businesses where you can forecast 5-year earnings with reasonable confidence
+- High and sustained ROIC: > 15% floor, > 20% ideal — and the moat must justify why this can continue
+- Fat margins: gross margin > 40% reflects pricing power; operating margin > 15% reflects operational discipline
+- Owner-operator mindset: management thinks in decades, not quarters — capital allocated rationally (high-return reinvestment, smart buybacks, low-quality acquisitions avoided)
+- Strong balance sheet: low leverage, high cash, no existential risk
+- Avoid cyclicals: prefer businesses where economics don't swing wildly with the macro cycle
+- "Toll booth" businesses: dominant positions in industries that grow with GDP but with structural pricing
+- Long history of profitability: the moat must be tested through full cycles, not just a recent spike
 
-THE INSTITUTIONAL BLINDSPOT THESIS (your entire framework):
-Large funds ($1B+) cannot buy positions in stocks under $2B without moving the price. They need 20+ hours of analyst coverage to justify owning a name. They cannot hold through dead-money phases without facing redemptions. These structural constraints create a permanent class of mis-priced opportunities — stocks that are fundamentally sound but institutionally uninvestable.
+ANTI-PATTERN: avoid one-trick-pony tech that may be obsoleted in 5 years; avoid commodity producers with no pricing power; avoid newly-public companies with no track record through a downturn.""",
+            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by ROIC + margin profile + earnings quality + low debt):\n{_pool_buffett_quality}
 
-WHAT YOU ARE LOOKING FOR — the IREN/Nokia profile:
-1. SIZE BLINDSPOT: $200M–$3B market cap. Too small for funds to buy without market impact. No analyst on the Street has an initiation report yet (0–5 analysts = deepest blindspot).
-2. NARRATIVE PIVOT IN PROGRESS: the market still prices this as what it WAS (struggling telco, commodity miner, legacy industrial) — not what it is BECOMING (AI infrastructure, HPC colocation, value-added services). The pivot is verifiable in recent data but not yet reflected in sell-side models.
-3. BASE-BUILDING: 52W position 50–85% — the stock has stopped falling, is consolidating, but has NOT been re-rated yet. This is the pre-discovery window.
-4. INSIDER CONVICTION: executives buying their own stock with personal cash while the Street is ignoring it = the most reliable signal that insiders see a specific value-creating event ahead.
-5. QUALITY ANCHOR: at least one sign that this is NOT a value trap — positive FCF, net cash, revenue consistency, or a familiar brand that real consumers use.
+HARD RULES:
+- ROIC < 12% = REJECT (no real moat)
+- Gross margin < 30% = REJECT (no pricing power)
+- Net Debt/EBITDA > 2.5 = REJECT (Buffett hates leverage; insurance/REIT exempt)
+- Revenue declining 2+ years = REJECT (deteriorating moat or terminal industry)
 
-KEY SIGNALS IN THE DATA (tagged explicitly for you):
-- 🔍UnderCovered: ≤5 analyst estimates — institutional blindspot confirmed
-- 🎯HiddenGem: insider cluster buying + sell-side rated Hold/Sell = the asymmetry setup
-- 52wPos: look for 0.50–0.85 (base-building zone, pre-re-rating)
-- InsiderBuys/InsiderValue: cluster (3+ buyers) > single purchase — consensus from within
-- RevGrowth > RevGrowthPrev (accelerating): narrative pivot showing up in numbers
-
-WHAT YOU MUST REJECT:
-- Stocks already above 52W pos 0.90 — the re-rating has already happened; you're late
-- Pure fundamental plays with obvious financial cheapness and heavy coverage — that's what every other agent does; you are specifically NOT that
-- Stocks where the "pivot" story is a press release with no financial confirmation — the pivot must have at least one data point (FCF turning positive, revenue accelerating, margin expansion beginning)
-- Story stocks with dilution > 10%/year — share issuance destroys the per-share value creation thesis
-
-PHILOSOPHY:
-The retail edge over institutions is NOT information — it's STRUCTURE. Institutions literally cannot own these names in meaningful size. You can. The edge exists because of their constraint, not your intelligence. Find the names that will be rerated when a fund eventually initiates coverage, when a catalyst closes the institutional access gap, or when the narrative pivot becomes undeniable in the numbers.
-The best pick is: "boring company in a changing business, 2 analysts, insiders buying, consolidating at the 65th percentile of its 52W range, and one signal of the pivot showing in the last two quarters."
-""",
-            f"""SECTOR CONTEXT:\n{sector_block}\n\nCANDIDATE STOCKS (ranked by institutional blindspot signals: coverage gap + base-building + insider conviction — your lens):
-Note: 🔍UnderCovered = ≤5 sell-side analysts. 🎯HiddenGem = insiders buying + Street bearish. 52wPos shows where price sits in its 52W range.
-{_pool_off_radar}
-
-HARD RULES — DISQUALIFY IMMEDIATELY:
-- Market cap > $5B = DISQUALIFIED. At that size, institutions already own it. The blindspot is closed.
-- 52wPos > 0.92 = DISQUALIFIED. Already re-rated. You missed the window.
-- Analyst count > 8 (if shown) = DISQUALIFIED. Not a blindspot if 8+ analysts already cover it.
-- ADV < $500K/day = DISQUALIFIED. Illiquid names can't be exited when the thesis plays out.
-- Dilution > +12%/yr = DISQUALIFIED. Share count growth this fast kills per-share value regardless of the pivot.
-- Altman-Z < 1.5 (distress zone) = DISQUALIFIED. Revenue growth means nothing if the company can't survive long enough for the re-rating. Going concern risk destroys the blindspot thesis.
-- Financial Services or Real Estate = DISQUALIFIED. These sectors use different metrics; the institutional blindspot thesis doesn't apply in the same way.
-- Operating margin < -100% with no FCF = DISQUALIFIED. Cash-burning shells are not pre-discovery opportunities — they are capital destruction events with a story.
-
-Pick your TOP 7 pre-discovery setups. Return fewer if the bar isn't met.
-For each pick, answer THREE questions:
-1. WHY is this institutionally invisible right now? (size? zero coverage? sector stigma? recent spinoff?)
-2. WHAT is the narrative pivot that is beginning but not yet priced? (Business model shift? Industry re-rating? A specific catalyst closing the institutional access gap?)
-3. WHERE is the quality anchor proving this is not a value trap? (positive FCF? net cash? insider cluster? revenue consistency?)
-In `rationale`: cite analyst count, 52W position %, insider buying data, and the specific evidence of the pivot from the provided candidate data (do NOT recall or invent numbers from training knowledge).
+Pick your TOP 2-4 quality compounders.
+For each: name the specific moat (and explain WHY competitors can't replicate it), confirm the ROIC + margin profile, assess capital allocation discipline, project the next 5-year earnings range with reasoning.
+In `rationale`: format as "Moat: [specific type] | ROIC: X% (sustained N yrs) | GM: Y%, OM: Z%. Capital allocation: [reinvestment / buybacks / dividends ratio]."
 Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
     ]
@@ -5958,7 +5984,7 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
     _neutral_note = (" IMPORTANT: You are running in NEUTRAL mode — ignore all macro/rate/VIX conditions. Pick purely on business quality, valuation fundamentals, and specialist consensus. Do NOT reference interest rates, yield curves, inflation, or macro regime in your reasoning." if neutral_judge else "")
     judge_system = f"""You are the Master Manager — a chief investment officer and final decision-maker who synthesises recommendations from eleven specialist analysts into a single, high-conviction portfolio list for an investor whose edge is personal knowledge of companies they directly use as a consumer or workplace user.
 Today is {datetime.date.today()}.{_neutral_note}
-Your eleven specialists are: Quality Growth (compounders), Special Situation, Capital Appreciation, Emerging Growth, 10-Bagger Hunter, Lynch Buy What You Know, Disruptive Innovation, Pabrai Asymmetric Bet, Marks Second-Level, Burry Deep Value, Insider & Smart Money.
+Your twelve specialists are: Wall Street Blindspot Hunter (under-followed small-mid caps), Lynch Buy What You Know (consumer-observable), Camillo Social Arbitrage (social-trend velocity), Mayer 100-Bagger (strict ROIC + size gates), Wood Disruptive Innovation (Wright's Law platforms), Greenblatt Magic Formula (ROIC>20% + EY>10%), Pabrai Asymmetric Bet (3:1+ upside/downside), Marks Second-Level (contrarian where consensus is wrong), Sleep Scale Economics Shared (flywheel compounders), Burry Catalyst Deep Value (named catalyst <12mo), Insider & 13F Tracker (cluster buys + smart money), Buffett Quality Compounder (durable moat + predictable earnings).
 
 YOUR INVESTMENT PHILOSOPHY — VALUE-TILTED QUALITY:
 - Your job is to find SOLID companies at LOW valuations, not great companies at fair prices. The Buffett "great business at any reasonable price" lens has become crowded; your edge is finding solid businesses where the market is currently mispricing them as boring, broken, or out-of-favour.
@@ -5999,7 +6025,7 @@ QUALITY STANDARD — hard filter before including any pick:
 - Survivability: would this business remain competitively relevant through a recession AND an aggressive well-funded new entrant simultaneously?
 - For 10-Bagger candidates: gross margin > 30% + positive operating income replaces FCF as the quality gate — but dilution < 5%/yr is non-negotiable
 
-YOUR ROLE: Synthesise the twelve specialist reports into a final 5-20 pick list diversified across lenses (quality + special situations + appreciation + emerging growth + small-cap + deep value + contrarian + insider signals + pre-discovery blindspots). Prioritise consensus names rigorously. Include at least one pick from each specialist lens where quality meets the bar. Never pad the list — 8 genuine picks beat 20 forced ones.{_judge_track_block}"""
+YOUR ROLE: Synthesise the twelve specialist reports into a final 5-20 pick list diversified across lenses (Wall Street blindspots + consumer-observable Lynch + social arbitrage + 100-bagger pattern + disruptive innovation + Magic Formula quality + asymmetric bets + contrarian second-level + scale economics shared compounders + catalyst deep value + insider & 13F + Buffett quality). Prioritise consensus names rigorously. Include at least one pick from each specialist lens where quality meets the bar. Never pad the list — 8 genuine picks beat 20 forced ones.{_judge_track_block}"""
 
     # ── Build macro context block for judge (from live FRED data) ──────────
     macro_block = ""
@@ -6641,38 +6667,47 @@ def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
+    # NEW 12-AGENT LINEUP (2026-05-10) — see top of call_claude_analysis() for full details.
     AGENT_DESCRIPTIONS = {
-        "QualityGrowth":  ("🌱 Quality Growth",
-                          "Finds durable compounders with ROIC >15%, consistent multi-year revenue growth, and structural competitive moats. Prioritises FCF conversion and PEG <1.5 as quality gates."),
-        "SpecialSit":     ("⚡ Special Situation",
-                          "Identifies event-driven, misunderstood, and inflection-point opportunities. Focuses on business model misclassification, regulatory catalysts, and hidden assets not yet priced in."),
-        "CapAppreciation":("📈 Capital Appreciation",
-                          "Finds near-term re-rating candidates with specific catalysts in 1-6 months. Targets beaten-down quality (52wPos <65%), revenue re-acceleration signals, and cycle trough entries."),
-        "EmergingGrowth": ("🚀 Emerging Growth",
-                          "Identifies smaller fast-growing companies ($100M-$15B) at the early stage of becoming compounders. Targets 20%+ revenue growth, rising ROIC, and large underserved TAMs."),
-        "TenBagger":      ("🎯 10-Bagger Hunter",
-                          "Peter Lynch-style small-cap hunter. Looks for underfollowed companies ($50M-$2B) with 15-40% EPS+revenue growth, simple competitive advantages, at least 2 expansion levers not yet exhausted, and structural Wall Street under-coverage (orphans, post-restructuring, complex/sin-sector names)."),
-        "LynchBWYK":      ("🛒 Lynch Buy What You Know",
-                          "Lynch's 'buy what you know' approach — simple, understandable businesses serving everyday consumer or workplace needs, growing 15-25%/yr with real earnings at PEG <1.0."),
-        "CathieWood":     ("🚀 Disruptive Innovation",
-                          "ARK Invest-style innovation screen. Identifies pure-play companies in AI, robotics, genomics, energy storage, or blockchain riding Wright's Law cost curves with network effects and expanding TAMs."),
-        "Pabrai":         ("🎲 Pabrai Asymmetric Bet",
-                          "Mohnish Pabrai's 'heads I win, tails I don't lose much' framework. Finds bets with 3:1+ upside/downside asymmetry where downside is protected by real assets or essential business value."),
-        "HowardMarks":    ("🔄 Marks Second-Level",
-                          "Howard Marks' second-level thinking — contrarian analysis where market consensus is factually wrong. Targets oversold stocks where the negative narrative exceeds actual fundamental deterioration."),
-        "Burry":          ("🕳️ Burry Deep Value",
-                          "Michael Burry-style catalyst-driven deep value. Identifies hidden assets, temporary earnings distortions, and specific upcoming events that will FORCE the market to reprice."),
-        "InsiderTrack":   ("👁️ Insider & Smart Money",
-                          "Tracks cluster insider buying (multiple executives buying simultaneously) and significant open-market purchases. Insiders are the most informed buyers — their conviction buying with personal capital is a high-signal indicator."),
+        "WallStBlind":   ("🛰️ Wall Street Blindspot Hunter",
+                          "Finds opportunities Wall Street's major banks can't or won't cover: under-followed small-mid caps ($100M-$3B, ≤5 analysts), recent spinoffs, orphaned former mid-caps, sin-sector discounts, post-bankruptcy clean balance sheets, and IPO aftermath."),
+        "LynchBWYK":     ("🛒 Lynch Buy What You Know",
+                          "Peter Lynch's everyday-life observation framework — simple, understandable consumer/workplace businesses growing 15-25%/yr at PEG <1.0. Requires the 🛒 FamiliarBrand tag (consumer-observable industry)."),
+        "SocialArb":     ("📱 Camillo Social Arbitrage",
+                          "Chris Camillo's social-trend velocity framework — viral consumer products, app rank momentum, and emerging behavioural shifts where revenue is accelerating BEFORE Wall Street catches up."),
+        "Mayer100x":     ("💯 Mayer 100-Bagger",
+                          "Christopher Mayer's strict 100-bagger pattern: <$2B market cap + ROIC >15% sustained + owner-operator + long reinvestment runway + low dilution. Returns zero picks if nothing meets the bar."),
+        "CathieWood":    ("🚀 Wood Disruptive Innovation",
+                          "ARK Invest's disruptive-innovation screen. Pure-play (≥50% revenue) names in AI, robotics, genomics, energy storage, or blockchain riding Wright's Law cost curves."),
+        "MagicFormula":  ("🔢 Greenblatt Magic Formula",
+                          "Joel Greenblatt's two-factor screen: ROIC >20% AND earnings yield >10%. Pre-filtered candidate pool; agent's job is secondary filtering for sustainability and earnings quality."),
+        "Pabrai":        ("🎲 Pabrai Asymmetric Bet",
+                          "Mohnish Pabrai's 3:1+ upside/downside framework. Downside protected by real assets or cash; upside driven by a specific catalyst the market is underpricing."),
+        "HowardMarks":   ("🔄 Marks Second-Level",
+                          "Howard Marks' contrarian framework — find where market consensus is factually wrong. Oversold names with improving fundamentals; sentiment-extreme sectors with mean-reversion potential."),
+        "NickSleep":     ("🌀 Sleep Scale Economics Shared",
+                          "Nick Sleep's flywheel framework — businesses that share scale benefits with customers (Costco/Amazon model), driving self-reinforcing growth with stable-or-declining gross margins as they scale."),
+        "Burry":         ("🕳️ Burry Catalyst Deep Value",
+                          "Michael Burry's catalyst-driven deep value. Hidden assets, sum-of-parts gaps, accounting normalisations — with a SPECIFIC named catalyst (timeline ≤12 months ideal) that forces market repricing."),
+        "InsiderTrack":  ("👁️ Insider & 13F Tracker",
+                          "Cluster insider buying + smart-money 13F overlap. The two groups with both information and capital at stake. Highest priority: 🎯 Hidden Gem (cluster buys + Street rated Hold/Sell)."),
+        "BuffettQ":      ("🏰 Buffett Quality Compounder",
+                          "Warren Buffett's durable-moat framework. ROIC >15% sustained, gross margin >40%, predictable earnings, low debt, exceptional capital allocation. The bedrock of long-term wealth building."),
     }
 
     AGENT_COLORS = {
-        "QualityGrowth": "2E7D32", "SpecialSit": "6A1B9A", "CapAppreciation": "1565C0",
-        "EmergingGrowth": "E65100", "TenBagger": "BF360D",
-        "LynchBWYK": "880E4F",
-        "CathieWood": "0D47A1", "Pabrai": "33691E",
-        "HowardMarks": "827717", "Burry": "3E2723",
-        "InsiderTrack": "263238",
+        "WallStBlind":   "00695C",
+        "LynchBWYK":     "880E4F",
+        "SocialArb":     "AD1457",
+        "Mayer100x":     "BF360D",
+        "CathieWood":    "0D47A1",
+        "MagicFormula":  "1565C0",
+        "Pabrai":        "33691E",
+        "HowardMarks":   "827717",
+        "NickSleep":     "4527A0",
+        "Burry":         "3E2723",
+        "InsiderTrack":  "263238",
+        "BuffettQ":      "2E7D32",
     }
 
     specialist_picks = ai_result.get("_specialist_picks", {})
@@ -6705,10 +6740,10 @@ def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
 
     sr = 4  # current row
 
-    # Order: existing 5 first, then 12 new
-    agent_order = ["QualityGrowth", "SpecialSit", "CapAppreciation", "EmergingGrowth", "TenBagger",
-                   "LynchBWYK", "CathieWood",
-                   "Pabrai", "HowardMarks", "Burry", "InsiderTrack"]
+    # NEW 12-agent display order (2026-05-10) — broad → contrarian → quality
+    agent_order = ["WallStBlind", "LynchBWYK", "SocialArb", "Mayer100x",
+                   "CathieWood", "MagicFormula", "Pabrai", "HowardMarks",
+                   "NickSleep", "Burry", "InsiderTrack", "BuffettQ"]
 
     for agent_key in agent_order:
         if agent_key not in specialist_picks:
@@ -8792,18 +8827,26 @@ def build_picks_tracking(wb, stocks):
     # ── Read AI agent picks (fmp_ai_picks_log.csv) — if exists ─────────────
     ai_logged = []
     _agent_icons = {
-        "AI-QualityGrowth":    "🌱 Qual.Growth",
-        "AI-SpecialSit":       "⚡ Special Sit",
-        "AI-CapAppreciation":  "📈 Cap.Apprecn",
-        "AI-EmergingGrowth":   "🚀 Emerg.Growth",
-        "AI-TenBagger":        "🎯 10-Bagger",
+        # NEW 12-agent lineup (2026-05-10)
+        "AI-WallStBlind":      "🛰️ WallSt Blind",
         "AI-LynchBWYK":        "🛒 Lynch BWYK",
+        "AI-SocialArb":        "📱 Social Arb",
+        "AI-Mayer100x":        "💯 100-Bagger",
         "AI-CathieWood":       "🚀 Disruptive",
+        "AI-MagicFormula":     "🔢 Magic Form.",
         "AI-Pabrai":           "🎲 Pabrai",
         "AI-HowardMarks":      "🔄 Contrarian",
+        "AI-NickSleep":        "🌀 Scale Econ",
         "AI-Burry":            "🕳️ Deep Value",
-        "AI-InsiderTrack":     "👁️ Insider",
-        "AI-OffRadar":         "🛰️ Off-the-Radar",
+        "AI-InsiderTrack":     "👁️ Insider+13F",
+        "AI-BuffettQ":         "🏰 Buffett Q",
+        # ── retired agents kept for archived-CSV compatibility (do not delete) ──
+        "AI-QualityGrowth":    "🌱 Qual.Growth (retired)",
+        "AI-SpecialSit":       "⚡ Special Sit (retired)",
+        "AI-CapAppreciation":  "📈 Cap.Apprecn (retired)",
+        "AI-EmergingGrowth":   "🚀 Emerg.Growth (retired)",
+        "AI-TenBagger":        "🎯 10-Bagger (retired)",
+        "AI-OffRadar":         "🛰️ Off-the-Radar (retired)",
         "AI-Judge":            "⚖️ Master Manager",
         "AI-MallManager":      "🛍️ Mall Manager",
         # legacy labels kept for old log entries
@@ -11443,45 +11486,50 @@ function showMacroDetail(el, id) {
         if not _sp:
             return '<section id="agents"><p style="color:#666">No agent data available</p></section>'
 
+        # NEW 12-agent lineup (2026-05-10)
         _ADESC = {
-            "QualityGrowth":  ("🌱 Quality Growth",  "2E7D32",
-                "Finds durable compounders with ROIC >15%, consistent multi-year revenue growth, "
-                "and structural competitive moats. Prioritises FCF conversion and PEG <1.5 as quality gates."),
-            "SpecialSit":     ("⚡ Special Situation", "6A1B9A",
-                "Identifies event-driven, misunderstood, and inflection-point opportunities. Focuses on "
-                "business model misclassification, regulatory catalysts, and hidden assets not yet priced in."),
-            "CapAppreciation":("📈 Capital Appreciation", "1565C0",
-                "Finds near-term re-rating candidates with specific catalysts in 1–6 months. Targets "
-                "beaten-down quality (52wPos <65%), revenue re-acceleration signals, and cycle trough entries."),
-            "EmergingGrowth": ("🚀 Emerging Growth",  "E65100",
-                "Identifies smaller fast-growing companies ($100M–$15B) at the early stage of becoming "
-                "compounders. Targets 20%+ revenue growth, rising ROIC, and large underserved TAMs."),
-            "TenBagger":      ("🎯 10-Bagger Hunter", "BF360D",
-                "Peter Lynch-style small-cap hunter. Looks for underfollowed companies ($50M–$2B) with "
-                "15–40% EPS+revenue growth, simple competitive advantages, at least 2 expansion levers, and "
-                "structural Wall Street under-coverage (orphans, post-restructuring, complex/sin-sector names)."),
-            "LynchBWYK":      ("🛒 Lynch Buy What You Know","880E4F",
-                "Lynch's 'buy what you know' approach — simple, understandable businesses serving everyday "
-                "consumer or workplace needs, growing 15–25%/yr with real earnings at PEG <1.0."),
-            "CathieWood":     ("🚀 Disruptive Innovation","0D47A1",
-                "ARK Invest-style innovation screen. Identifies pure-play companies in AI, robotics, "
-                "genomics, energy storage, or blockchain riding Wright's Law cost curves with network effects."),
-            "Pabrai":         ("🎲 Pabrai Asymmetric Bet","33691E",
-                "Mohnish Pabrai's 'heads I win, tails I don't lose much' framework. Finds bets with "
-                "3:1+ upside/downside asymmetry where downside is protected by real assets or essential value."),
-            "HowardMarks":    ("🔄 Marks Second-Level","827717",
-                "Howard Marks' second-level thinking — contrarian analysis where market consensus is factually "
-                "wrong. Targets oversold stocks where the negative narrative exceeds actual deterioration."),
-            "Burry":          ("🕳️ Burry Deep Value",  "3E2723",
-                "Michael Burry-style catalyst-driven deep value. Identifies hidden assets, temporary earnings "
-                "distortions, and specific upcoming events that will FORCE the market to reprice."),
-            "InsiderTrack":   ("👁️ Insider & Smart Money","263238",
-                "Tracks cluster insider buying (multiple executives buying simultaneously) and significant "
-                "open-market purchases. Insiders are the most informed buyers with personal-capital conviction."),
+            "WallStBlind":   ("🛰️ Wall Street Blindspot Hunter", "00695C",
+                "Finds opportunities Wall Street's major banks can't or won't cover: under-followed "
+                "small-mid caps ($100M–$3B, ≤5 analysts), recent spinoffs, orphaned former mid-caps, "
+                "sin-sector discounts, post-bankruptcy clean balance sheets, and IPO aftermath."),
+            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F",
+                "Peter Lynch's everyday-life observation framework — simple, understandable consumer/"
+                "workplace businesses growing 15–25%/yr at PEG <1.0. Requires the 🛒 FamiliarBrand tag."),
+            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457",
+                "Chris Camillo's social-trend velocity framework — viral consumer products, app rank "
+                "momentum, and emerging behavioural shifts where revenue is accelerating BEFORE Wall "
+                "Street catches up."),
+            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D",
+                "Christopher Mayer's strict 100-bagger pattern: <$2B + ROIC >15% sustained + owner-"
+                "operator + long reinvestment runway + low dilution. Returns zero picks if nothing fits."),
+            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1",
+                "ARK Invest's disruptive-innovation screen. Pure-play (≥50% revenue) names in AI, "
+                "robotics, genomics, energy storage, or blockchain riding Wright's Law cost curves."),
+            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0",
+                "Joel Greenblatt's two-factor screen: ROIC >20% AND earnings yield >10%. Pre-filtered "
+                "candidate pool; agent secondarily filters for sustainability and earnings quality."),
+            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E",
+                "Mohnish Pabrai's 3:1+ upside/downside framework. Downside protected by real assets or "
+                "cash; upside driven by a specific catalyst the market is underpricing."),
+            "HowardMarks":   ("🔄 Marks Second-Level", "827717",
+                "Howard Marks' contrarian framework — find where market consensus is factually wrong. "
+                "Oversold names with improving fundamentals; sentiment-extreme sectors with mean-reversion."),
+            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0",
+                "Nick Sleep's flywheel framework — businesses that share scale benefits with customers "
+                "(Costco/Amazon model), driving self-reinforcing growth as they scale."),
+            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723",
+                "Michael Burry's catalyst-driven deep value. Hidden assets, sum-of-parts gaps, accounting "
+                "normalisations — with a SPECIFIC named catalyst (≤12mo) that forces market repricing."),
+            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238",
+                "Cluster insider buying + smart-money 13F overlap. The two groups with both information "
+                "and capital at stake. Highest priority: 🎯 Hidden Gem (cluster + Street rated Hold/Sell)."),
+            "BuffettQ":      ("🏰 Buffett Quality Compounder", "2E7D32",
+                "Warren Buffett's durable-moat framework. ROIC >15% sustained, gross margin >40%, "
+                "predictable earnings, low debt, exceptional capital allocation."),
         }
-        _AGENT_ORDER = ["QualityGrowth", "SpecialSit", "CapAppreciation", "EmergingGrowth", "TenBagger",
-                        "LynchBWYK", "CathieWood",
-                        "Pabrai", "HowardMarks", "Burry", "InsiderTrack"]
+        _AGENT_ORDER = ["WallStBlind", "LynchBWYK", "SocialArb", "Mayer100x",
+                        "CathieWood", "MagicFormula", "Pabrai", "HowardMarks",
+                        "NickSleep", "Burry", "InsiderTrack", "BuffettQ"]
 
         sections_html = []
         for ak in _AGENT_ORDER:
@@ -12083,23 +12131,25 @@ function showMacroDetail(el, id) {
                 if _tk2:
                     _spec_map.setdefault(_tk2, []).append(_ak)
 
+        # NEW 12-agent attribution icons (2026-05-10)
         _ATTR_ICONS = {
-            "QualityGrowth": "🌱", "SpecialSit": "⚡", "CapAppreciation": "📈",
-            "EmergingGrowth": "🚀", "TenBagger": "🎯",
-            "LynchBWYK": "🛒",
-            "CathieWood": "🚀", "Pabrai": "🎲",
-            "HowardMarks": "🔄", "Burry": "🕳️",
-            "InsiderTrack": "👁️",
+            "WallStBlind": "🛰️", "LynchBWYK": "🛒", "SocialArb": "📱", "Mayer100x": "💯",
+            "CathieWood": "🚀",  "MagicFormula": "🔢", "Pabrai": "🎲",   "HowardMarks": "🔄",
+            "NickSleep": "🌀",   "Burry": "🕳️",       "InsiderTrack": "👁️", "BuffettQ": "🏰",
         }
         _ATTR_LABELS = {
-            "QualityGrowth": "Quality Growth", "SpecialSit": "Special Sit",
-            "CapAppreciation": "Cap Appreciation", "EmergingGrowth": "Emerging Growth",
-            "TenBagger": "10-Bagger Hunter",
+            "WallStBlind": "WallSt Blindspot",
             "LynchBWYK": "Lynch BWYK",
+            "SocialArb": "Social Arbitrage",
+            "Mayer100x": "Mayer 100-Bagger",
             "CathieWood": "Disruptive Innov.",
+            "MagicFormula": "Magic Formula",
             "Pabrai": "Pabrai Asym.",
             "HowardMarks": "Marks 2nd-Level",
-            "Burry": "Burry Deep Val.", "InsiderTrack": "Insider Track",
+            "NickSleep": "Scale Econ Shared",
+            "Burry": "Burry Catalyst DV",
+            "InsiderTrack": "Insider + 13F",
+            "BuffettQ": "Buffett Quality",
         }
 
         # ── MASTER MANAGER PICKS ─────────────────────────────────────────────
@@ -12507,49 +12557,50 @@ function showMacroDetail(el, id) {
             mall_section_html = f"<!-- mall_section error: {str(_emall)[:80]} -->"
 
         # ── SPECIALIST SECTIONS ───────────────────────────────────────────
+        # NEW 12-agent lineup (2026-05-10)
         _ADESC = {
-            "QualityGrowth":  ("🌱 Quality Growth",  "2E7D32",
-                "Finds durable compounders with ROIC >15%, consistent multi-year revenue growth, "
-                "and structural competitive moats. Prioritises FCF conversion and PEG <1.5."),
-            "SpecialSit":     ("⚡ Special Situation", "6A1B9A",
-                "Identifies event-driven, misunderstood, and inflection-point opportunities. Focuses on "
-                "business model misclassification, regulatory catalysts, and hidden assets."),
-            "CapAppreciation":("📈 Capital Appreciation", "1565C0",
-                "Finds near-term re-rating candidates with specific catalysts in 1–6 months. Targets "
-                "beaten-down quality (52wPos <65%), revenue re-acceleration, and cycle trough entries."),
-            "EmergingGrowth": ("🚀 Emerging Growth",  "E65100",
-                "Identifies smaller fast-growing companies ($100M–$15B) early in becoming compounders. "
-                "Targets 20%+ revenue growth, rising ROIC, and large underserved TAMs."),
-            "TenBagger":      ("🎯 10-Bagger Hunter", "BF360D",
-                "Peter Lynch-style small-cap hunter. Looks for underfollowed companies ($50M–$2B) with "
-                "15–40% EPS+revenue growth, at least 2 expansion levers not yet exhausted, and structural "
-                "Wall Street under-coverage (orphans, post-restructuring, complex/sin-sector names)."),
-            "LynchBWYK":      ("🛒 Lynch Buy What You Know","880E4F",
-                "Lynch's 'buy what you know' — simple understandable businesses serving everyday needs, "
-                "growing 15–25%/yr with real earnings at PEG <1.0."),
-            "CathieWood":     ("🚀 Disruptive Innovation","0D47A1",
-                "ARK Invest-style screen. Identifies pure-play companies in AI, robotics, genomics, "
-                "or energy storage riding Wright's Law cost curves with network effects."),
-            "Pabrai":         ("🎲 Pabrai Asymmetric Bet","33691E",
-                "Mohnish Pabrai's framework: 3:1+ upside/downside asymmetry where downside is protected "
-                "by real assets or essential business value — 'heads I win, tails I don't lose much'."),
-            "HowardMarks":    ("🔄 Marks Second-Level","827717",
-                "Howard Marks' contrarian analysis where market consensus is factually wrong. Targets "
-                "oversold stocks where the negative narrative exceeds actual deterioration."),
-            "Burry":          ("🕳️ Burry Deep Value",  "3E2723",
-                "Michael Burry-style catalyst-driven deep value — hidden assets, temporary earnings "
-                "distortions, and specific upcoming events that will force the market to reprice."),
-            "InsiderTrack":   ("👁️ Insider & Smart Money","263238",
-                "Tracks cluster insider buying (multiple executives buying simultaneously) and significant "
-                "open-market purchases with personal capital — the highest-signal conviction indicator."),
-            "OffRadar":       ("🛰️ Off-the-Radar","00695C",
-                "Pre-discovery institutional arbitrage: finds stocks that are structurally invisible to funds "
-                "($200M–$3B, ≤5 analysts) with a narrative pivot in progress and insider conviction. "
-                "The IREN/Nokia profile — buying BEFORE the re-rating."),
+            "WallStBlind":   ("🛰️ Wall Street Blindspot Hunter", "00695C",
+                "Finds opportunities Wall Street's major banks can't or won't cover: under-followed "
+                "small-mid caps ($100M–$3B, ≤5 analysts), recent spinoffs, orphaned former mid-caps, "
+                "sin-sector discounts, post-bankruptcy clean balance sheets, and IPO aftermath."),
+            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F",
+                "Peter Lynch's everyday-life observation framework — simple, understandable consumer/"
+                "workplace businesses growing 15–25%/yr at PEG <1.0. Requires the 🛒 FamiliarBrand tag."),
+            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457",
+                "Chris Camillo's social-trend velocity framework — viral consumer products, app rank "
+                "momentum, and emerging behavioural shifts where revenue is accelerating BEFORE Wall "
+                "Street catches up."),
+            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D",
+                "Christopher Mayer's strict 100-bagger pattern: <$2B + ROIC >15% sustained + owner-"
+                "operator + long reinvestment runway + low dilution. Returns zero picks if nothing fits."),
+            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1",
+                "ARK Invest's disruptive-innovation screen. Pure-play (≥50% revenue) names in AI, "
+                "robotics, genomics, energy storage, or blockchain riding Wright's Law cost curves."),
+            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0",
+                "Joel Greenblatt's two-factor screen: ROIC >20% AND earnings yield >10%. Pre-filtered "
+                "candidate pool; agent secondarily filters for sustainability and earnings quality."),
+            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E",
+                "Mohnish Pabrai's 3:1+ upside/downside framework. Downside protected by real assets or "
+                "cash; upside driven by a specific catalyst the market is underpricing."),
+            "HowardMarks":   ("🔄 Marks Second-Level", "827717",
+                "Howard Marks' contrarian framework — find where market consensus is factually wrong. "
+                "Oversold names with improving fundamentals; sentiment-extreme sectors with mean-reversion."),
+            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0",
+                "Nick Sleep's flywheel framework — businesses that share scale benefits with customers "
+                "(Costco/Amazon model), driving self-reinforcing growth as they scale."),
+            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723",
+                "Michael Burry's catalyst-driven deep value. Hidden assets, sum-of-parts gaps, accounting "
+                "normalisations — with a SPECIFIC named catalyst (≤12mo) that forces market repricing."),
+            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238",
+                "Cluster insider buying + smart-money 13F overlap. The two groups with both information "
+                "and capital at stake. Highest priority: 🎯 Hidden Gem (cluster + Street rated Hold/Sell)."),
+            "BuffettQ":      ("🏰 Buffett Quality Compounder", "2E7D32",
+                "Warren Buffett's durable-moat framework. ROIC >15% sustained, gross margin >40%, "
+                "predictable earnings, low debt, exceptional capital allocation."),
         }
-        _AGENT_ORDER = ["QualityGrowth", "SpecialSit", "CapAppreciation", "EmergingGrowth", "TenBagger",
-                        "LynchBWYK", "CathieWood",
-                        "Pabrai", "HowardMarks", "Burry", "InsiderTrack", "OffRadar"]
+        _AGENT_ORDER = ["WallStBlind", "LynchBWYK", "SocialArb", "Mayer100x",
+                        "CathieWood", "MagicFormula", "Pabrai", "HowardMarks",
+                        "NickSleep", "Burry", "InsiderTrack", "BuffettQ"]
 
         # ── Strategy Picks Summary table ──────────────────────────────────
         _strat_defs = [
@@ -12986,25 +13037,29 @@ function showMacroDetail(el, id) {
         _AGENT_ICONS = {
             "AI-Judge":           "⚖️ Master Manager",
             "AI-MallManager":     "🛍️ Mall Manager",
-            "AI-QualityGrowth":   "🌱 Qual.Growth",
-            "AI-EmergingGrowth":  "🚀 Emerg.Growth",
-            "AI-CapAppreciation": "📈 Cap.Apprecn",
-            "AI-SpecialSit":      "⚡ Special Sit",
-            "AI-TenBagger":       "🎯 10-Bagger",
+            # NEW 12-agent active lineup (2026-05-10)
+            "AI-WallStBlind":     "🛰️ WallSt Blind",
             "AI-LynchBWYK":       "🛒 Lynch BWYK",
+            "AI-SocialArb":       "📱 Social Arb",
+            "AI-Mayer100x":       "💯 100-Bagger",
             "AI-CathieWood":      "🚀 Disruptive",
+            "AI-MagicFormula":    "🔢 Magic Form.",
             "AI-Pabrai":          "🎲 Pabrai",
             "AI-HowardMarks":     "🔄 Contrarian",
+            "AI-NickSleep":       "🌀 Scale Econ",
             "AI-Burry":           "🕳️ Deep Value",
-            "AI-InsiderTrack":    "👁️ Insider",
-            "AI-OffRadar":        "🛰️ Off-the-Radar",
-            # Retired agents — labels kept so historical CSV entries display correctly
+            "AI-InsiderTrack":    "👁️ Insider+13F",
+            "AI-BuffettQ":        "🏰 Buffett Q",
+            # Retired agents — labels kept so historical CSV entries display correctly.
+            # The "(retired)" suffix is what _AGENT_ORDER below uses to filter them out of the
+            # active leaderboard while still rendering archived rows with their old emoji.
+            "AI-QualityGrowth":   "🌱 Qual.Growth (retired)",
+            "AI-EmergingGrowth":  "🚀 Emerg.Growth (retired)",
+            "AI-CapAppreciation": "📈 Cap.Apprecn (retired)",
+            "AI-SpecialSit":      "⚡ Special Sit (retired)",
+            "AI-TenBagger":       "🎯 10-Bagger (retired)",
+            "AI-OffRadar":        "🛰️ Off-the-Radar (retired)",
             "AI-GoldmanSC":       "🏦 Goldman SC (retired)",
-            "AI-SocialArb":       "📱 Social Arb (retired)",
-            "AI-Mayer100x":       "💯 100-Bagger (retired)",
-            "AI-MagicFormula":    "🔢 Magic Formula (retired)",
-            "AI-NickSleep":       "🌀 Scale Econ (retired)",
-            "AI-WallStBlind":     "🔍 WallStBlind (retired)",
         }
         _AGENT_ORDER = list(_AGENT_ICONS.keys())
         _AGENT_ORDER = [a for a in _AGENT_ORDER if "(retired)" not in _AGENT_ICONS.get(a, "")]
@@ -14278,6 +14333,9 @@ def main():
     ai_status   = "✅ loaded" if ANTHROPIC_KEY else "⚠️  not set  (AI analysis disabled)"
     print(f"  🔑 FMP_API_KEY:        {fmp_status}")
     print(f"  🔑 ANTHROPIC_API_KEY:  {ai_status}")
+    # 2026-05-10: 12-agent redesign — old picks log archived, fresh leaderboard starting.
+    if not os.path.exists(AI_PICKS_LOG):
+        print("  📋 New scoreboard — leaderboard will populate after first AI run with new agents.")
     if not FMP_KEY or not ANTHROPIC_KEY:
         env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
         if not os.path.exists(env_path):
