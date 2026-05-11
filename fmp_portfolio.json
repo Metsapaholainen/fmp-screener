@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 26100.826599999993,
+  "cash": 26076.800199999994,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -112,16 +112,16 @@
       "sector": "Financial Services"
     },
     {
-      "ticker": "PYPL",
-      "company": "PayPal Holdings, Inc.",
-      "shares": 110,
-      "entry_price": 45.37,
-      "entry_date": "2026-05-10",
-      "rationale": "IV Discount + Turnaround: 15% ROIC, 13.8% FCF yield, PEG 0.62, +4% RG, 58% MoS. Digital payments secular tailwind; operational deleveraging underway. Fills final portfolio slot in underweighted Consum",
-      "conviction": "HIGH",
-      "sell_trigger": "ROIC declines below 12% for 2 consecutive quarters OR FCF yield falls below 10% AND RG remains <5%",
-      "lynch_category": "Turnaround",
-      "sector": "Financial Services"
+      "ticker": "G",
+      "company": "Genpact Limited",
+      "shares": 157,
+      "entry_price": 31.82,
+      "entry_date": "2026-05-11",
+      "rationale": "IV Discount + Stalwart: 13% ROIC, 12.1% FCF yield, PEG 0.53, +7% RG, 74% MoS. Outsourcing operator with durable margins and capital-light model. Fills Stalwart slot vacated by PYPL sale. Opens room fo",
+      "conviction": "MEDIUM",
+      "sell_trigger": "ROIC falls below 12% for consecutive quarter; margin compression in digitally-transformed service lines",
+      "lynch_category": "Stalwart+SlowGrower+Turnaround",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -1408,6 +1408,30 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "IV Discount + Turnaround: 15% ROIC, 13.8% FCF yield, PEG 0.62, +4% RG, 58% MoS. Digital payments secular tailwind; operational deleveraging underway. Fills final portfolio slot in underweighted Consum"
+    },
+    {
+      "date": "2026-05-11",
+      "action": "SELL",
+      "ticker": "PYPL",
+      "company": "PayPal Holdings, Inc.",
+      "shares": 110,
+      "price": 45.31,
+      "value": 4977.71,
+      "return_pct": -0.14,
+      "transaction_cost": 5.98,
+      "rationale": "THESIS BROKEN ON ROIC CRITERIA: Current ROIC 15% barely meets 12% threshold and shows no trajectory to accelerate. Weak 4% RG signals turnaround stalling. PEG 0.62 is attractive but insufficient to offset weak ROIC progression. Portfolio overweight Turnarounds (8/3 max) \u2014 selling this borderline name frees capacity for superior opportunities. Only 1 day held \u2014 acceptable to trim."
+    },
+    {
+      "date": "2026-05-11",
+      "action": "BUY",
+      "ticker": "G",
+      "company": "Genpact Limited",
+      "shares": 157,
+      "price": 31.82,
+      "value": 4995.74,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "IV Discount + Stalwart: 13% ROIC, 12.1% FCF yield, PEG 0.53, +7% RG, 74% MoS. Outsourcing operator with durable margins and capital-light model. Fills Stalwart slot vacated by PYPL sale. Opens room fo"
     }
   ],
   "last_updated": "2026-05-11"
