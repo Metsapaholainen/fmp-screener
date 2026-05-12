@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 39960.17429999999,
+  "cash": 24999.291299999993,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -86,6 +86,42 @@
       "sell_trigger": "Revenue growth decelerates below 25% YoY for 2 consecutive quarters OR ROIC falls below 20%",
       "lynch_category": "FastGrower+Turnaround",
       "sector": "Technology"
+    },
+    {
+      "ticker": "PGY",
+      "company": "Pagaya Technologies",
+      "shares": 369,
+      "entry_price": 13.53,
+      "entry_date": "2026-05-12",
+      "rationale": "Exceptional 10-Bagger candidate: ROIC 59%, FCF 18.6%, PEG 0.53 with 26% growth. AI-driven credit platform in underweight Financial Services (1/10). Diversification boost; capital-light model scales. Q",
+      "conviction": "HIGH",
+      "sell_trigger": "Credit loss ratio deteriorates >200bps or management signals AI model degradation",
+      "lynch_category": "FastGrower",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "GSL",
+      "company": "Global Ship Lease",
+      "shares": 119,
+      "entry_price": 41.79,
+      "entry_date": "2026-05-12",
+      "rationale": "IV Discount + Slow Grower: ROIC 15%, FCF yield 23.6% (exceptional), PEG 0.21. Container shipping recovery visible; 68% MoS. Diversifies into underweight Energy/Industrials. High-yield compounder with ",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "Container spot rates fall below $1,500/TEU for 2 consecutive weeks or dry cargo orderbook growth exceeds 15%",
+      "lynch_category": "SlowGrower+Cyclical+Turnaround+AssetPlay",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "BKNG",
+      "company": "Booking Holdings",
+      "shares": 31,
+      "entry_price": 160.56,
+      "entry_date": "2026-05-12",
+      "rationale": "Premium Fast Grower: ROIC 68%, FCF 7.0%, PEG 0.50 with 13% growth\u2014monopoly-grade travel platform. 40% MoS despite strong performance. Adds to Technology but below sector cap (3\u21924). Digital transformat",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "Travel booking deceleration confirmed for 2+ consecutive quarters OR competitive margin compression below 40%",
+      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
+      "sector": "Consumer Cyclical"
     }
   ],
   "transactions": [
@@ -1576,6 +1612,42 @@
       "return_pct": 0.0,
       "transaction_cost": 6.0,
       "rationale": "Quality Compounder in underweight Communication Services/FinTech. ROIC 29%, FCF 10.1%, PEG 0.91, +47% RG, 84% MoS. Fills 1 open slot; diversifies geographic exposure (Latin American fintech). Better a"
+    },
+    {
+      "date": "2026-05-12",
+      "action": "BUY",
+      "ticker": "PGY",
+      "company": "Pagaya Technologies",
+      "shares": 369,
+      "price": 13.53,
+      "value": 4992.57,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "Exceptional 10-Bagger candidate: ROIC 59%, FCF 18.6%, PEG 0.53 with 26% growth. AI-driven credit platform in underweight Financial Services (1/10). Diversification boost; capital-light model scales. Q"
+    },
+    {
+      "date": "2026-05-12",
+      "action": "BUY",
+      "ticker": "GSL",
+      "company": "Global Ship Lease",
+      "shares": 119,
+      "price": 41.79,
+      "value": 4973.01,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "IV Discount + Slow Grower: ROIC 15%, FCF yield 23.6% (exceptional), PEG 0.21. Container shipping recovery visible; 68% MoS. Diversifies into underweight Energy/Industrials. High-yield compounder with "
+    },
+    {
+      "date": "2026-05-12",
+      "action": "BUY",
+      "ticker": "BKNG",
+      "company": "Booking Holdings",
+      "shares": 31,
+      "price": 160.56,
+      "value": 4977.36,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "Premium Fast Grower: ROIC 68%, FCF 7.0%, PEG 0.50 with 13% growth\u2014monopoly-grade travel platform. 40% MoS despite strong performance. Adds to Technology but below sector cap (3\u21924). Digital transformat"
     }
   ],
   "last_updated": "2026-05-12"
