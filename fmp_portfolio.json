@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 24999.291299999993,
+  "cash": 25007.18229999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -64,64 +64,64 @@
       "sector": "Energy"
     },
     {
-      "ticker": "EXEL",
-      "company": "Exelixis, Inc.",
-      "shares": 100,
-      "entry_price": 49.71,
-      "entry_date": "2026-05-12",
-      "rationale": "Quality Compounder in underweight Healthcare (currently 1/10 positions). ROIC 35%, FCF 7.6%, PEG 1.75, +7% RG, MoS 79%. Oncology pipeline with proven efficacy; margin expansion tailwind. Fills Healthc",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 147,
+      "entry_price": 34.01,
+      "entry_date": "2026-05-13",
+      "rationale": "ROIC 21%, FCF 8.2%, PEG 0.40 (exceptional), growth +17%. Stalwart category (underweight). Fills rebalancing need after selling 3 FastGrowers. Software/BPM is durable; low valuation multiple is safety ",
       "conviction": "HIGH",
-      "sell_trigger": "Clinical trial failure on lead pipeline asset; PEG rises above 2.5",
+      "sell_trigger": "Revenue growth turns negative for 2 consecutive quarters or PEG expands above 1.2 without growth acceleration",
+      "lynch_category": "Stalwart+FastGrower",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "PAYC",
+      "company": "Paycom Software, Inc.",
+      "shares": 36,
+      "entry_price": 137.6,
+      "entry_date": "2026-05-13",
+      "rationale": "ROIC 21%, FCF 5.9%, PEG 0.76, growth +9%. Stalwart category. SaaS payroll moat is durable; MoS 51% is solid. ROIC 21% is respectable. Fills second Stalwart slot needed post-rebalancing. Technology sec",
+      "conviction": "HIGH",
+      "sell_trigger": "Payroll outsourcing growth turns cyclical downward or customer churn accelerates above 5% annually",
       "lynch_category": "Stalwart+Turnaround",
-      "sector": "Healthcare"
-    },
-    {
-      "ticker": "DLO",
-      "company": "DLocal Limited",
-      "shares": 377,
-      "entry_price": 13.26,
-      "entry_date": "2026-05-12",
-      "rationale": "Quality Compounder in underweight Communication Services/FinTech. ROIC 29%, FCF 10.1%, PEG 0.91, +47% RG, 84% MoS. Fills 1 open slot; diversifies geographic exposure (Latin American fintech). Better a",
-      "conviction": "HIGH",
-      "sell_trigger": "Revenue growth decelerates below 25% YoY for 2 consecutive quarters OR ROIC falls below 20%",
-      "lynch_category": "FastGrower+Turnaround",
       "sector": "Technology"
     },
     {
-      "ticker": "PGY",
-      "company": "Pagaya Technologies",
-      "shares": 369,
-      "entry_price": 13.53,
-      "entry_date": "2026-05-12",
-      "rationale": "Exceptional 10-Bagger candidate: ROIC 59%, FCF 18.6%, PEG 0.53 with 26% growth. AI-driven credit platform in underweight Financial Services (1/10). Diversification boost; capital-light model scales. Q",
-      "conviction": "HIGH",
-      "sell_trigger": "Credit loss ratio deteriorates >200bps or management signals AI model degradation",
-      "lynch_category": "FastGrower",
-      "sector": "Technology"
-    },
-    {
-      "ticker": "GSL",
-      "company": "Global Ship Lease",
-      "shares": 119,
-      "entry_price": 41.79,
-      "entry_date": "2026-05-12",
-      "rationale": "IV Discount + Slow Grower: ROIC 15%, FCF yield 23.6% (exceptional), PEG 0.21. Container shipping recovery visible; 68% MoS. Diversifies into underweight Energy/Industrials. High-yield compounder with ",
+      "ticker": "RNR",
+      "company": "RenaissanceRe Holdings Ltd.",
+      "shares": 16,
+      "entry_price": 296.34,
+      "entry_date": "2026-05-13",
+      "rationale": "ROIC 10%, FCF 33.0% (extraordinary), PEG 0.48, growth +9%, MoS 81%. IV Discount + Slow Grower category (currently underweight). Replaces GSL as superior yield play. Reinsurance FCF is structural; cata",
       "conviction": "MEDIUM-HIGH",
-      "sell_trigger": "Container spot rates fall below $1,500/TEU for 2 consecutive weeks or dry cargo orderbook growth exceeds 15%",
-      "lynch_category": "SlowGrower+Cyclical+Turnaround+AssetPlay",
+      "sell_trigger": "Combined underwriting and investing loss ratio exceeds 105% or catastrophe losses force capital raise",
+      "lynch_category": "Stalwart+AssetPlay",
+      "sector": "Financial Services"
+    },
+    {
+      "ticker": "ALL",
+      "company": "The Allstate Corporation",
+      "shares": 23,
+      "entry_price": 215.47,
+      "entry_date": "2026-05-13",
+      "rationale": "ROIC 31%, FCF 21.0%, PEG 0.79, growth +5%, MoS 41%. IV Discount + Stalwart. Superior to HIG on FCF yield (21% vs 16.1%); diversifies financial services. ROIC 31% is top-tier. Fills Stalwart/IV Discoun",
+      "conviction": "MEDIUM-HIGH",
+      "sell_trigger": "Combined ratio exceeds 100% for 3 consecutive quarters or investment losses accelerate",
+      "lynch_category": "Turnaround",
+      "sector": "Financial Services"
+    },
+    {
+      "ticker": "MMS",
+      "company": "Maximus, Inc.",
+      "shares": 81,
+      "entry_price": 61.18,
+      "entry_date": "2026-05-13",
+      "rationale": "ROIC 12%, FCF 10.6%, PEG 0.29 (exceptional), growth +2%, MoS 68%. IV Discount + Slow Grower (Industrials/Government Services). Fills Industrials underweight. Stable government services contracts provi",
+      "conviction": "MEDIUM",
+      "sell_trigger": "Government contract renewal rates decline materially or FCF margin compresses below 8%",
+      "lynch_category": "",
       "sector": "Industrials"
-    },
-    {
-      "ticker": "BKNG",
-      "company": "Booking Holdings",
-      "shares": 31,
-      "entry_price": 160.56,
-      "entry_date": "2026-05-12",
-      "rationale": "Premium Fast Grower: ROIC 68%, FCF 7.0%, PEG 0.50 with 13% growth\u2014monopoly-grade travel platform. 40% MoS despite strong performance. Adds to Technology but below sector cap (3\u21924). Digital transformat",
-      "conviction": "MEDIUM-HIGH",
-      "sell_trigger": "Travel booking deceleration confirmed for 2+ consecutive quarters OR competitive margin compression below 40%",
-      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
-      "sector": "Consumer Cyclical"
     }
   ],
   "transactions": [
@@ -1648,7 +1648,127 @@
       "return_pct": 0.0,
       "transaction_cost": 5.98,
       "rationale": "Premium Fast Grower: ROIC 68%, FCF 7.0%, PEG 0.50 with 13% growth\u2014monopoly-grade travel platform. 40% MoS despite strong performance. Adds to Technology but below sector cap (3\u21924). Digital transformat"
+    },
+    {
+      "date": "2026-05-13",
+      "action": "SELL",
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 100,
+      "price": 49.46,
+      "value": 4940.05,
+      "return_pct": -0.5,
+      "transaction_cost": 5.95,
+      "rationale": "THESIS BROKEN ON PORTFOLIO CONSTRAINT + VALUATION: EXEL has ROIC 35% but PEG 1.75 is materially higher than portfolio average (0.65). More critically, portfolio is at 8 Turnarounds (cap 3)\u2014this is one of them. Must exit to rebalance. Held only 1d; no hold bias violation. Replace with higher-conviction candidate in underweight sector."
+    },
+    {
+      "date": "2026-05-13",
+      "action": "SELL",
+      "ticker": "DLO",
+      "company": "DLocal Limited",
+      "shares": 377,
+      "price": 12.69,
+      "value": 4778.35,
+      "return_pct": -4.3,
+      "transaction_cost": 5.78,
+      "rationale": "THESIS BROKEN ON PORTFOLIO CONSTRAINT: DLO is excellent (ROIC 29%, PEG 0.91, growth +47%) but portfolio has 7 FastGrowers (cap 4). DLO is categorized as FastGrower + IV Discount. Held only 1d, so no hold bias. Must exit to create space. This is a quality cut, not a thesis break\u2014swap into a Stalwart or Slow Grower."
+    },
+    {
+      "date": "2026-05-13",
+      "action": "SELL",
+      "ticker": "PGY",
+      "company": "Pagaya Technologies",
+      "shares": 369,
+      "price": 13.53,
+      "value": 4986.58,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "THESIS BROKEN ON PORTFOLIO CONSTRAINT: PGY is exceptional (ROIC 59%, FCF 18.6%, PEG 0.53, growth +26%) but portfolio has 7 FastGrowers (cap 4). PGY is FastGrower + 10-Bagger. Held only 1d. Must exit to comply. Quality is not the issue; allocation discipline is. Sell and redeploy into rebalancing."
+    },
+    {
+      "date": "2026-05-13",
+      "action": "SELL",
+      "ticker": "GSL",
+      "company": "Global Ship Lease",
+      "shares": 119,
+      "price": 41.79,
+      "value": 4967.04,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "THESIS BROKEN ON PORTFOLIO CONSTRAINT: GSL (ROIC 15%, FCF 23.6%, PEG 0.21) is a quality Slow Grower with exceptional FCF yield, but portfolio has 3 Cyclicals (cap 2)\u2014GSL is Cyclical. Held only 1d. Must exit to rebalance. This is allocation-driven, not thesis-driven. Excellent candidate to trim for compliance."
+    },
+    {
+      "date": "2026-05-13",
+      "action": "SELL",
+      "ticker": "BKNG",
+      "company": "Booking Holdings",
+      "shares": 31,
+      "price": 160.56,
+      "value": 4971.38,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "THESIS BROKEN ON PORTFOLIO CONSTRAINT: BKNG is premium (ROIC 68%, PEG 0.50, growth +13%) but portfolio has 7 FastGrowers (cap 4). BKNG is FastGrower category. Held only 1d. Must exit for rebalancing. This is a quality sacrifice but mandatory for compliance. Sell to create capacity."
+    },
+    {
+      "date": "2026-05-13",
+      "action": "BUY",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 147,
+      "price": 34.01,
+      "value": 4999.47,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "ROIC 21%, FCF 8.2%, PEG 0.40 (exceptional), growth +17%. Stalwart category (underweight). Fills rebalancing need after selling 3 FastGrowers. Software/BPM is durable; low valuation multiple is safety "
+    },
+    {
+      "date": "2026-05-13",
+      "action": "BUY",
+      "ticker": "PAYC",
+      "company": "Paycom Software, Inc.",
+      "shares": 36,
+      "price": 137.6,
+      "value": 4953.6,
+      "return_pct": 0.0,
+      "transaction_cost": 5.95,
+      "rationale": "ROIC 21%, FCF 5.9%, PEG 0.76, growth +9%. Stalwart category. SaaS payroll moat is durable; MoS 51% is solid. ROIC 21% is respectable. Fills second Stalwart slot needed post-rebalancing. Technology sec"
+    },
+    {
+      "date": "2026-05-13",
+      "action": "BUY",
+      "ticker": "RNR",
+      "company": "RenaissanceRe Holdings Ltd.",
+      "shares": 16,
+      "price": 296.34,
+      "value": 4741.44,
+      "return_pct": 0.0,
+      "transaction_cost": 5.74,
+      "rationale": "ROIC 10%, FCF 33.0% (extraordinary), PEG 0.48, growth +9%, MoS 81%. IV Discount + Slow Grower category (currently underweight). Replaces GSL as superior yield play. Reinsurance FCF is structural; cata"
+    },
+    {
+      "date": "2026-05-13",
+      "action": "BUY",
+      "ticker": "ALL",
+      "company": "The Allstate Corporation",
+      "shares": 23,
+      "price": 215.47,
+      "value": 4955.81,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "ROIC 31%, FCF 21.0%, PEG 0.79, growth +5%, MoS 41%. IV Discount + Stalwart. Superior to HIG on FCF yield (21% vs 16.1%); diversifies financial services. ROIC 31% is top-tier. Fills Stalwart/IV Discoun"
+    },
+    {
+      "date": "2026-05-13",
+      "action": "BUY",
+      "ticker": "MMS",
+      "company": "Maximus, Inc.",
+      "shares": 81,
+      "price": 61.18,
+      "value": 4955.58,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "ROIC 12%, FCF 10.6%, PEG 0.29 (exceptional), growth +2%, MoS 68%. IV Discount + Slow Grower (Industrials/Government Services). Fills Industrials underweight. Stable government services contracts provi"
     }
   ],
-  "last_updated": "2026-05-12"
+  "last_updated": "2026-05-13"
 }
