@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 25007.18229999999,
+  "cash": 24377.70519999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -64,42 +64,6 @@
       "sector": "Energy"
     },
     {
-      "ticker": "PEGA",
-      "company": "Pegasystems Inc.",
-      "shares": 147,
-      "entry_price": 34.01,
-      "entry_date": "2026-05-13",
-      "rationale": "ROIC 21%, FCF 8.2%, PEG 0.40 (exceptional), growth +17%. Stalwart category (underweight). Fills rebalancing need after selling 3 FastGrowers. Software/BPM is durable; low valuation multiple is safety ",
-      "conviction": "HIGH",
-      "sell_trigger": "Revenue growth turns negative for 2 consecutive quarters or PEG expands above 1.2 without growth acceleration",
-      "lynch_category": "Stalwart+FastGrower",
-      "sector": "Technology"
-    },
-    {
-      "ticker": "PAYC",
-      "company": "Paycom Software, Inc.",
-      "shares": 36,
-      "entry_price": 137.6,
-      "entry_date": "2026-05-13",
-      "rationale": "ROIC 21%, FCF 5.9%, PEG 0.76, growth +9%. Stalwart category. SaaS payroll moat is durable; MoS 51% is solid. ROIC 21% is respectable. Fills second Stalwart slot needed post-rebalancing. Technology sec",
-      "conviction": "HIGH",
-      "sell_trigger": "Payroll outsourcing growth turns cyclical downward or customer churn accelerates above 5% annually",
-      "lynch_category": "Stalwart+Turnaround",
-      "sector": "Technology"
-    },
-    {
-      "ticker": "RNR",
-      "company": "RenaissanceRe Holdings Ltd.",
-      "shares": 16,
-      "entry_price": 296.34,
-      "entry_date": "2026-05-13",
-      "rationale": "ROIC 10%, FCF 33.0% (extraordinary), PEG 0.48, growth +9%, MoS 81%. IV Discount + Slow Grower category (currently underweight). Replaces GSL as superior yield play. Reinsurance FCF is structural; cata",
-      "conviction": "MEDIUM-HIGH",
-      "sell_trigger": "Combined underwriting and investing loss ratio exceeds 105% or catastrophe losses force capital raise",
-      "lynch_category": "Stalwart+AssetPlay",
-      "sector": "Financial Services"
-    },
-    {
       "ticker": "ALL",
       "company": "The Allstate Corporation",
       "shares": 23,
@@ -122,6 +86,42 @@
       "sell_trigger": "Government contract renewal rates decline materially or FCF margin compresses below 8%",
       "lynch_category": "",
       "sector": "Industrials"
+    },
+    {
+      "ticker": "GSL",
+      "company": "Global Ship Lease, Inc.",
+      "shares": 121,
+      "entry_price": 41.25,
+      "entry_date": "2026-05-14",
+      "rationale": "Post-PAYC/PEGA/RNR sales, slot opens in Energy/Cyclical. GSL offers 15% ROIC, 23.6% FCF yield, PEG 0.21 (extraordinary), 9% growth, 69% MoS. Shipping cycle is stabilizing; container rates are supporte",
+      "conviction": "HIGH",
+      "sell_trigger": "Container spot rates fall below $500/FEU sustained for 2+ months; FCF yield compresses below 15%",
+      "lynch_category": "SlowGrower+Cyclical+Turnaround+AssetPlay",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "DUOL",
+      "company": "Duolingo, Inc.",
+      "shares": 47,
+      "entry_price": 104.98,
+      "entry_date": "2026-05-14",
+      "rationale": "DUOL replaces one of the three Turnarounds (reducing from 6 to 5, still 1 over cap). ROIC 11%, FCF 8.4%, PEG 1.50, 39% growth, 73% MoS. Turnaround/Compounder hybrid with clear path to profitability; A",
+      "conviction": "MEDIUM",
+      "sell_trigger": "User growth stalls below 20% YoY; LLM-driven tutoring commoditizes and reduces differentiation",
+      "lynch_category": "FastGrower+Turnaround",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "G",
+      "company": "Genpact Limited",
+      "shares": 169,
+      "entry_price": 29.44,
+      "entry_date": "2026-05-14",
+      "rationale": "After PEGA/PAYC sales, an Industrials/BPO slot opens. G: ROIC 13%, FCF 12.1%, PEG 0.48, 7% growth, 76% MoS. IV Discount + Stalwart. Outsourcing moat; AI integration is creating new service layers (not",
+      "conviction": "MEDIUM",
+      "sell_trigger": "Client concentration rises above 15% of revenue; gross margins compress below 25%",
+      "lynch_category": "Stalwart+SlowGrower+Turnaround",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -1768,7 +1768,79 @@
       "return_pct": 0.0,
       "transaction_cost": 5.96,
       "rationale": "ROIC 12%, FCF 10.6%, PEG 0.29 (exceptional), growth +2%, MoS 68%. IV Discount + Slow Grower (Industrials/Government Services). Fills Industrials underweight. Stable government services contracts provi"
+    },
+    {
+      "date": "2026-05-14",
+      "action": "SELL",
+      "ticker": "PEGA",
+      "company": "Pegasystems Inc.",
+      "shares": 147,
+      "price": 32.72,
+      "value": 4804.03,
+      "return_pct": -3.79,
+      "transaction_cost": 5.81,
+      "rationale": "THESIS BROKEN ON CATEGORY CONSTRAINT + LACK OF DIFFERENTIATION: Held only 1 day. Portfolio is already at 7 Stalwarts (cap 5), 5 FastGrowers (cap 4), and 6 Turnarounds (cap 3). PEGA is quality (ROIC 21%, FCF 8.2%, PEG 0.38) but is redundant\u2014overlaps functionally with ADBE, PAYC, and APPF on software/SaaS moat. Selling to free category capacity for higher-conviction swaps and rebalance. No thesis deterioration; pure portfolio architecture issue."
+    },
+    {
+      "date": "2026-05-14",
+      "action": "SELL",
+      "ticker": "PAYC",
+      "company": "Paycom Software, Inc.",
+      "shares": 36,
+      "price": 134.9,
+      "value": 4850.54,
+      "return_pct": -1.96,
+      "transaction_cost": 5.86,
+      "rationale": "THESIS BROKEN ON CATEGORY CONSTRAINT: Held only 1 day. Portfolio has 7 Stalwarts (cap 5). PAYC is excellent (ROIC 21%, FCF 5.9%, PEG 0.75) but payroll SaaS moat is well-established and offers no catalyst upside vs. ADBE/PEGA. Selling to reduce Stalwart count and Technology sector exposure (currently at 4/4 cap). Strategy: redeploy into underweight sectors (Consumer Cyclical, Utilities, Basic Materials) where median PEG is higher and valuations more attractive."
+    },
+    {
+      "date": "2026-05-14",
+      "action": "SELL",
+      "ticker": "RNR",
+      "company": "RenaissanceRe Holdings Ltd.",
+      "shares": 16,
+      "price": 290.01,
+      "value": 4634.52,
+      "return_pct": -2.14,
+      "transaction_cost": 5.64,
+      "rationale": "THESIS BROKEN ON CATEGORY CONSTRAINT: Held only 1 day. This is the weakest link: 10% ROIC is below 12% threshold (passes on FCF yield 33%, but ROIC is marginal). Portfolio has 3 Financial Services already (at 4/4 sector cap once we account for ALL/HIG). RNR's reinsurance thesis is sound (FCF 33%, PEG 0.48) but it's redundant given ALL (31% ROIC, 21% FCF) offers superior ROIC with similar stability. Sell to create category flexibility and improve portfolio quality floor."
+    },
+    {
+      "date": "2026-05-14",
+      "action": "BUY",
+      "ticker": "GSL",
+      "company": "Global Ship Lease, Inc.",
+      "shares": 121,
+      "price": 41.25,
+      "value": 4991.25,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "Post-PAYC/PEGA/RNR sales, slot opens in Energy/Cyclical. GSL offers 15% ROIC, 23.6% FCF yield, PEG 0.21 (extraordinary), 9% growth, 69% MoS. Shipping cycle is stabilizing; container rates are supporte"
+    },
+    {
+      "date": "2026-05-14",
+      "action": "BUY",
+      "ticker": "DUOL",
+      "company": "Duolingo, Inc.",
+      "shares": 47,
+      "price": 104.98,
+      "value": 4934.06,
+      "return_pct": 0.0,
+      "transaction_cost": 5.93,
+      "rationale": "DUOL replaces one of the three Turnarounds (reducing from 6 to 5, still 1 over cap). ROIC 11%, FCF 8.4%, PEG 1.50, 39% growth, 73% MoS. Turnaround/Compounder hybrid with clear path to profitability; A"
+    },
+    {
+      "date": "2026-05-14",
+      "action": "BUY",
+      "ticker": "G",
+      "company": "Genpact Limited",
+      "shares": 169,
+      "price": 29.44,
+      "value": 4975.36,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "After PEGA/PAYC sales, an Industrials/BPO slot opens. G: ROIC 13%, FCF 12.1%, PEG 0.48, 7% growth, 76% MoS. IV Discount + Stalwart. Outsourcing moat; AI integration is creating new service layers (not"
     }
   ],
-  "last_updated": "2026-05-13"
+  "last_updated": "2026-05-14"
 }
