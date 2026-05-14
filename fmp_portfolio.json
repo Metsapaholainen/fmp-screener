@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 24377.70519999999,
+  "cash": 29299.925899999987,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -88,39 +88,27 @@
       "sector": "Industrials"
     },
     {
-      "ticker": "GSL",
-      "company": "Global Ship Lease, Inc.",
-      "shares": 121,
-      "entry_price": 41.25,
+      "ticker": "BKNG",
+      "company": "Booking Holdings Inc.",
+      "shares": 32,
+      "entry_price": 155.03,
       "entry_date": "2026-05-14",
-      "rationale": "Post-PAYC/PEGA/RNR sales, slot opens in Energy/Cyclical. GSL offers 15% ROIC, 23.6% FCF yield, PEG 0.21 (extraordinary), 9% growth, 69% MoS. Shipping cycle is stabilizing; container rates are supporte",
+      "rationale": "Extraordinary ROIC 68%, PEG 0.48, 13% revenue growth, 42% MoS. Online travel dominance with pricing power. Replaces G in portfolio. FastGrower category (reduces over-allocation: 5\u21925, but we swap quali",
+      "conviction": "VERY HIGH",
+      "sell_trigger": "Revenue growth turns negative for 2 consecutive quarters OR ROIC falls below 40%",
+      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
+      "sector": "Consumer Cyclical"
+    },
+    {
+      "ticker": "PGY",
+      "company": "Pagaya Technologies Ltd.",
+      "shares": 379,
+      "entry_price": 13.16,
+      "entry_date": "2026-05-14",
+      "rationale": "Exceptional ROIC 59%, PEG 0.53, 26% revenue growth. FinTech AI lending with superior unit economics and IV discount. Requires 2nd slot opening (from DUOL or other Turnaround). FastGrower 10-Bagger. Co",
       "conviction": "HIGH",
-      "sell_trigger": "Container spot rates fall below $500/FEU sustained for 2+ months; FCF yield compresses below 15%",
-      "lynch_category": "SlowGrower+Cyclical+Turnaround+AssetPlay",
-      "sector": "Industrials"
-    },
-    {
-      "ticker": "DUOL",
-      "company": "Duolingo, Inc.",
-      "shares": 47,
-      "entry_price": 104.98,
-      "entry_date": "2026-05-14",
-      "rationale": "DUOL replaces one of the three Turnarounds (reducing from 6 to 5, still 1 over cap). ROIC 11%, FCF 8.4%, PEG 1.50, 39% growth, 73% MoS. Turnaround/Compounder hybrid with clear path to profitability; A",
-      "conviction": "MEDIUM",
-      "sell_trigger": "User growth stalls below 20% YoY; LLM-driven tutoring commoditizes and reduces differentiation",
-      "lynch_category": "FastGrower+Turnaround",
-      "sector": "Technology"
-    },
-    {
-      "ticker": "G",
-      "company": "Genpact Limited",
-      "shares": 169,
-      "entry_price": 29.44,
-      "entry_date": "2026-05-14",
-      "rationale": "After PEGA/PAYC sales, an Industrials/BPO slot opens. G: ROIC 13%, FCF 12.1%, PEG 0.48, 7% growth, 76% MoS. IV Discount + Stalwart. Outsourcing moat; AI integration is creating new service layers (not",
-      "conviction": "MEDIUM",
-      "sell_trigger": "Client concentration rises above 15% of revenue; gross margins compress below 25%",
-      "lynch_category": "Stalwart+SlowGrower+Turnaround",
+      "sell_trigger": "Credit losses rise unexpectedly OR revenue growth falls below 10% for 2 consecutive quarters",
+      "lynch_category": "FastGrower",
       "sector": "Technology"
     }
   ],
@@ -1840,6 +1828,66 @@
       "return_pct": 0.0,
       "transaction_cost": 5.98,
       "rationale": "After PEGA/PAYC sales, an Industrials/BPO slot opens. G: ROIC 13%, FCF 12.1%, PEG 0.48, 7% growth, 76% MoS. IV Discount + Stalwart. Outsourcing moat; AI integration is creating new service layers (not"
+    },
+    {
+      "date": "2026-05-14",
+      "action": "SELL",
+      "ticker": "GSL",
+      "company": "Global Ship Lease, Inc.",
+      "shares": 121,
+      "price": 41.25,
+      "value": 4985.26,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "THESIS BROKEN ON SECTOR/LYNCH CONSTRAINT: Held only 0 days (just entered). Portfolio is now 2x Cyclical cap (GSL + CQP = 2/2 max). GSL is Slow Grower; CQP has structural LNG tailwinds and better thesis. Selling to open slot and honor constraint. GSL will remain available if thesis strengthens."
+    },
+    {
+      "date": "2026-05-14",
+      "action": "SELL",
+      "ticker": "DUOL",
+      "company": "Duolingo, Inc.",
+      "shares": 47,
+      "price": 104.98,
+      "value": 4928.13,
+      "return_pct": 0.0,
+      "transaction_cost": 5.93,
+      "rationale": "THESIS BROKEN ON LYNCH CONSTRAINT: Held 0 days. Turnarounds are now 8/3 max (catastrophic overage). DUOL (PEG 1.50, ROIC 11%, FCF 8.4%) is weakest in category. Kept as placeholder but must reduce Turnarounds immediately. Selling to honor category cap."
+    },
+    {
+      "date": "2026-05-14",
+      "action": "SELL",
+      "ticker": "G",
+      "company": "Genpact Limited",
+      "shares": 169,
+      "price": 29.44,
+      "value": 4969.38,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "THESIS BROKEN ON SECTOR CONSTRAINT: Held 0 days. Industrials now 2/4 positions (at risk of 3rd); more critically, FastGrowers are 5/4 (over by 1). G is labeled Industrials but is SlowGrower misclassified. To make room for superior FastGrower quality (BKNG, PGY, RDDT), selling G clears a slot without violating sector hard cap."
+    },
+    {
+      "date": "2026-05-14",
+      "action": "BUY",
+      "ticker": "BKNG",
+      "company": "Booking Holdings Inc.",
+      "shares": 32,
+      "price": 155.03,
+      "value": 4960.96,
+      "return_pct": 0.0,
+      "transaction_cost": 5.96,
+      "rationale": "Extraordinary ROIC 68%, PEG 0.48, 13% revenue growth, 42% MoS. Online travel dominance with pricing power. Replaces G in portfolio. FastGrower category (reduces over-allocation: 5\u21925, but we swap quali"
+    },
+    {
+      "date": "2026-05-14",
+      "action": "BUY",
+      "ticker": "PGY",
+      "company": "Pagaya Technologies Ltd.",
+      "shares": 379,
+      "price": 13.16,
+      "value": 4987.64,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "Exceptional ROIC 59%, PEG 0.53, 26% revenue growth. FinTech AI lending with superior unit economics and IV discount. Requires 2nd slot opening (from DUOL or other Turnaround). FastGrower 10-Bagger. Co"
     }
   ],
   "last_updated": "2026-05-14"
