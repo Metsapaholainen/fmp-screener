@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 29299.925899999987,
+  "cash": 24305.89789999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -109,6 +109,18 @@
       "conviction": "HIGH",
       "sell_trigger": "Credit losses rise unexpectedly OR revenue growth falls below 10% for 2 consecutive quarters",
       "lynch_category": "FastGrower",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "DLO",
+      "company": "dLocal Limited",
+      "shares": 394,
+      "entry_price": 12.66,
+      "entry_date": "2026-05-15",
+      "rationale": "Fast Grower with 29% ROIC, PEG 0.91, FCF 10.1%, RG 47%, MoS 85%. Latam payment platform with exceptional unit economics and secular fintech tailwind. Fills 1 open slot without breaching sector/Lynch c",
+      "conviction": "HIGH",
+      "sell_trigger": "Revenue growth falls below 20% for 2 consecutive quarters OR competitive pressure forces market share loss >5% YoY",
+      "lynch_category": "FastGrower+Turnaround",
       "sector": "Technology"
     }
   ],
@@ -1888,7 +1900,19 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "Exceptional ROIC 59%, PEG 0.53, 26% revenue growth. FinTech AI lending with superior unit economics and IV discount. Requires 2nd slot opening (from DUOL or other Turnaround). FastGrower 10-Bagger. Co"
+    },
+    {
+      "date": "2026-05-15",
+      "action": "BUY",
+      "ticker": "DLO",
+      "company": "dLocal Limited",
+      "shares": 394,
+      "price": 12.66,
+      "value": 4988.04,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "Fast Grower with 29% ROIC, PEG 0.91, FCF 10.1%, RG 47%, MoS 85%. Latam payment platform with exceptional unit economics and secular fintech tailwind. Fills 1 open slot without breaching sector/Lynch c"
     }
   ],
-  "last_updated": "2026-05-14"
+  "last_updated": "2026-05-15"
 }
