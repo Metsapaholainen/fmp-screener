@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 39224.601299999995,
+  "cash": 24305.89789999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -86,6 +86,42 @@
       "sell_trigger": "Government contract renewal rates decline materially or FCF margin compresses below 8%",
       "lynch_category": "",
       "sector": "Industrials"
+    },
+    {
+      "ticker": "BKNG",
+      "company": "Booking Holdings Inc.",
+      "shares": 32,
+      "entry_price": 155.03,
+      "entry_date": "2026-05-14",
+      "rationale": "Extraordinary ROIC 68%, PEG 0.48, 13% revenue growth, 42% MoS. Online travel dominance with pricing power. Replaces G in portfolio. FastGrower category (reduces over-allocation: 5\u21925, but we swap quali",
+      "conviction": "VERY HIGH",
+      "sell_trigger": "Revenue growth turns negative for 2 consecutive quarters OR ROIC falls below 40%",
+      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
+      "sector": "Consumer Cyclical"
+    },
+    {
+      "ticker": "PGY",
+      "company": "Pagaya Technologies Ltd.",
+      "shares": 379,
+      "entry_price": 13.16,
+      "entry_date": "2026-05-14",
+      "rationale": "Exceptional ROIC 59%, PEG 0.53, 26% revenue growth. FinTech AI lending with superior unit economics and IV discount. Requires 2nd slot opening (from DUOL or other Turnaround). FastGrower 10-Bagger. Co",
+      "conviction": "HIGH",
+      "sell_trigger": "Credit losses rise unexpectedly OR revenue growth falls below 10% for 2 consecutive quarters",
+      "lynch_category": "FastGrower",
+      "sector": "Technology"
+    },
+    {
+      "ticker": "DLO",
+      "company": "dLocal Limited",
+      "shares": 394,
+      "entry_price": 12.66,
+      "entry_date": "2026-05-15",
+      "rationale": "Fast Grower with 29% ROIC, PEG 0.91, FCF 10.1%, RG 47%, MoS 85%. Latam payment platform with exceptional unit economics and secular fintech tailwind. Fills 1 open slot without breaching sector/Lynch c",
+      "conviction": "HIGH",
+      "sell_trigger": "Revenue growth falls below 20% for 2 consecutive quarters OR competitive pressure forces market share loss >5% YoY",
+      "lynch_category": "FastGrower+Turnaround",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -1876,43 +1912,7 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "Fast Grower with 29% ROIC, PEG 0.91, FCF 10.1%, RG 47%, MoS 85%. Latam payment platform with exceptional unit economics and secular fintech tailwind. Fills 1 open slot without breaching sector/Lynch c"
-    },
-    {
-      "date": "2026-05-18",
-      "action": "SELL",
-      "ticker": "BKNG",
-      "company": "Booking Holdings Inc.",
-      "shares": 32,
-      "price": 155.03,
-      "value": 4955.0,
-      "return_pct": 0.0,
-      "transaction_cost": 5.96,
-      "rationale": "THESIS BROKEN ON CATEGORY CONSTRAINT. BKNG is a FastGrower (7 held, max 4). Held only 4d\u2014insufficient hold period to justify on fundamentals alone. Must sell to restore Lynch compliance. ROIC/PEG excellent, but category cap non-negotiable. Sell to make room for rebalancing."
-    },
-    {
-      "date": "2026-05-18",
-      "action": "SELL",
-      "ticker": "PGY",
-      "company": "Pagaya Technologies Ltd.",
-      "shares": 379,
-      "price": 13.16,
-      "value": 4981.65,
-      "return_pct": 0.0,
-      "transaction_cost": 5.99,
-      "rationale": "THESIS BROKEN ON CATEGORY CONSTRAINT. PGY is a FastGrower (7 held, max 4). Held only 4d. Exceptional metrics (ROIC 59%, PEG 0.53), but portfolio is 3x over FastGrower cap and must deleverge. Sell to comply with Lynch discipline."
-    },
-    {
-      "date": "2026-05-18",
-      "action": "SELL",
-      "ticker": "DLO",
-      "company": "dLocal Limited",
-      "shares": 394,
-      "price": 12.66,
-      "value": 4982.05,
-      "return_pct": 0.0,
-      "transaction_cost": 5.99,
-      "rationale": "THESIS BROKEN ON CATEGORY CONSTRAINT. DLO is a FastGrower (7 held, max 4). Held only 3d\u2014newest position. While ROIC 29%, PEG 0.91, and RG 47% are strong, portfolio is dangerously over FastGrowers. Sell to immediately reduce from 7\u21925 toward cap of 4."
     }
   ],
-  "last_updated": "2026-05-18"
+  "last_updated": "2026-05-15"
 }

@@ -137,6 +137,7 @@ CLAUDE_CHAT_PROFILES = {
 
 CACHE_FILE = "fmp_screener_cache.json"
 CACHE_DAYS = 1
+LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".fmp_screener.lock")
 PICKS_LOG    = "fmp_picks_log.csv"
 AI_PICKS_LOG = "fmp_ai_picks_log.csv"
 SECTOR_OVERRIDES_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sector_overrides.json")
@@ -1881,6 +1882,10 @@ def load_cache() -> dict:
                     return _cache
                 else:
                     print(f"  🔄 FMP cache expired ({age:.0f}d > {CACHE_DAYS}d TTL)")
+                    # Preserve stale cache in memory so fetch_us_universe can fall back to it
+                    # if the API is rate-limited. Sub-caches (ratios, metrics) remain available.
+                    _cache = data
+                    return _cache
     except Exception as e:
         print(f"  ⚠️ Cache load error: {e}")
     _cache = {}
@@ -1984,6 +1989,14 @@ def fetch_us_universe() -> dict:
                 if done % 300 == 0:
                     print(f"    [{done}/{len(us_symbols)}] profiles loaded...")
                 time.sleep(0.15)
+
+    # Strategy 3: stale cache fallback — use expired universe when API is rate-limited
+    if len(universe) < 100:
+        stale = {k: v for k, v in _cache.get("universe", {}).items()
+                 if k not in ("_timestamp",)}
+        if len(stale) > 100:
+            print(f"  ⚠️ API rate-limited — using stale cached universe ({len(stale)} stocks, prices may be outdated)")
+            universe = stale
 
     _cache["universe"] = universe
     print(f"  ✅ US Universe: {len(universe)} stocks loaded")
@@ -15562,6 +15575,27 @@ def main():
 
     DEBUG = args.debug
     _run_start = time.time()
+
+    # ── Instance lock: prevent concurrent runs that exhaust FMP API quota ──
+    import atexit, ctypes
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE) as _lf:
+                _lpid = int(_lf.read().strip())
+            _h = ctypes.windll.kernel32.OpenProcess(0x0400, False, _lpid)
+            if _h:
+                ctypes.windll.kernel32.CloseHandle(_h)
+                print(f"\n  ❌ Another screener instance is already running (PID {_lpid}).")
+                print("     Exiting to prevent FMP API rate-limit exhaustion.\n")
+                sys.exit(0)
+        except Exception:
+            pass  # Stale lock — proceed
+    try:
+        with open(LOCK_FILE, "w") as _lf:
+            _lf.write(str(os.getpid()))
+        atexit.register(lambda: os.remove(LOCK_FILE) if os.path.exists(LOCK_FILE) else None)
+    except Exception:
+        pass
 
     print("=" * 65)
     print("  📈 FMP STOCK SCREENER — Professional Fundamentals Edition")
