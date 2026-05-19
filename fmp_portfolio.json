@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 24305.89789999999,
+  "cash": 28839.23899999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -84,7 +84,7 @@
       "rationale": "ROIC 12%, FCF 10.6%, PEG 0.29 (exceptional), growth +2%, MoS 68%. IV Discount + Slow Grower (Industrials/Government Services). Fills Industrials underweight. Stable government services contracts provi",
       "conviction": "MEDIUM",
       "sell_trigger": "Government contract renewal rates decline materially or FCF margin compresses below 8%",
-      "lynch_category": "",
+      "lynch_category": "SlowGrower+Turnaround",
       "sector": "Industrials"
     },
     {
@@ -109,18 +109,6 @@
       "conviction": "HIGH",
       "sell_trigger": "Credit losses rise unexpectedly OR revenue growth falls below 10% for 2 consecutive quarters",
       "lynch_category": "FastGrower",
-      "sector": "Technology"
-    },
-    {
-      "ticker": "DLO",
-      "company": "dLocal Limited",
-      "shares": 394,
-      "entry_price": 12.66,
-      "entry_date": "2026-05-15",
-      "rationale": "Fast Grower with 29% ROIC, PEG 0.91, FCF 10.1%, RG 47%, MoS 85%. Latam payment platform with exceptional unit economics and secular fintech tailwind. Fills 1 open slot without breaching sector/Lynch c",
-      "conviction": "HIGH",
-      "sell_trigger": "Revenue growth falls below 20% for 2 consecutive quarters OR competitive pressure forces market share loss >5% YoY",
-      "lynch_category": "FastGrower+Turnaround",
       "sector": "Technology"
     }
   ],
@@ -1912,7 +1900,19 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "Fast Grower with 29% ROIC, PEG 0.91, FCF 10.1%, RG 47%, MoS 85%. Latam payment platform with exceptional unit economics and secular fintech tailwind. Fills 1 open slot without breaching sector/Lynch c"
+    },
+    {
+      "date": "2026-05-19",
+      "action": "SELL",
+      "ticker": "DLO",
+      "company": "dLocal Limited",
+      "shares": 394,
+      "price": 11.52,
+      "value": 4533.34,
+      "return_pct": -9.0,
+      "transaction_cost": 5.54,
+      "rationale": "THESIS BROKEN ON POSITION SIZING + CATEGORY OVERLOAD. DLO is a fast-grower (7/4 cap already violated), held only 4d with -9% drawdown. This position exists solely because category constraints were ignored at entry. Portfolio has 8 Turnarounds (cap 3) and 7 FastGrowers (cap 4) \u2014 the entire structure is broken. DLO must be culled to begin rebalancing. Sell at market to free capital."
     }
   ],
-  "last_updated": "2026-05-15"
+  "last_updated": "2026-05-19"
 }

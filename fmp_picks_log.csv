@@ -1986,3 +1986,103 @@ date,strategy,ticker,entry_price,company
 2026-05-15,Off-the-Radar,NSP,28.93,"Insperity, Inc."
 2026-05-15,Off-the-Radar,AGCC,18.7,Agencia Comercial Spirits Ltd
 2026-05-15,Off-the-Radar,API,3.85,"Agora, Inc."
+2026-05-18,IV Discount,HRB,37.25,"H&R Block, Inc."
+2026-05-18,IV Discount,TRV,299.76,"The Travelers Companies, Inc."
+2026-05-18,IV Discount,MMS,59.36,"Maximus, Inc."
+2026-05-18,IV Discount,TIMB,21.92,TIM S.A.
+2026-05-18,IV Discount,IT,146.23,"Gartner, Inc."
+2026-05-18,Quality Compounders,PAYC,136.24,"Paycom Software, Inc."
+2026-05-18,Quality Compounders,V,325.75,Visa Inc.
+2026-05-18,Quality Compounders,ANET,141.97,"Arista Networks, Inc."
+2026-05-18,Quality Compounders,ZTS,74.22,Zoetis Inc.
+2026-05-18,Quality Compounders,DECK,93.56,Deckers Outdoor Corporation
+2026-05-18,Stalwarts,DECK,93.56,Deckers Outdoor Corporation
+2026-05-18,Stalwarts,PAYC,136.24,"Paycom Software, Inc."
+2026-05-18,Stalwarts,GIB,63.11,CGI Inc.
+2026-05-18,Stalwarts,THG,194.64,"The Hanover Insurance Group, I"
+2026-05-18,Stalwarts,CON,25.87,Concentra Group Holdings Paren
+2026-05-18,Fast Growers,XZO,13.56,"Exzeo Group, Inc."
+2026-05-18,Fast Growers,BKTI,83.44,BK Technologies Corporation
+2026-05-18,Fast Growers,SII,129.04,Sprott Inc.
+2026-05-18,Fast Growers,FIX,1993.41,"Comfort Systems USA, Inc."
+2026-05-18,Fast Growers,TKO,190.07,"TKO Group Holdings, Inc."
+2026-05-18,Turnarounds,TKO,190.07,"TKO Group Holdings, Inc."
+2026-05-18,Turnarounds,AMTM,22.98,"Amentum Holdings, Inc."
+2026-05-18,Turnarounds,CBZ,28.92,"CBIZ, Inc."
+2026-05-18,Turnarounds,INSP,40.05,"Inspire Medical Systems, Inc."
+2026-05-18,Turnarounds,CURB,27.6,Curbline Properties Corp.
+2026-05-18,Slow Growers,ABEV,3.07,Ambev S.A.
+2026-05-18,Slow Growers,BSM,14.01,"Black Stone Minerals, L.P."
+2026-05-18,Slow Growers,VOC,3.29,VOC Energy Trust
+2026-05-18,Slow Growers,APAM,36.43,Artisan Partners Asset Managem
+2026-05-18,Slow Growers,WU,8.34,The Western Union Company
+2026-05-18,Cyclicals,JBI,4.81,"Janus International Group, Inc"
+2026-05-18,Cyclicals,OIS,9.01,"Oil States International, Inc."
+2026-05-18,Cyclicals,WGO,28.82,"Winnebago Industries, Inc."
+2026-05-18,Cyclicals,RHI,25.12,Robert Half International Inc.
+2026-05-18,Cyclicals,SXC,7.62,"SunCoke Energy, Inc."
+2026-05-18,Asset Plays,DQ,18.19,Daqo New Energy Corp.
+2026-05-18,Asset Plays,INN,5.24,"Summit Hotel Properties, Inc."
+2026-05-18,Asset Plays,CLW,13.25,Clearwater Paper Corporation
+2026-05-18,Asset Plays,FCRS,10.23,FutureCrest Acquisition Corp.
+2026-05-18,Asset Plays,EXOD,6.43,"Exodus Movement, Inc."
+2026-05-18,Lynch 10-Baggers,MNTN,7.78,MNTN Inc.
+2026-05-18,Lynch 10-Baggers,INSP,40.05,"Inspire Medical Systems, Inc."
+2026-05-18,Lynch 10-Baggers,BKTI,83.44,BK Technologies Corporation
+2026-05-18,Lynch 10-Baggers,INFU,8.77,"InfuSystem Holdings, Inc."
+2026-05-18,Lynch 10-Baggers,YALA,6.56,Yalla Group Limited
+2026-05-18,Off-the-Radar,BH,267.44,Biglari Holdings Inc.
+2026-05-18,Off-the-Radar,USNA,17.98,"USANA Health Sciences, Inc."
+2026-05-18,Off-the-Radar,CMCL,23.04,Caledonia Mining Corporation P
+2026-05-18,Off-the-Radar,TXO,13.07,"TXO Partners, L.P."
+2026-05-18,Off-the-Radar,LUXE,7.59,LuxExperience B.V.
+2026-05-19,IV Discount,HRB,38.71,"H&R Block, Inc."
+2026-05-19,IV Discount,TRV,305.99,"The Travelers Companies, Inc."
+2026-05-19,IV Discount,MMS,59.65,"Maximus, Inc."
+2026-05-19,IV Discount,TIMB,22.17,TIM S.A.
+2026-05-19,IV Discount,IT,155.43,"Gartner, Inc."
+2026-05-19,Quality Compounders,PAYC,139.18,"Paycom Software, Inc."
+2026-05-19,Quality Compounders,V,332.64,Visa Inc.
+2026-05-19,Quality Compounders,ANET,141.71,"Arista Networks, Inc."
+2026-05-19,Quality Compounders,ZTS,77.72,Zoetis Inc.
+2026-05-19,Quality Compounders,DECK,94.61,Deckers Outdoor Corporation
+2026-05-19,Stalwarts,DECK,94.61,Deckers Outdoor Corporation
+2026-05-19,Stalwarts,PAYC,139.18,"Paycom Software, Inc."
+2026-05-19,Stalwarts,GIB,65.08,CGI Inc.
+2026-05-19,Stalwarts,THG,197.54,"The Hanover Insurance Group, I"
+2026-05-19,Stalwarts,CON,26.08,Concentra Group Holdings Paren
+2026-05-19,Fast Growers,XZO,13.71,"Exzeo Group, Inc."
+2026-05-19,Fast Growers,BKTI,84,BK Technologies Corporation
+2026-05-19,Fast Growers,SII,129.23,Sprott Inc.
+2026-05-19,Fast Growers,FIX,1853.84,"Comfort Systems USA, Inc."
+2026-05-19,Fast Growers,TKO,194.07,"TKO Group Holdings, Inc."
+2026-05-19,Turnarounds,TKO,194.07,"TKO Group Holdings, Inc."
+2026-05-19,Turnarounds,AMTM,23.29,"Amentum Holdings, Inc."
+2026-05-19,Turnarounds,CBZ,30.87,"CBIZ, Inc."
+2026-05-19,Turnarounds,INSP,41.83,"Inspire Medical Systems, Inc."
+2026-05-19,Turnarounds,CURB,27.73,Curbline Properties Corp.
+2026-05-19,Slow Growers,ABEV,3.14,Ambev S.A.
+2026-05-19,Slow Growers,NBXG,15.2,Neuberger Next Generation Conn
+2026-05-19,Slow Growers,BSM,14.06,"Black Stone Minerals, L.P."
+2026-05-19,Slow Growers,VOC,3.27,VOC Energy Trust
+2026-05-19,Slow Growers,APAM,36.68,Artisan Partners Asset Managem
+2026-05-19,Cyclicals,JBI,4.88,"Janus International Group, Inc"
+2026-05-19,Cyclicals,OIS,9.18,"Oil States International, Inc."
+2026-05-19,Cyclicals,WGO,29.04,"Winnebago Industries, Inc."
+2026-05-19,Cyclicals,RHI,26.18,Robert Half International Inc.
+2026-05-19,Cyclicals,SXC,7.75,"SunCoke Energy, Inc."
+2026-05-19,Asset Plays,DQ,17.45,Daqo New Energy Corp.
+2026-05-19,Asset Plays,CLW,13.62,Clearwater Paper Corporation
+2026-05-19,Asset Plays,FCRS,10.22,FutureCrest Acquisition Corp.
+2026-05-19,Asset Plays,ARL,13.9,"American Realty Investors, Inc"
+2026-05-19,Asset Plays,LUXE,7.79,LuxExperience B.V.
+2026-05-19,Lynch 10-Baggers,MNTN,8.19,MNTN Inc.
+2026-05-19,Lynch 10-Baggers,DV,9.27,"DoubleVerify Holdings, Inc."
+2026-05-19,Lynch 10-Baggers,INSP,41.83,"Inspire Medical Systems, Inc."
+2026-05-19,Lynch 10-Baggers,ELMD,38.24,"Electromed, Inc."
+2026-05-19,Lynch 10-Baggers,TPB,89.14,"Turning Point Brands, Inc."
+2026-05-19,Off-the-Radar,BH,273.7,Biglari Holdings Inc.
+2026-05-19,Off-the-Radar,ALKT,16.99,"Alkami Technology, Inc."
+2026-05-19,Off-the-Radar,USNA,18.04,"USANA Health Sciences, Inc."
+2026-05-19,Off-the-Radar,CMCL,23.69,Caledonia Mining Corporation P
+2026-05-19,Off-the-Radar,TTGT,4.62,"TechTarget, Inc."
