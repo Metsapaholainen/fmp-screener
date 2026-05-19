@@ -6852,7 +6852,7 @@ def log_claude_chat_picks(chat_results: dict, stocks: dict):
                 "strategy": result.get("label", key),
                 "conviction": pick.get("conviction", "MEDIUM"),
                 "entry_price": f"{price:.2f}" if price else "",
-                "headline": pick.get("rationale", "")[:200],
+                "headline": (pick.get("rationale") or "")[:200],
                 "prompt_version": "chat-1.0",
                 "strategy_echo": "",
                 "synopsis": "",
@@ -6915,7 +6915,7 @@ def log_ai_picks(ai_result: dict, stocks: dict, mall_result: dict = None):
             s = stocks.get(t, {})
             price = s.get("price")
             if _valid_ticker(t) and price:
-                _hl = p.get("key_metric", "")[:80]
+                _hl = (p.get("key_metric") or "")[:80]
                 if t in _strategy_today:
                     # Strategy-echo flag: the same ticker was logged as a strategy pick today
                     _hl = (f"[strat-echo] {_hl}")[:80]
@@ -6923,15 +6923,15 @@ def log_ai_picks(ai_result: dict, stocks: dict, mall_result: dict = None):
                     "date": today, "source": source,
                     "ticker": t,
                     "company": s.get("name", t)[:30],
-                    "strategy": p.get("brief_case", "")[:50],
+                    "strategy": (p.get("brief_case") or "")[:50],
                     "conviction": p.get("conviction", ""),
                     "entry_price": round(price, 2),
                     "headline": _hl,
                     "prompt_version": PROMPT_VERSION,   # B6
                     "strategy_echo": "1" if t in _strategy_today else "",  # A8-fix
-                    "synopsis": p.get("business_synopsis", "")[:300],
-                    "industry": p.get("industry", "")[:60],
-                    "key_competitors": p.get("key_competitors", "")[:120],
+                    "synopsis": (p.get("business_synopsis") or "")[:300],
+                    "industry": (p.get("industry") or "")[:60],
+                    "key_competitors": (p.get("key_competitors") or "")[:120],
                 })
                 specialist_tickers_today.add(t)
 
@@ -7155,10 +7155,10 @@ def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
             row_data = [
                 pi,
                 tk,
-                pick.get("company", s_data.get("name", tk))[:28],
-                pick.get("conviction", ""),
-                pick.get("key_metric", "")[:24],
-                pick.get("brief_case", "")[:200],
+                (pick.get("company") or s_data.get("name", tk))[:28],
+                pick.get("conviction") or "",
+                (pick.get("key_metric") or "")[:24],
+                (pick.get("brief_case") or "")[:200],
                 round(price, 2) if price else "",
                 f"${mktcap:.1f}B" if mktcap else "",
             ]
@@ -7172,7 +7172,7 @@ def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
                     horizontal="center" if ci in (1, 4, 7, 8) else "left",
                     vertical="top", wrap_text=(ci == 6)
                 )
-            ws.row_dimensions[sr].height = 14 if len(pick.get("brief_case", "")) < 100 else 28
+            ws.row_dimensions[sr].height = 14 if len(pick.get("brief_case") or "") < 100 else 28
             sr += 1
 
         sr += 1  # blank row between agents
@@ -7381,9 +7381,9 @@ def build_ai_picks_tab(wb, ai_result: dict, stocks: dict, ws=None):
         # ── Summary row (always visible) ──────────────────────────
         sum_vals = [
             i, t,
-            p.get("company", s.get("name",""))[:22],
-            p.get("sector", s.get("sector",""))[:14],
-            p.get("strategy","")[:14],
+            (p.get("company") or s.get("name",""))[:22],
+            (p.get("sector") or s.get("sector",""))[:14],
+            (p.get("strategy") or "")[:14],
             conv,
             agents,    # col 7 — new Agents column
             urgency,
@@ -7887,9 +7887,9 @@ def build_overview_tab(ws, stocks, iv_rows, stalwarts, fast_growers, turnarounds
                 _ov_price = _ov_live.get(t) or s.get("price")
                 sum_vals = [
                     i, t,
-                    p.get("company", s.get("name",""))[:22],
-                    p.get("sector", s.get("sector",""))[:14],
-                    p.get("strategy","")[:14],
+                    (p.get("company") or s.get("name",""))[:22],
+                    (p.get("sector") or s.get("sector",""))[:14],
+                    (p.get("strategy") or "")[:14],
                     conv, urgency,
                     _ov_price, s.get("peg"), s.get("pe"),
                     s.get("mos"), s.get("roe"), s.get("piotroski"),
@@ -8692,13 +8692,13 @@ def apply_portfolio_decisions(portfolio: dict, decisions: dict, stocks: dict) ->
         portfolio["cash"] = portfolio.get("cash", 0) - total_cost
         holdings_by_ticker[t] = {
             "ticker": t,
-            "company": buy.get("company", s.get("name", t))[:30],
+            "company": (buy.get("company") or s.get("name", t))[:30],
             "shares": shares,
             "entry_price": round(price, 2),
             "entry_date": today,
-            "rationale": buy.get("rationale", "")[:200],
+            "rationale": (buy.get("rationale") or "")[:200],
             "conviction": buy.get("conviction", "MEDIUM"),
-            "sell_trigger": buy.get("sell_trigger", "")[:150],
+            "sell_trigger": (buy.get("sell_trigger") or "")[:150],
             "lynch_category": s.get("lynchCategory", ""),   # Fix-9: persist for C2 round-trip
             "sector": s.get("sector", ""),                   # Fix-9: persist sector for B7 round-trip
         }
@@ -8706,13 +8706,13 @@ def apply_portfolio_decisions(portfolio: dict, decisions: dict, stocks: dict) ->
             "date": today,
             "action": "BUY",
             "ticker": t,
-            "company": buy.get("company", s.get("name", t))[:30],
+            "company": (buy.get("company") or s.get("name", t))[:30],
             "shares": shares,
             "price": round(price, 2),
             "value": round(cost, 2),
             "return_pct": 0.0,
             "transaction_cost": round(tc_buy, 2),  # C3
-            "rationale": buy.get("rationale", "")[:200],
+            "rationale": (buy.get("rationale") or "")[:200],
         })
         print(f"    🛒 BUY  {t} {shares}sh @ ${price:.2f} (${cost:,.0f}) [tc=${tc_buy:.2f}] — {buy.get('rationale','')[:60]}")
 
@@ -8833,11 +8833,11 @@ def build_portfolio_tab(wb, portfolio: dict, stocks: dict, spy_prices: dict = No
         rel_h = (ret_h - spy_h_ret) if ret_h is not None and spy_h_ret is not None else None
 
         fill = ALT_FILL if ri % 2 == 0 else PLAIN_FILL
-        row_vals = [h.get("entry_date",""), t, h.get("company","")[:24],
-                    s.get("sector","")[:13], h["shares"],
+        row_vals = [h.get("entry_date",""), t, (h.get("company") or "")[:24],
+                    (s.get("sector") or "")[:13], h["shares"],
                     ep, round(cp, 2), ret_h, spy_h_ret, rel_h,
                     days_h, h.get("conviction",""),
-                    h.get("rationale","")[:120], h.get("sell_trigger","")[:80]]
+                    (h.get("rationale") or "")[:120], (h.get("sell_trigger") or "")[:80]]
         for ci, v in enumerate(row_vals, 1):
             c = ws.cell(row=r, column=ci, value=v)
             c.font = Font(name="Arial", size=9)
@@ -8887,10 +8887,10 @@ def build_portfolio_tab(wb, portfolio: dict, stocks: dict, spy_prices: dict = No
         is_buy = tx.get("action") == "BUY"
         action_fill = PatternFill("solid", fgColor="C8E6C9" if is_buy else "FFCDD2")
         row_vals = [tx.get("date",""), tx.get("action",""), tx.get("ticker",""),
-                    tx.get("company","")[:22], tx.get("shares"),
+                    (tx.get("company") or "")[:22], tx.get("shares"),
                     tx.get("price"), tx.get("value"),
                     (tx.get("return_pct", 0) / 100) if tx.get("return_pct") is not None else None,
-                    tx.get("rationale","")[:120]]
+                    (tx.get("rationale") or "")[:120]]
         for ci, v in enumerate(row_vals, 1):
             c = ws.cell(row=r, column=ci, value=v)
             c.font = Font(name="Arial", size=9)
@@ -12298,11 +12298,11 @@ function showMacroDetail(el, id) {
     <span class="ap-ticker">{tk}</span>
     <span style="font-size:.65rem;background:{conv_color};color:#fff;border-radius:3px;padding:1px 5px">{conv2}</span>
   </div>
-  <div class="ap-co">{pp.get("company",s2.get("name",tk))[:32]}</div>
+  <div class="ap-co">{(pp.get("company") or s2.get("name",tk))[:32]}</div>
   {f'<div class="ap-syn">{pp.get("business_synopsis","")[:120]}</div>' if pp.get("business_synopsis") else ""}
   {f'<div style="margin-top:4px">{_lb}</div>' if _lb else ''}
   <div class="ap-rationale">{rationale2[:350]}</div>
-  <div class="ap-metric">{pp.get("key_metric","")[:60]}{"  ·  $"+f"{prc:.0f}" if prc else ""}{"  ·  $"+f"{mc_b:.1f}B" if mc_b else ""}</div>
+  <div class="ap-metric">{(pp.get("key_metric") or "")[:60]}{"  ·  $"+f"{prc:.0f}" if prc else ""}{"  ·  $"+f"{mc_b:.1f}B" if mc_b else ""}</div>
 </div>""")
 
             sections_html.append(f"""
@@ -14326,14 +14326,14 @@ function openSpec(id){{
                             "Date":      row.get("date",""),
                             "Agent":     _AGENT_ICONS.get(src, src),
                             "Ticker":    t,
-                            "Company":   row.get("company","")[:28],
-                            "Strategy":  row.get("strategy","")[:22],
+                            "Company":   (row.get("company") or "")[:28],
+                            "Strategy":  (row.get("strategy") or "")[:22],
                             "Entry $":   entry or None,
                             "Current $": curr or None,
                             "Return":    ret,
                             "Days":      days,
                             "Conviction":row.get("conviction",""),
-                            "Headline":  row.get("headline","")[:60],
+                            "Headline":  (row.get("headline") or "")[:60],
                         })
             except Exception:
                 pass
@@ -14551,7 +14551,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
                 port_rows.append({
                     "Entry Date":  h.get("entry_date",""),
                     "Ticker":      t,
-                    "Company":     h.get("company","")[:26],
+                    "Company":     (h.get("company") or "")[:26],
                     "Shares":      shares,
                     "Entry $":     entry or None,
                     "Current $":   curr or None,
