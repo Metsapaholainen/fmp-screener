@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 28839.23899999999,
+  "cash": 23858.26399999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -110,6 +110,18 @@
       "sell_trigger": "Credit losses rise unexpectedly OR revenue growth falls below 10% for 2 consecutive quarters",
       "lynch_category": "FastGrower",
       "sector": "Technology"
+    },
+    {
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 125,
+      "entry_price": 39.8,
+      "entry_date": "2026-05-21",
+      "rationale": "ROIC 39%, FCF 16.1%, exceptional PEG 0.32, 67% MoS. Tax services are countercyclical and defensible; April 2026 tax season tailwind beginning. IV Discount profile with secular shift to digital filing.",
+      "conviction": "HIGH",
+      "sell_trigger": "Tax filing volume declines 2 consecutive years; digital adoption stalls below 50% penetration",
+      "lynch_category": "Turnaround",
+      "sector": "Consumer Cyclical"
     }
   ],
   "transactions": [
@@ -1912,7 +1924,19 @@
       "return_pct": -9.0,
       "transaction_cost": 5.54,
       "rationale": "THESIS BROKEN ON POSITION SIZING + CATEGORY OVERLOAD. DLO is a fast-grower (7/4 cap already violated), held only 4d with -9% drawdown. This position exists solely because category constraints were ignored at entry. Portfolio has 8 Turnarounds (cap 3) and 7 FastGrowers (cap 4) \u2014 the entire structure is broken. DLO must be culled to begin rebalancing. Sell at market to free capital."
+    },
+    {
+      "date": "2026-05-21",
+      "action": "BUY",
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 125,
+      "price": 39.8,
+      "value": 4975.0,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "ROIC 39%, FCF 16.1%, exceptional PEG 0.32, 67% MoS. Tax services are countercyclical and defensible; April 2026 tax season tailwind beginning. IV Discount profile with secular shift to digital filing."
     }
   ],
-  "last_updated": "2026-05-19"
+  "last_updated": "2026-05-21"
 }
