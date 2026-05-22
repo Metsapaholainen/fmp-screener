@@ -1931,7 +1931,7 @@ def fetch_us_universe() -> dict:
                 if not t or len(t) > 6: continue
                 universe[t] = {
                     "symbol": t,
-                    "name": (stock.get("companyName") or "")[:30],
+                    "name": (stock.get("companyName") or "")[:80],
                     "sector": stock.get("sector") or "Unknown",
                     "industry": stock.get("industry") or "",
                     "mktCap": stock.get("marketCap") or 0,
@@ -1976,7 +1976,7 @@ def fetch_us_universe() -> dict:
                         if not p.get("isActivelyTrading", True): continue
                         universe[t] = {
                             "symbol": t,
-                            "name": (p.get("companyName") or "")[:30],
+                            "name": (p.get("companyName") or "")[:80],
                             "sector": p.get("sector") or "Unknown",
                             "industry": p.get("industry") or "",
                             "mktCap": mktCap,
@@ -2041,7 +2041,7 @@ def fetch_bulk_ratios(universe: dict) -> dict:
                         "lastDiv": item.get("lastDiv"),
                         "sector": item.get("sector"),
                         "industry": item.get("industry"),
-                        "name": (item.get("companyName") or "")[:30],
+                        "name": (item.get("companyName") or "")[:80],
                         "exchange": item.get("exchangeShortName"),
                         "isActivelyTrading": item.get("isActivelyTrading"),
                     }
@@ -3412,6 +3412,10 @@ def _is_common_stock(s: dict) -> bool:
     # Mutual fund tickers typically 5 chars ending in X (RNNEX, IFAFX, AMECX, AMPFX)
     if len(ticker) == 5 and ticker.endswith("X"):
         return False
+    # Explicit known non-equity instruments that FMP misclassifies as stocks
+    _NON_EQUITY_TICKERS = {"KKRS", "AMJB"}
+    if ticker in _NON_EQUITY_TICKERS:
+        return False
     # Fund/ETF name keywords
     fund_kw = (
         "fund", " etf", "income fund", "bond fund", "money market",
@@ -3426,6 +3430,8 @@ def _is_common_stock(s: dict) -> bool:
         # Debt instruments traded on exchanges (subordinated notes, debentures, baby bonds)
         "subordinated notes", "notes due 20", "senior notes", "debentures due",
         "% notes", "% debentures", "% senior", "% subordinated",
+        # SPACs — blank-check companies with no operating business
+        "acquisition corp",
     )
     if any(kw in name for kw in fund_kw):
         return False
