@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 23858.26399999999,
+  "cash": 28588.777699999988,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -110,18 +110,6 @@
       "sell_trigger": "Credit losses rise unexpectedly OR revenue growth falls below 10% for 2 consecutive quarters",
       "lynch_category": "FastGrower",
       "sector": "Technology"
-    },
-    {
-      "ticker": "HRB",
-      "company": "H&R Block, Inc.",
-      "shares": 125,
-      "entry_price": 39.8,
-      "entry_date": "2026-05-21",
-      "rationale": "ROIC 39%, FCF 16.1%, exceptional PEG 0.32, 67% MoS. Tax services are countercyclical and defensible; April 2026 tax season tailwind beginning. IV Discount profile with secular shift to digital filing.",
-      "conviction": "HIGH",
-      "sell_trigger": "Tax filing volume declines 2 consecutive years; digital adoption stalls below 50% penetration",
-      "lynch_category": "Turnaround",
-      "sector": "Consumer Cyclical"
     }
   ],
   "transactions": [
@@ -1936,7 +1924,19 @@
       "return_pct": 0.0,
       "transaction_cost": 5.97,
       "rationale": "ROIC 39%, FCF 16.1%, exceptional PEG 0.32, 67% MoS. Tax services are countercyclical and defensible; April 2026 tax season tailwind beginning. IV Discount profile with secular shift to digital filing."
+    },
+    {
+      "date": "2026-05-22",
+      "action": "SELL",
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 125,
+      "price": 37.89,
+      "value": 4730.51,
+      "return_pct": -4.8,
+      "transaction_cost": 5.74,
+      "rationale": "THESIS BROKEN ON LYNCH CATEGORY OVERLOAD + EARLY UNDERPERFORMANCE. HRB held only 1 day and portfolio is at CRITICAL capacity: Turnarounds 8/3, FastGrowers 6/4, Stalwarts 5/5. HRB is categorized as SlowGrower (RG=+4%), but entry at $39.80 is already -4.8% to $37.89 within 24 hours, signaling weak near-term momentum. While ROIC 39% and PEG 0.31 are genuinely excellent, tax services face structural headwinds (digital adoption, automation). Most critically: portfolio has ZERO open slots, and HRB added the 10th position at maximum constraint. Must exit to rebalance and address Lynch category bloat before deploying $23.9k cash. Recommend sale at market to free slot for higher-conviction FastGrower or quality Stalwart candidate."
     }
   ],
-  "last_updated": "2026-05-21"
+  "last_updated": "2026-05-22"
 }
