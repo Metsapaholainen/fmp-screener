@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 23509.779699999992,
+  "cash": 28261.62869999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,28 +100,16 @@
       "sector": "Healthcare"
     },
     {
-      "ticker": "IT",
-      "company": "Gartner, Inc.",
-      "shares": 31,
-      "entry_price": 158.89,
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 64,
+      "entry_price": 77.98,
       "entry_date": "2026-06-09",
-      "rationale": "IV Discount Stalwart. ROIC 21%, FCF 12.1%, PEG 0.25 (exceptional), RG 4%, MoS 64%. Research and advisory platform with recurring subscription revenue and pricing power. Fits Stalwart category (current",
+      "rationale": "IV Discount Turnaround (but only 1/2 Cyclical cap). ROIC 18%, FCF 10.1%, PEG 1.10, +12% RG, 85% MoS. Defense contractor with secular government spending tailwind. Consolidating after recent weakness; ",
       "conviction": "MEDIUM",
-      "sell_trigger": "Customer churn accelerates above 5% annually; pricing power erodes",
-      "lynch_category": "Cyclical+Turnaround",
+      "sell_trigger": "Revenue decline or margin compression below 10% operating margin; government contract losses",
+      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
       "sector": "Industrials"
-    },
-    {
-      "ticker": "PYPL",
-      "company": "PayPal Holdings, Inc.",
-      "shares": 119,
-      "entry_price": 41.98,
-      "entry_date": "2026-06-09",
-      "rationale": "IV Discount, SlowGrower. ROIC 15%, FCF 14.1%, PEG 0.23 (rare), RG 4%, MoS 60%. Digital payments infrastructure with fortress-like FCF generation (14% yield). Fits SlowGrower category (cap 6, currently",
-      "conviction": "MEDIUM",
-      "sell_trigger": "FCF margin compresses below 12%; competitive displacement from Stripe/Block accelerates",
-      "lynch_category": "Turnaround",
-      "sector": "Financial Services"
     }
   ],
   "transactions": [
@@ -2008,6 +1996,42 @@
       "return_pct": 0.0,
       "transaction_cost": 6.0,
       "rationale": "IV Discount, SlowGrower. ROIC 15%, FCF 14.1%, PEG 0.23 (rare), RG 4%, MoS 60%. Digital payments infrastructure with fortress-like FCF generation (14% yield). Fits SlowGrower category (cap 6, currently"
+    },
+    {
+      "date": "2026-06-09",
+      "action": "SELL",
+      "ticker": "IT",
+      "company": "Gartner, Inc.",
+      "shares": 31,
+      "price": 156.68,
+      "value": 4851.07,
+      "return_pct": -1.39,
+      "transaction_cost": 5.86,
+      "rationale": "THESIS BROKEN ON PORTFOLIO CONSTRUCTION. Added 2026-06-09 but Stalwarts are now 6/5 (AT CAP). PEG 0.25, ROIC 21%, FCF 12.1% are excellent, but Lynch category overload forces exit. Gartner is Stalwart; can only hold 5 Stalwarts max. ADBE, HIG, QLYS, BKNG, PYPL (5) have equal/better ROIC and conviction. Sell IT to rebalance."
+    },
+    {
+      "date": "2026-06-09",
+      "action": "SELL",
+      "ticker": "PYPL",
+      "company": "PayPal Holdings, Inc.",
+      "shares": 119,
+      "price": 41.2,
+      "value": 4897.49,
+      "return_pct": -1.85,
+      "transaction_cost": 5.9,
+      "rationale": "THESIS BROKEN ON PORTFOLIO CONSTRUCTION. Added 2026-06-09 but portfolio is now severely overloaded: Turnarounds 8/3, Stalwarts 6/5, FastGrowers 6/4, Cyclicals 3/2. PYPL is classified as SlowGrower (RG 4%, ROIC 15%, PEG 0.23), which is good but not differentiated enough to justify adding when core categories are blown. Sell to rebalance; can re-add later if category room opens."
+    },
+    {
+      "date": "2026-06-09",
+      "action": "BUY",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 64,
+      "price": 77.98,
+      "value": 4990.72,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "IV Discount Turnaround (but only 1/2 Cyclical cap). ROIC 18%, FCF 10.1%, PEG 1.10, +12% RG, 85% MoS. Defense contractor with secular government spending tailwind. Consolidating after recent weakness; "
     }
   ],
   "last_updated": "2026-06-09"
