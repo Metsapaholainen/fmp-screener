@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 33442.98239999999,
+  "cash": 23509.779699999992,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -98,6 +98,30 @@
       "sell_trigger": "FDA approval denial on lead oncology candidate; ROIC falls below 20%; two consecutive quarters of revenue decline",
       "lynch_category": "Stalwart+Turnaround",
       "sector": "Healthcare"
+    },
+    {
+      "ticker": "IT",
+      "company": "Gartner, Inc.",
+      "shares": 31,
+      "entry_price": 158.89,
+      "entry_date": "2026-06-09",
+      "rationale": "IV Discount Stalwart. ROIC 21%, FCF 12.1%, PEG 0.25 (exceptional), RG 4%, MoS 64%. Research and advisory platform with recurring subscription revenue and pricing power. Fits Stalwart category (current",
+      "conviction": "MEDIUM",
+      "sell_trigger": "Customer churn accelerates above 5% annually; pricing power erodes",
+      "lynch_category": "Cyclical+Turnaround",
+      "sector": "Industrials"
+    },
+    {
+      "ticker": "PYPL",
+      "company": "PayPal Holdings, Inc.",
+      "shares": 119,
+      "entry_price": 41.98,
+      "entry_date": "2026-06-09",
+      "rationale": "IV Discount, SlowGrower. ROIC 15%, FCF 14.1%, PEG 0.23 (rare), RG 4%, MoS 60%. Digital payments infrastructure with fortress-like FCF generation (14% yield). Fits SlowGrower category (cap 6, currently",
+      "conviction": "MEDIUM",
+      "sell_trigger": "FCF margin compresses below 12%; competitive displacement from Stripe/Block accelerates",
+      "lynch_category": "Turnaround",
+      "sector": "Financial Services"
     }
   ],
   "transactions": [
@@ -1960,7 +1984,31 @@
       "return_pct": 0.0,
       "transaction_cost": 5.96,
       "rationale": "UNLOCK HEALTHCARE SLOT: Healthcare sector currently 1/1 position (HALO). EXEL is high-quality (ROIC 35%, PEG 0.26, 7% revenue growth, 76% MoS) oncology player with durable pipeline moat. Meets all thr"
+    },
+    {
+      "date": "2026-06-09",
+      "action": "BUY",
+      "ticker": "IT",
+      "company": "Gartner, Inc.",
+      "shares": 31,
+      "price": 158.89,
+      "value": 4925.59,
+      "return_pct": 0.0,
+      "transaction_cost": 5.93,
+      "rationale": "IV Discount Stalwart. ROIC 21%, FCF 12.1%, PEG 0.25 (exceptional), RG 4%, MoS 64%. Research and advisory platform with recurring subscription revenue and pricing power. Fits Stalwart category (current"
+    },
+    {
+      "date": "2026-06-09",
+      "action": "BUY",
+      "ticker": "PYPL",
+      "company": "PayPal Holdings, Inc.",
+      "shares": 119,
+      "price": 41.98,
+      "value": 4995.69,
+      "return_pct": 0.0,
+      "transaction_cost": 6.0,
+      "rationale": "IV Discount, SlowGrower. ROIC 15%, FCF 14.1%, PEG 0.23 (rare), RG 4%, MoS 60%. Digital payments infrastructure with fortress-like FCF generation (14% yield). Fits SlowGrower category (cap 6, currently"
     }
   ],
-  "last_updated": "2026-06-08"
+  "last_updated": "2026-06-09"
 }
