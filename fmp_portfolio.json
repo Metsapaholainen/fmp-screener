@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 28261.62869999999,
+  "cash": 28320.16589999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,16 +100,16 @@
       "sector": "Healthcare"
     },
     {
-      "ticker": "BAH",
-      "company": "Booz Allen Hamilton",
-      "shares": 64,
-      "entry_price": 77.98,
-      "entry_date": "2026-06-09",
-      "rationale": "IV Discount Turnaround (but only 1/2 Cyclical cap). ROIC 18%, FCF 10.1%, PEG 1.10, +12% RG, 85% MoS. Defense contractor with secular government spending tailwind. Consolidating after recent weakness; ",
-      "conviction": "MEDIUM",
-      "sell_trigger": "Revenue decline or margin compression below 10% operating margin; government contract losses",
-      "lynch_category": "Stalwart+FastGrower+Cyclical+Turnaround",
-      "sector": "Industrials"
+      "ticker": "DAVE",
+      "company": "Dave Inc.",
+      "shares": 18,
+      "entry_price": 270.9,
+      "entry_date": "2026-06-11",
+      "rationale": "UNLOCK FASTGROWER REBALANCE: DAVE is FastGrower (category at 6/4 after BAH sale \u2192 5/4). However, DAVE offers exceptional quality: ROIC 44%, PEG 0.24 (elite), +60% revenue growth. Fintech lending thesi",
+      "conviction": "HIGH",
+      "sell_trigger": "Revenue growth declines below 25% for 2 consecutive quarters OR credit loss rates exceed 8%",
+      "lynch_category": "FastGrower",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -2032,7 +2032,31 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "IV Discount Turnaround (but only 1/2 Cyclical cap). ROIC 18%, FCF 10.1%, PEG 1.10, +12% RG, 85% MoS. Defense contractor with secular government spending tailwind. Consolidating after recent weakness; "
+    },
+    {
+      "date": "2026-06-11",
+      "action": "SELL",
+      "ticker": "BAH",
+      "company": "Booz Allen Hamilton",
+      "shares": 64,
+      "price": 77.29,
+      "value": 4940.61,
+      "return_pct": -0.88,
+      "transaction_cost": 5.95,
+      "rationale": "THESIS BROKEN ON STRUCTURAL PORTFOLIO CONSTRAINT: Added 2026-06-09 as IV Discount Turnaround, but portfolio now has 7 Turnarounds (cap: 3) and 3 Cyclicals (cap: 2). BAH is classified as both. Despite solid fundamentals (ROIC 18%, PEG 1.09), this position violates dual category constraints. Must reduce to rebalance."
+    },
+    {
+      "date": "2026-06-11",
+      "action": "BUY",
+      "ticker": "DAVE",
+      "company": "Dave Inc.",
+      "shares": 18,
+      "price": 270.9,
+      "value": 4876.2,
+      "return_pct": 0.0,
+      "transaction_cost": 5.88,
+      "rationale": "UNLOCK FASTGROWER REBALANCE: DAVE is FastGrower (category at 6/4 after BAH sale \u2192 5/4). However, DAVE offers exceptional quality: ROIC 44%, PEG 0.24 (elite), +60% revenue growth. Fintech lending thesi"
     }
   ],
-  "last_updated": "2026-06-09"
+  "last_updated": "2026-06-11"
 }
