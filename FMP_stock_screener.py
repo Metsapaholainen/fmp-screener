@@ -136,7 +136,14 @@ CLAUDE_CHAT_PROFILES = {
 }
 
 CACHE_FILE = "fmp_screener_cache.json"
-CACHE_DAYS = 1
+CACHE_DAYS = 6   # weekly cadence: 6 (not 7) so the scheduled Sunday run always treats
+                 # last week's cache as expired despite clock drift, while a manual
+                 # mid-week re-run still reuses cache.
+
+# ── Data-integrity guard (protects the larger weekly cold fetch from FMP rate-limit
+# partial-fetch corruption — the failure that silently dropped ADBE & NASDAQ large-caps) ──
+COVERAGE_MIN = 0.70          # re-fetch missing / warn if a key covers <70% of requested
+_COVERAGE_WARNINGS = []      # keys that ended a run below threshold — surfaced via ntfy
 LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".fmp_screener.lock")
 PICKS_LOG    = "fmp_picks_log.csv"
 AI_PICKS_LOG = "fmp_ai_picks_log.csv"
@@ -786,6 +793,88 @@ def fetch_sparkline_data(tickers: list) -> dict:
 
     _cache[SKEY] = cached
     _fmp_call_count += len(missing)
+    return results
+
+
+def fetch_daily_history(tickers: list, days: int = 300) -> dict:
+    """Fetch ~`days` trading days of daily closes + volume for technical signals
+    (Swing Setups SMAs/RSI, Composite Value / Earnings Momentum 6M momentum).
+
+    Returns {ticker: {"dates": [...], "c": [closes...], "v": [volumes...]}},
+    oldest→newest. Cached under "_daily_hist" with a per-entry 1-day TTL — daily
+    bars go stale overnight, unlike the 7-day sparkline cache. Also back-fills
+    the in-memory _hist_price_cache so the Performance tab reuses these calls.
+    """
+    global _fmp_call_count, _hist_price_cache
+    DKEY = "_daily_hist"
+    today_str = datetime.date.today().isoformat()
+    # ~430 calendar days ≈ 290 trading days of headroom for a 200-day SMA
+    from_dt = (datetime.date.today() - datetime.timedelta(days=int(days * 1.45))).isoformat()
+
+    cached = _cache.get(DKEY, {})
+
+    def _fresh(entry):
+        return (isinstance(entry, dict) and entry.get("d") == today_str
+                and entry.get("c") and entry.get("dates"))
+
+    missing = [t for t in tickers if not _fresh(cached.get(t))]
+    results = {t: cached[t] for t in tickers if _fresh(cached.get(t))}
+    if missing:
+        print(f"  📊 Fetching daily history ({days}d) for {len(missing)} tickers"
+              f"{' (+ ' + str(len(results)) + ' cached)' if results else ''}...")
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+        _lock = threading.Lock()
+        _throttle = threading.Semaphore(8)
+
+        def _fetch_one(t):
+            with _throttle:
+                try:
+                    r = requests.get(
+                        f"{FMP_BASE}/historical-price-eod/light",
+                        params={"symbol": t, "from": from_dt,
+                                "to": today_str, "apikey": FMP_KEY},
+                        timeout=15,
+                    )
+                    time.sleep(0.08)
+                    if r.status_code == 200:
+                        data = r.json()
+                        if isinstance(data, list) and data:
+                            recs = [rec for rec in reversed(data)   # newest-first → oldest-first
+                                    if rec.get("date") and (rec.get("price") or rec.get("close"))]
+                            if recs:
+                                return t, {
+                                    "d": today_str,
+                                    "dates": [rec["date"] for rec in recs],
+                                    "c": [round(float(rec.get("price") or rec.get("close")), 3)
+                                          for rec in recs],
+                                    "v": [int(rec.get("volume") or 0) for rec in recs],
+                                }
+                except Exception:
+                    pass
+                return t, None
+
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            futures = {pool.submit(_fetch_one, t): t for t in missing}
+            for future in as_completed(futures):
+                t, entry = future.result()
+                if entry:
+                    with _lock:
+                        results[t] = entry
+                        cached[t] = entry
+
+        # Prune stale entries (bounds cache size without evicting same-day fetches
+        # made by other callers — Composite Value and Swing share this cache)
+        for t in [k for k, e in cached.items() if not _fresh(e)]:
+            del cached[t]
+        _cache[DKEY] = cached
+        _fmp_call_count += len(missing)
+
+    # Back-fill the Performance tab's in-memory price cache for free
+    for t, entry in results.items():
+        if t not in _hist_price_cache:
+            _hist_price_cache[t] = dict(zip(entry["dates"], entry["c"]))
     return results
 
 
@@ -2057,49 +2146,127 @@ def fetch_bulk_ratios(universe: dict) -> dict:
 
 def _parallel_fetch(tickers: list, endpoint: str, label: str,
                     cache_key: str, params_extra: dict = None) -> dict:
-    """Generic parallel fetcher for per-ticker FMP endpoints.
-    Uses ThreadPoolExecutor with rate-limit-aware throttling.
-    """
-    if _cache.get(cache_key):
-        print(f"  📦 Using cached {label} ({len(_cache[cache_key])} stocks)")
-        return _cache[cache_key]
+    """Generic parallel fetcher for per-ticker FMP endpoints, hardened against the
+    partial-fetch cache corruption that can silently drop large swaths of the universe
+    when FMP rate-limits a cold run (the failure that once dropped ADBE + NASDAQ large-caps).
 
+    Guards:
+      • Resolution-aware reuse — a ticker is only re-fetched if it was NEVER resolved before
+        (neither returned data nor confirmed empty). Genuine no-data names are remembered in a
+        `<key>__empty` sentinel so they aren't retried forever; transient failures ARE retried.
+      • Retry-with-backoff per ticker on empty/timeout (initial + 2 retries).
+      • Merge-don't-replace into the cache, so a partial run can never erase prior coverage.
+      • Coverage sentinel — logs resolved/requested and records sub-threshold keys for the
+        phone alert (_COVERAGE_WARNINGS).
+    """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
 
-    print(f"\n  📊 Fetching {label}...")
-    results = {}
-    total = len(tickers)
-    _lock = threading.Lock()
-    _throttle = threading.Semaphore(4)  # max 4 concurrent — stay under 300/min
+    requested = list(dict.fromkeys(tickers))         # dedupe, preserve order
+    total     = len(requested)
+    cached    = dict(_cache.get(cache_key) or {})
+    empties   = set(_cache.get(cache_key + "__empty") or [])
+    resolved  = set(cached.keys()) | empties          # tickers we already have an answer for
+    missing   = [t for t in requested if t not in resolved]
+
+    if total and not missing:
+        cov = sum(1 for t in requested if t in cached) / total
+        print(f"  📦 Using cached {label} ({len(cached)} stocks, {cov:.0%} have data of {total} requested)")
+        return cached
+
+    if cached or empties:
+        _have_cov = (total - len(missing)) / total if total else 1.0
+        print(f"  🔁 Cached {label}: {_have_cov:.0%} of {total} resolved — fetching {len(missing)} unresolved")
+    else:
+        print(f"\n  📊 Fetching {label} ({len(missing)} stocks)...")
+
+    results   = dict(cached)                           # start from prior good data
+    new_data  = {}
+    new_empty = []
+    n_fail    = 0
+    _lock     = threading.Lock()
+    _throttle = threading.Semaphore(4)                 # max 4 concurrent — stay under 300/min
 
     def _fetch_one(t):
         with _throttle:
             p = {"symbol": t}
             if params_extra:
                 p.update(params_extra)
-            data = fmp_get(endpoint, p)
-            time.sleep(0.2)  # ~200 req/min with 4 workers
-            if data and isinstance(data, list) and data:
-                return t, data[0]
-            elif data and isinstance(data, dict) and "Error" not in str(data)[:50]:
-                return t, data
-            return t, None
+            for _attempt in range(3):                  # initial + 2 retries
+                data = fmp_get(endpoint, p)
+                time.sleep(0.2)                        # ~200 req/min with 4 workers
+                if data and isinstance(data, list) and data:
+                    return t, data[0], "ok"
+                if data and isinstance(data, dict) and "Error" not in str(data)[:50]:
+                    return t, data, "ok"
+                if data == [] or data == {}:           # API explicitly says: no data for this name
+                    return t, None, "empty"
+                time.sleep(0.5 * (_attempt + 1))       # transient (timeout/None) → back off + retry
+            return t, None, "fail"                     # exhausted retries — retry again next run
 
     with ThreadPoolExecutor(max_workers=12) as pool:
-        futures = {pool.submit(_fetch_one, t): t for t in tickers}
+        futures = {pool.submit(_fetch_one, t): t for t in missing}
         done_count = 0
         for future in as_completed(futures):
-            t, data = future.result()
-            if data:
-                with _lock:
-                    results[t] = data
+            t, data, status = future.result()
+            with _lock:
+                if status == "ok" and data:
+                    new_data[t] = data
+                elif status == "empty":
+                    new_empty.append(t)
+                else:
+                    n_fail += 1
             done_count += 1
             if done_count % 100 == 0:
-                print(f"    [{done_count}/{total}] {label} fetched...")
+                print(f"    [{done_count}/{len(missing)}] {label} fetched...")
 
+    # Merge-don't-replace: never shrink an existing good cache
+    results.update(new_data)
     _cache[cache_key] = results
-    print(f"  ✅ {label} loaded: {len(results)} stocks")
+    if new_empty:
+        _cache[cache_key + "__empty"] = sorted(empties | set(new_empty))
+
+    final_cov = sum(1 for t in requested if t in results) / total if total else 1.0
+    print(f"  ✅ {label} loaded: {len(results)} stocks "
+          f"(data for {final_cov:.0%} of {total} requested, +{len(new_data)} new, "
+          f"{len(new_empty)} confirmed-empty, {n_fail} failed)")
+    # Warn only when real fetch FAILURES (not legit empties) left us below threshold
+    if total and n_fail and (1 - n_fail / total) < COVERAGE_MIN:
+        _COVERAGE_WARNINGS.append(f"{label}: {n_fail}/{total} failed")
+        print(f"  ⚠️ LOW COVERAGE — {label}: {n_fail}/{total} tickers failed to fetch "
+              f"(rate limits?). Cache preserved; these will be retried next run.")
+    return results
+
+
+def _coverage_missing(requested, cache_key):
+    """Resolution-aware reuse helper for the custom-list fetchers (estimates / growth).
+    Returns (cached_copy, empties_set, missing_list). A ticker is 'missing' only when it has
+    neither cached data nor a confirmed-empty marker — so transient failures retry next run,
+    but genuine no-data names are not re-fetched forever."""
+    cached  = dict(_cache.get(cache_key) or {})
+    empties = set(_cache.get(cache_key + "__empty") or [])
+    resolved = set(cached.keys()) | empties
+    missing  = [t for t in dict.fromkeys(requested) if t not in resolved]
+    return cached, empties, missing
+
+
+def _coverage_finalize(cache_key, label, requested, cached, new_data, new_empty, n_fail):
+    """Merge-don't-replace into cache, persist the empties sentinel, log coverage, warn if low."""
+    total   = len(dict.fromkeys(requested))
+    results = dict(cached)
+    results.update(new_data)
+    _cache[cache_key] = results
+    if new_empty:
+        _prev = set(_cache.get(cache_key + "__empty") or [])
+        _cache[cache_key + "__empty"] = sorted(_prev | set(new_empty))
+    final_cov = sum(1 for t in dict.fromkeys(requested) if t in results) / total if total else 1.0
+    print(f"  ✅ {label} loaded: {len(results)} stocks "
+          f"(data for {final_cov:.0%} of {total} requested, +{len(new_data)} new, "
+          f"{len(new_empty)} confirmed-empty, {n_fail} failed)")
+    if total and n_fail and (1 - n_fail / total) < COVERAGE_MIN:
+        _COVERAGE_WARNINGS.append(f"{label}: {n_fail}/{total} failed")
+        print(f"  ⚠️ LOW COVERAGE — {label}: {n_fail}/{total} tickers failed to fetch "
+              f"(rate limits?). Cache preserved; these will be retried next run.")
     return results
 
 
@@ -2172,40 +2339,46 @@ def fetch_dcf_bulk(tickers: list) -> dict:
 
 
 def fetch_growth_estimates(tickers: list) -> dict:
-    """Fetch analyst estimates — store full list for CAGR calculation."""
+    """Fetch analyst estimates — store full list for CAGR calculation.
+    Resolution-aware + retry/merge guarded (see _parallel_fetch)."""
     cache_key = "estimates"
-    if _cache.get(cache_key):
-        print(f"  📦 Using cached growth estimates ({len(_cache[cache_key])} stocks)")
-        return _cache[cache_key]
+    cached, empties, missing = _coverage_missing(tickers, cache_key)
+    if not missing:
+        print(f"  📦 Using cached growth estimates ({len(cached)} stocks)")
+        return cached
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
-    print(f"\n  📊 Fetching growth estimates...")
-    results = {}
+    print(f"\n  📊 Fetching growth estimates ({len(missing)} stocks)...")
+    new_data, new_empty, n_fail = {}, [], 0
     _lock = threading.Lock()
     _throttle = threading.Semaphore(4)
 
     def _f(t):
         with _throttle:
-            data = fmp_get("analyst-estimates", {"symbol": t, "period": "annual", "limit": 5})
-            time.sleep(0.2)
-            if data and isinstance(data, list) and len(data) >= 2:
-                return t, data  # full list, not data[0]
-            return t, None
+            for _attempt in range(3):
+                data = fmp_get("analyst-estimates", {"symbol": t, "period": "annual", "limit": 5})
+                time.sleep(0.2)
+                if data and isinstance(data, list) and len(data) >= 2:
+                    return t, data, "ok"            # full list, not data[0]
+                if data == [] or (isinstance(data, list) and len(data) < 2):
+                    return t, None, "empty"          # too few estimates to use — don't retry forever
+                time.sleep(0.5 * (_attempt + 1))
+            return t, None, "fail"
 
     with ThreadPoolExecutor(max_workers=6) as pool:
-        futs = {pool.submit(_f, t): t for t in tickers}
+        futs = {pool.submit(_f, t): t for t in missing}
         done = 0
         for fut in as_completed(futs):
-            t, data = fut.result()
-            if data:
-                with _lock: results[t] = data
+            t, data, status = fut.result()
+            with _lock:
+                if status == "ok" and data: new_data[t] = data
+                elif status == "empty":     new_empty.append(t)
+                else:                        n_fail += 1
             done += 1
-            if done % 100 == 0: print(f"    [{done}/{len(tickers)}] estimates fetched...")
+            if done % 100 == 0: print(f"    [{done}/{len(missing)}] estimates fetched...")
 
-    _cache[cache_key] = results
-    print(f"  ✅ estimates loaded: {len(results)} stocks")
-    return results
+    return _coverage_finalize(cache_key, "estimates", tickers, cached, new_data, new_empty, n_fail)
 
 
 def fetch_financial_scores(tickers: list) -> dict:
@@ -2223,38 +2396,43 @@ def fetch_financial_growth(tickers: list) -> dict:
     Most recent year = data[0], previous year = data[1], etc.
     """
     cache_key = "growth"
-    if _cache.get(cache_key):
-        print(f"  📦 Using cached growth metrics ({len(_cache[cache_key])} stocks)")
-        return _cache[cache_key]
+    cached, empties, missing = _coverage_missing(tickers, cache_key)
+    if not missing:
+        print(f"  📦 Using cached growth metrics ({len(cached)} stocks)")
+        return cached
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
-    print(f"\n  📊 Fetching growth metrics...")
-    results = {}
+    print(f"\n  📊 Fetching growth metrics ({len(missing)} stocks)...")
+    new_data, new_empty, n_fail = {}, [], 0
     _lock = threading.Lock()
     _throttle = threading.Semaphore(4)
 
     def _f(t):
         with _throttle:
-            data = fmp_get("financial-growth", {"symbol": t, "period": "annual", "limit": "5"})
-            time.sleep(0.2)
-            if data and isinstance(data, list) and data:
-                return t, data  # return full list for trend detection
-            return t, None
+            for _attempt in range(3):
+                data = fmp_get("financial-growth", {"symbol": t, "period": "annual", "limit": "5"})
+                time.sleep(0.2)
+                if data and isinstance(data, list) and data:
+                    return t, data, "ok"            # return full list for trend detection
+                if data == []:
+                    return t, None, "empty"
+                time.sleep(0.5 * (_attempt + 1))
+            return t, None, "fail"
 
     with ThreadPoolExecutor(max_workers=12) as pool:
-        futs = {pool.submit(_f, t): t for t in tickers}
+        futs = {pool.submit(_f, t): t for t in missing}
         done = 0
         for fut in as_completed(futs):
-            t, data = fut.result()
-            if data:
-                with _lock: results[t] = data
+            t, data, status = fut.result()
+            with _lock:
+                if status == "ok" and data: new_data[t] = data
+                elif status == "empty":     new_empty.append(t)
+                else:                        n_fail += 1
             done += 1
-            if done % 100 == 0: print(f"    [{done}/{len(tickers)}] growth metrics fetched...")
+            if done % 100 == 0: print(f"    [{done}/{len(missing)}] growth metrics fetched...")
 
-    _cache[cache_key] = results
-    print(f"  ✅ growth metrics loaded: {len(results)} stocks")
-    return results
+    return _coverage_finalize(cache_key, "growth metrics", tickers, cached, new_data, new_empty, n_fail)
 
 
 def fetch_ratios_ttm(tickers: list) -> dict:
@@ -3003,62 +3181,6 @@ def compute_implied_growth(stock: dict, cfs_5y: list, balance_sheet: dict,
     return final
 
 
-def fetch_earnings_surprises(tickers: list) -> dict:
-    """Fetch last 8 quarters of earnings surprises for beat-rate calculation.
-    Beat rate = % of quarters where actual EPS beat estimated EPS.
-    High beat rate = management consistently under-promises and over-delivers.
-    Tries two FMP endpoint names; fails fast if neither is available on the plan.
-    """
-    cache_key = "earnings_surprises"
-    if _cache.get(cache_key):
-        print(f"  📦 Using cached earnings surprises ({len(_cache[cache_key])} stocks)")
-        return _cache[cache_key]
-
-    # Probe with the first ticker to confirm the endpoint is available before
-    # attempting all 4,000 stocks (avoids 4,000 noisy 404 warnings).
-    _probe_ticker = tickers[0] if tickers else None
-    _endpoint = None
-    for _ep in ("earnings-surprises", "historical-earnings"):
-        _probe = fmp_get(_ep, {"symbol": _probe_ticker, "limit": 2}) if _probe_ticker else None
-        if _probe and isinstance(_probe, list):
-            _endpoint = _ep
-            break
-
-    if not _endpoint:
-        print("  ⏭️ Skipping earnings surprises (endpoint not available on this plan)")
-        _cache[cache_key] = {}
-        return {}
-
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import threading
-    print(f"\n  📊 Fetching earnings surprises ({_endpoint})...")
-    results = {}
-    _lock = threading.Lock()
-    _throttle = threading.Semaphore(4)
-
-    def _f(t):
-        with _throttle:
-            data = fmp_get(_endpoint, {"symbol": t, "limit": 8})
-            time.sleep(0.2)
-            if data and isinstance(data, list) and len(data) >= 2:
-                return t, data
-            return t, None
-
-    with ThreadPoolExecutor(max_workers=12) as pool:
-        futs = {pool.submit(_f, t): t for t in tickers}
-        done = 0
-        for fut in as_completed(futs):
-            t, data = fut.result()
-            if data:
-                with _lock: results[t] = data
-            done += 1
-            if done % 100 == 0: print(f"    [{done}/{len(tickers)}] earnings surprises fetched...")
-
-    _cache[cache_key] = results
-    print(f"  ✅ earnings surprises loaded: {len(results)} stocks")
-    return results
-
-
 def _parse_openinsider_table(html: str) -> list:
     """Parse the tinytable from an OpenInsider HTML page into trade dicts."""
     from html.parser import HTMLParser
@@ -3511,7 +3633,6 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
         else:
             gr = {}; gr_prev = {}; gr_yr2 = {}; gr_yr3 = {}; gr_yr4 = {}
         bs = (balance_sheet or {}).get(t, {})
-        es = (earnings_surp or {}).get(t, [])
         ins = insider_lookup.get(t, {})
 
         price = prof.get("price") or u.get("price") or 0
@@ -3535,6 +3656,7 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
 
         # PEG calculation — primary: FMP analyst EPS CAGR from estimates endpoint
         peg = None
+        peg_basis = None   # "F" = forward analyst-estimate CAGR; "T" = trailing 1y growth fallback
         growth_5y = None
         rev_growth_5y = None
         if isinstance(est, list) and len(est) >= 2:
@@ -3563,9 +3685,14 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             peg = round(pe_val / (growth_5y * 100), 2)
             if peg < 0.2 or peg > 50:
                 peg = None
+            else:
+                peg_basis = "F"   # forward analyst-estimate CAGR (the trustworthy path)
 
-        # Fallback PEG: use trailing growth when analyst estimates unavailable
-        # Lynch himself used the most recent available growth rate — this is more authentic
+        # Fallback PEG: use trailing growth when analyst estimates unavailable.
+        # Lynch himself used the most recent available growth rate — but trailing 1y growth
+        # can wildly overstate cheapness when growth is decelerating (e.g. ADBE: trailing EPS
+        # +34% → PEG 0.4, while forward analyst growth is ~12%). Tag these "T" so the UI can
+        # flag them as less reliable than estimate-based PEGs.
         if peg is None and pe_val and pe_val > 3:
             eg_tr = _first(gr.get("epsgrowth"), gr.get("epsGrowth"))
             rg_tr = _first(gr.get("revenueGrowth"), gr.get("revGrowth"))
@@ -3575,6 +3702,7 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                 _peg_fb = round(pe_val / (trailing_g * 100), 2)
                 if 0.2 < _peg_fb < 50:
                     peg = _peg_fb
+                    peg_basis = "T"   # trailing 1y growth — treat with caution
 
         # ── Forward P/E and Forward PEG ────────────────────────────────────────
         # Use est[0] (next fiscal year) for a fully consistent forward valuation.
@@ -3638,25 +3766,6 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
                     net_cash_per_share = round(_ncps, 2)
                     if price > 0:
                         net_cash_ratio = round(_ncps / price, 4)
-
-        # ── Earnings beat rate (from earnings surprises) ───────────────────
-        # beat_rate = fraction of last N quarters where actual EPS > estimated EPS
-        beat_rate = None
-        eps_beat_streak = 0  # consecutive quarters beating estimates (most recent first)
-        if isinstance(es, list) and len(es) >= 2:
-            beats = []
-            for rec in es:
-                actual = rec.get("actualEarningResult") or rec.get("actual")
-                est_eps = rec.get("estimatedEarning") or rec.get("estimated")
-                if actual is not None and est_eps is not None:
-                    beats.append(1 if actual >= est_eps else 0)
-            if beats:
-                beat_rate = round(sum(beats) / len(beats), 3)
-                for b in beats:  # most recent first in FMP response
-                    if b == 1:
-                        eps_beat_streak += 1
-                    else:
-                        break
 
         # ── 52-week positioning ────────────────────────────────────────────
         _yr_high = u.get("yearHigh")
@@ -3835,6 +3944,7 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             "mktCapB": round(mktCap / 1e9, 2) if mktCap else 0,
             "pe": pe_val,
             "peg": peg,
+            "pegBasis": peg_basis,   # "F"=forward estimate CAGR, "T"=trailing 1y (less reliable)
             "fwdPE": fwd_pe,
             "fwdPEG": fwd_peg,
             # 10-year median P/E (FMP annual key-metrics, filtered to clean years).
@@ -4017,9 +4127,6 @@ def assemble_stock_data(universe, profiles, key_metrics, ratios_ttm, dcf_data,
             # Net cash per share (computed from balance sheet above)
             "netCashPerShare": net_cash_per_share,
             "netCashRatio": net_cash_ratio,  # netCashPerShare / price
-            # Earnings beat metrics
-            "beatRate": beat_rate,           # 0.0–1.0, e.g. 0.875 = beat 7 of 8 quarters
-            "epsBeatStreak": eps_beat_streak,  # consecutive quarterly beats (most recent)
             # 52-week positioning
             "priceVs52H": price_vs_52h,  # price / 52wk high; <0.7 = beaten down
             "priceVs52L": price_vs_52l,  # price / 52wk low; >1.5 = well off lows
@@ -4228,7 +4335,7 @@ def write_table(ws, rows, headers, start_row, header_color="1A237E", widths=None
                     cell.font = Font(name="Arial", size=9, color="B71C1C")               # weak — red
             elif h in ("MoS", "ROE", "ROA", "FCF Yield", "Div Yield", "Gross Margin",
                        "Rev Growth", "EPS Growth", "Rev Growth 5Y", "EPS Growth 5Y",
-                       "Avg MoS", "Avg FCF Yield", "Avg ROE") and isinstance(v, (int, float)):
+                       "Avg MoS", "Avg FCF Yield", "Avg ROE", "Shldr Yld") and isinstance(v, (int, float)):
                 cell.number_format = "0.0%"
                 if v > 0.01:
                     cell.font = Font(name="Arial", size=9, color="1B5E20")
@@ -4255,6 +4362,13 @@ def write_table(ws, rows, headers, start_row, header_color="1A237E", widths=None
                     cell.fill = PatternFill("solid", fgColor="C8E6C9")
                 elif v < 0.40:
                     cell.fill = PatternFill("solid", fgColor="FFCDD2")
+            elif h in ("Est Rev 30d", "6M Mom", "Rev 30d", "Mom 6M",
+                       "Dist SMA50", "Dist SMA200") and isinstance(v, (int, float)):
+                cell.number_format = "+0.0%;-0.0%;0%"
+                if v >= 0.05:      # estimates raised — green
+                    cell.font = Font(name="Arial", size=9, color="1B5E20")
+                elif v <= -0.05:   # estimates cut — red
+                    cell.font = Font(name="Arial", size=9, color="B71C1C")
             elif h in ("FCF Margin",) and isinstance(v, (int, float)):
                 cell.number_format = "0%"
                 if v >= 0.20:
@@ -4382,6 +4496,7 @@ def format_stock_row(s: dict) -> dict:
         "IV": s.get("iv"),
         "MoS": s.get("mos"),
         "PEG": s.get("peg"),
+        "pegBasis": s.get("pegBasis"),   # "T"=trailing-growth (less reliable), "F"=forward estimate
         "Fwd PEG": s.get("fwdPEG"),
         "Fwd P/E": s.get("fwdPE"),
         "P/E": s.get("pe"),
@@ -4403,8 +4518,7 @@ def format_stock_row(s: dict) -> dict:
         "Tangible Book": s.get("tangibleBook"),
         "Net Cash/Sh": s.get("netCashPerShare"),
         "Graham NN": s.get("grahamNetNet"),
-        "Beat Rate": s.get("beatRate"),
-        "Beat Streak": s.get("epsBeatStreak"),
+        "Est Rev 30d": s.get("estRevision30d"),  # FY1 EPS consensus change over 30d
         "52w Pos": s.get("priceVs52H"),   # price / 52wk high; 0.65 = 35% off high
         "52w vs High": s.get("priceVs52H"),  # alias used in Fast Growers / QC / Stalwarts columns
         "52w vs Low": s.get("priceVs52L"),   # price / 52wk low; 1.30 = 30% off low
@@ -4494,8 +4608,8 @@ def format_stock_row(s: dict) -> dict:
 
 def build_iv_discount(wb, stocks):
     """Tab 2: Intrinsic Value Discount — Buffett/Lynch style: good businesses below DCF value.
-    Primary signal: DCF Margin of Safety.
-    Gate: Altman Z ≥ 1.5 (financial distress filter). No Piotroski gate.
+    Primary signal: DCF Margin of Safety (≥15% — real discount, not DCF noise).
+    Gates: Altman Z ≥ 1.5 (distress filter), ≥2 of 4 quality signals. No Piotroski gate.
     Scoring: MoS + Lynch quality (rev consistency, FCF conversion, EPS growth, buybacks)
              + FCF yield + ROIC + ROE + multi-metric cheapness + D/E + beat rate.
     """
@@ -4516,18 +4630,18 @@ def build_iv_discount(wb, stocks):
         if not iv or not price or price <= 0 or not mos:
             continue
         # Only undervalued stocks (positive MoS = DCF > price)
-        if mos < 0.05:   # at least 5% discount — noise floor
+        if mos < 0.15:   # at least 15% discount — real margin of safety, not DCF noise
             continue
         # Altman Z — exclude financially distressed (bankruptcy zone)
         if az is not None and az < 1.5:
             continue
-        # Earnings/cash quality gate — must have at least one positive quality signal
-        # Avoids pure speculative DCF plays with no real cash flows
+        # Earnings/cash quality gate — must have at least TWO positive quality signals
+        # Avoids pure speculative DCF plays with no real cash flows ("cheap PE but nothing else")
         has_fcf    = (fcf is not None and fcf > 0)
         has_roe    = (roe is not None and roe > 0.08)
         has_roic   = (s.get("roic") is not None and s.get("roic") > 0.08)
-        has_pe     = (s.get("pe") and 0 < s.get("pe") < 40)
-        if not (has_fcf or has_roe or has_roic or has_pe):
+        has_pe     = bool(s.get("pe") and 0 < s.get("pe") < 40)
+        if sum([has_fcf, has_roe, has_roic, has_pe]) < 2:
             continue
 
         # ── Scoring: pure IV-focus, no insider influence on rank ──────────
@@ -4606,10 +4720,12 @@ def build_iv_discount(wb, stocks):
         if de is not None and de < 0.3:   score += 4
         elif de is not None and de < 0.8: score += 2
 
-        # 8. Earnings beat rate — management consistently delivers
-        br = s.get("beatRate")
-        if br and br >= 0.875: score += 5
-        elif br and br >= 0.75: score += 3
+        # 8. Estimate revisions — analysts raising numbers confirms the value thesis
+        er = s.get("estRevision30d")
+        if er is not None:
+            if er >= 0.05:    score += 5
+            elif er >= 0:     score += 3
+            elif er <= -0.05: score -= 4   # cuts = value trap warning
 
         # Macro regime: IV Discount is a value/quality screen — benefits in risk-off
         _iv_mult = {"risk_on": 0.90, "neutral": 1.00, "risk_off": 1.15}.get(_MACRO_REGIME, 1.0)
@@ -4626,15 +4742,15 @@ def build_iv_discount(wb, stocks):
     ws.sheet_view.showGridLines = False
     sr = add_title(ws,
                    "💎 Intrinsic Value Discount — Good Businesses Trading Below DCF Value",
-                   f"Filter: MoS≥5%, Altman Z≥1.5 (distress gate), positive FCF/ROE/ROIC/PE. No Piotroski gate. "
+                   f"Filter: MoS≥15%, Altman Z≥1.5 (distress gate), ≥2 of FCF/ROE/ROIC/PE positive. No Piotroski gate. "
                    f"Score: MoS + Lynch quality (Rev Consistency, FCF Conversion, EPS growth, buybacks) "
-                   f"+ FCF yield + ROIC + ROE + multi-metric cheapness + D/E + beat rate. {datetime.date.today()}")
+                   f"+ FCF yield + ROIC + ROE + multi-metric cheapness + D/E + estimate revisions. {datetime.date.today()}")
 
     headers = [
         "Rank", "Ticker", "Company", "Sector", "Price", "IV", "MoS",
         "IV (Custom)", "MoS (Custom)", "Implied 5Y Growth",
         "P/E", "P/E 10Y Avg", "EV/EBITDA", "PEG", "P/B", "FCF Yield", "ROIC", "ROE", "D/E",
-        "Beat Rate", "Rev Consist.", "FCF Conv.", "EPS Growth 5Y",
+        "Est Rev 30d", "Rev Consist.", "FCF Conv.", "EPS Growth 5Y",
         "MktCap ($B)", "Score", "🏦 Insider",
     ]
     widths = [5, 8, 22, 15, 8, 8, 7, 9, 10, 11, 7, 9, 6, 6, 8, 7, 7, 7, 8, 9, 8, 9, 10, 6, 14]
@@ -4775,7 +4891,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         print("  ⏭️ No ANTHROPIC_KEY — skipping AI overview")
         return {}
 
-    print("\n  🤖 Running multi-agent AI analysis (12 specialists + judge)...")
+    print("\n  🤖 Running multi-agent AI analysis (6 specialists)...")
 
     # ── Step 1: Cross-strategy meta-ranking ────────────────────────────────
     # A stock appearing in multiple strategies is cross-validated — stronger signal.
@@ -4931,13 +5047,13 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         if (_go_ai is not None and _go_ai > 0.50) and (_ego_ai is not None and _ego_ai > 0.50):
             parts.append("🚩BOTH Rev+EPS estimates far above history")
 
-        # Change 3: Beat rate — management execution quality
-        _br_ai = s.get("beatRate")
-        if _br_ai is not None:
-            if _br_ai >= 0.75:
-                parts.append(f"✅BeatRate={_br_ai:.0%}")
-            elif _br_ai < 0.50:
-                parts.append(f"⚠BeatRate={_br_ai:.0%}(low)")
+        # Change 3: Estimate revisions — sell-side conviction direction (30d consensus change)
+        _er_ai = s.get("estRevision30d")
+        if _er_ai is not None:
+            if _er_ai >= 0.05:
+                parts.append(f"✅EstRev+{_er_ai:.0%}")
+            elif _er_ai <= -0.05:
+                parts.append(f"⚠EstRev{_er_ai:.0%}(cuts)")
 
         # Change 3: Gross margin — pricing power / business model quality
         _gm_ai = s.get("grossMargin")
@@ -5136,9 +5252,12 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         except json.JSONDecodeError:
             return _repair_truncated_json(text)
 
-    # Model constants — specialists use Haiku (cheap, fast); judge uses Sonnet (quality)
-    _SPECIALIST_MODEL = "claude-haiku-4-5"
+    # Model constants — weekly run uses stronger models for chat-quality analysis:
+    #   specialists → Sonnet (narrative reasoning); Mall Manager → Sonnet;
+    #   deep-research memo writer → Opus (Step 4).
+    _SPECIALIST_MODEL = "claude-sonnet-4-6"
     _JUDGE_MODEL      = "claude-sonnet-4-6"
+    _REPORT_MODEL     = "claude-opus-4-8"
 
     def _post(sys_p, usr_p, max_tok, timeout_s, model=None):
         return requests.post(
@@ -5157,7 +5276,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
     _tool_calls_made = [0]    # total FMP tool calls fired across all agents this run
     _tool_agents_used = [0]   # agents that actually called at least one tool
 
-    def _post_with_tools(sys_p, usr_p, max_tok, timeout_s, model=None, max_rounds=4):
+    def _post_with_tools(sys_p, usr_p, max_tok, timeout_s, model=None, max_rounds=6):
         """Like _post but supports multi-turn tool use when USE_FMP_TOOLS=1.
 
         If USE_FMP_TOOLS is off → falls back to plain _post (zero behaviour change).
@@ -5409,7 +5528,7 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         # Small/mid cap: viral trends move small caps more dramatically
         size_bonus = 15 if mc < 5 else (8 if mc < 20 else 0)
 
-        return accel + (_sv(m, "beatRate") or 0) * 20 + rg * 0.10 + b2c_bonus + trend_bonus + size_bonus
+        return accel + min(20, max(0, (_sv(m, "estRevision30d") or 0)) * 100) + rg * 0.10 + b2c_bonus + trend_bonus + size_bonus
 
     # Disruptive Innovation — rank by tech/healthcare + highest growth + scalable margins
     def _sc_cathie_wood(m):
@@ -5518,15 +5637,21 @@ def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
         '"business_synopsis":"2-3 sentences: what does this company do, how does it make money, who are its customers? Pure factual description — no investment thesis here.",'
         '"industry":"Specific industry or sub-sector (e.g. Cloud Security, Specialty Pharma, Industrial Automation)",'
         '"key_competitors":"Top 2-3 competitor names, comma-separated (e.g. Salesforce, HubSpot, Zoho)",'
-        '"rationale":"1-2 sentences citing YOUR framework\'s specific metrics — '
-        'e.g. Magic Formula: ROIC X% + EY Y%; SpecialSit: catalyst name + timeline; '
-        'InsiderTrack: who bought $X on date; Pabrai: floor $X vs upside $Y = N:1. '
-        'This must reflect YOUR investing lens, not generic text. '
-        'IMPORTANT: Only cite specific financial figures (percentages, multiples, dollar amounts) '
-        'that appear verbatim in the candidate stock data above — do NOT recall or invent numbers from training knowledge.",'
-        '"brief_case":"one sentence — the market-misunderstanding thesis",'
-        '"key_metric":"the single most compelling number from the provided data (not from memory)","conviction":"HIGH|MEDIUM"}'
+        '"rationale":"2-4 sentences in YOUR investor\'s voice — reason the way they actually think. '
+        'Tell the story: why this business, why now, what the market is missing. Weave in the '
+        'evidence from the data naturally, the way an analyst would in a written note.",'
+        '"brief_case":"one sentence — the core market-misunderstanding thesis",'
+        '"valuation_view":"Is it undervalued, fairly valued, or expensive — and roughly by how much / vs what? '
+        'Reference the discount-to-IV (MoS), forward PEG, or sector multiple where available.",'
+        '"what_to_watch":"The specific catalysts or signals to follow over the coming weeks–months '
+        '(e.g. next earnings date, an estimate-revision trend, a product launch, an insider cluster).",'
+        '"risks":"The 1-2 most important risks or reasons this thesis could be wrong.",'
+        '"time_horizon":"Your intended hold (e.g. 2-3 years, 5+ years, 12-month catalyst).",'
+        '"key_metric":"the single most compelling number that supports your case","conviction":"HIGH|MEDIUM"}'
         ',...]}'
+        '\n\nGrounding rule: every specific figure (percentage, multiple, dollar amount) you cite must come '
+        'from the candidate data above or from a live FMP tool lookup — reason freely about the business, '
+        'the narrative and the trends, but never fabricate or recall numbers from training knowledge.'
     )
 
     # ── B4: Agent-performance feedback block ────────────────────────────────
@@ -5973,25 +6098,66 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
         ),
     ]
 
+    # ── Active roster (simplification 2026-06) ────────────────────────────────
+    # Trimmed 12 → 6 most philosophically-distinct, highest-signal lenses to cut
+    # consensus noise and ~halve weekly AI cost. The other six remain defined above
+    # as a "bench" — to re-enable one, just add its id to this set.
+    #   Kept:   NickSleep (long-term quality), HowardMarks (contrarian / 2nd-level),
+    #           Burry (catalyst deep value), InsiderTrack (smart money),
+    #           CathieWood (disruption/growth), MagicFormula (mechanical quality+cheap)
+    #   Benched: GoldmanSC, LynchBWYK, SocialArb, Mayer100x, Pabrai, WallStBlind
+    _ACTIVE_SPECIALISTS = {
+        "NickSleep", "HowardMarks", "Burry", "InsiderTrack", "CathieWood", "MagicFormula",
+    }
+    specialists_cfg = [s for s in specialists_cfg if s[0] in _ACTIVE_SPECIALISTS]
+
     from concurrent.futures import ThreadPoolExecutor, as_completed as _as_completed
 
     # Tool-use preamble injected into specialist system prompts when USE_FMP_TOOLS=1
     _TOOL_PREAMBLE = (
-        "\n\nLIVE FMP DATA TOOL AVAILABLE — use when the candidate block summary is insufficient:\n"
-        "  • get_financial_statements(ticker) — annual income statement + balance sheet (4 years)\n"
-        "    Use this to verify: revenue trend, gross/operating margin trajectory, net debt,\n"
-        "    FCF direction, or equity base when you need more detail than the summary provides.\n"
-        "Tool budget: ≤2 calls total. Only call for stocks you are seriously considering picking.\n"
+        "\n\nLIVE FMP DATA TOOLS AVAILABLE — research like a real analyst before you commit:\n"
+        "  • get_financial_statements(ticker) — 4y income statement + balance sheet\n"
+        "  • get_analyst_estimates(ticker)    — forward consensus EPS/revenue + price target\n"
+        "  • get_company_news(ticker)         — recent headlines / narrative\n"
+        "  • get_insider_trades(ticker)       — recent insider buys/sells\n"
+        "  • get_sec_filings(ticker)          — recent 10-K/10-Q/8-K filings\n"
+        "Use these to verify the story, check the trajectory, and ground every claim in real data.\n"
+        "Tool budget: ≤5 calls total. Prioritise the names you are seriously considering picking.\n"
     ) if USE_FMP_TOOLS else ""
 
-    # Token and timeout budgets — doubled when tools are on (multi-round calls consume budget)
-    _SPEC_MAX_TOKENS = 5000 if USE_FMP_TOOLS else 2500
-    _SPEC_TIMEOUT    = 180  if USE_FMP_TOOLS else 90
+    # Token and timeout budgets — generous so Sonnet can reason in full narrative
+    _SPEC_MAX_TOKENS = 9000 if USE_FMP_TOOLS else 5000
+    _SPEC_TIMEOUT    = 300  if USE_FMP_TOOLS else 150
+
+    # Persona-reasoning directive appended to EVERY specialist system prompt. This is what
+    # turns the agents from mechanical number-screeners into investors reasoning in their own
+    # voice — the core of the weekly upgrade.
+    _PERSONA_DIRECTIVE = (
+        "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "HOW TO THINK (this matters more than any single metric):\n"
+        "You are not a stock screener. You are this investor, reasoning about the market as it is "
+        "RIGHT NOW. The criteria above are your LENS, not a checklist — a company that nails your "
+        "philosophy but misses one number is far more interesting than a box-ticker that hits every "
+        "threshold yet has no story. Ask yourself the real question: \"Given everything I believe "
+        "about investing, what would I actually buy today, and why?\"\n"
+        "  • Reason qualitatively first — the business, the narrative, the durability of the moat or "
+        "trend, where the crowd is wrong, what the next 1–3 years look like. Use the financial data as "
+        "EVIDENCE for that judgment, never as a pass/fail gate.\n"
+        "  • Write your rationale the way you'd write a note to a sharp friend: a flowing argument in "
+        "your own voice, not a list of metrics. Make the reader understand why YOU, specifically, find "
+        "this compelling.\n"
+        "  • Be honest about valuation and risk. Saying \"great business but priced for perfection\" and "
+        "passing is a legitimate, valuable answer.\n"
+        "  • Quality over quantity: surface only genuinely high-conviction names — typically 2–5, fewer "
+        "if only a few truly fit. Never pad the list to look productive. One brilliant idea beats five "
+        "mediocre ones.\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
 
     def _call_specialist(cfg):
         name, label, sys_p, usr_p = cfg
-        # Inject tool preamble when USE_FMP_TOOLS is on
-        _sys = sys_p + _TOOL_PREAMBLE if _TOOL_PREAMBLE else sys_p
+        # Always inject the persona directive; add the live-tool preamble when tools are on.
+        _sys = sys_p + _PERSONA_DIRECTIVE + (_TOOL_PREAMBLE if _TOOL_PREAMBLE else "")
         for attempt in range(2):
             try:
                 resp = _post_with_tools(_sys, usr_p, _SPEC_MAX_TOKENS, _SPEC_TIMEOUT,
@@ -6094,6 +6260,10 @@ Respond ONLY with valid JSON (no markdown): {SPECIALIST_JSON_SCHEMA}""",
             "story":            pd.get("rationale", pd.get("brief_case", ""))[:300],
             "catalyst":         pd.get("catalyst", ""),
             "watch":            pd.get("watch", ""),
+            "what_to_watch":    pd.get("what_to_watch", pd.get("watch", "")),
+            "valuation_view":   pd.get("valuation_view", ""),
+            "risks":            pd.get("risks", ""),
+            "time_horizon":     pd.get("time_horizon", ""),
             "conviction":       pd.get("conviction", "MEDIUM"),
             "urgency":          "WITHIN MONTHS",
             "key_metric":       pd.get("key_metric", ""),
@@ -6368,6 +6538,230 @@ JSON only. No markdown, no preamble."""
     except Exception as e:
         print(f"  ⚠️ Mall Manager failed: {str(e)[:120]}")
         return {}
+
+
+def call_research_analyst(ai_result: dict, stocks: dict,
+                          macro: dict = None, market_intel: dict = None,
+                          max_memos: int = 5) -> dict:
+    """📋 Deep-Research Analyst (Opus) — the weekly "ask Claude in chat for a comprehensive
+    stock analysis" layer. Writes a full investment memo on each of the top consensus picks:
+    business overview, bull case, bear case, valuation & is-it-undervalued, catalysts, and
+    what-to-watch over the coming weeks–months. Each memo is an independent Opus call with live
+    FMP tools so it can research the name properly. Returns {"memos": [ {...}, ... ]}.
+    """
+    if not ANTHROPIC_KEY:
+        return {}
+    picks = (ai_result or {}).get("picks", [])
+    if not picks:
+        return {}
+
+    # Picks are already ranked by cross-specialist endorsement (CORE → SATELLITE → WATCH).
+    top = picks[:max_memos]
+    print(f"\n  📋 Running AI Deep-Research Analyst (Opus) on {len(top)} top consensus picks...")
+
+    _MODEL        = "claude-opus-4-8"   # deepest model — weekly memo layer only
+    _MEMO_MAXTOK  = 6000
+    _MEMO_TIMEOUT = 420
+
+    _MEMO_SCHEMA = (
+        '{"ticker":"X","company":"Name",'
+        '"verdict":"BUY | WATCH | AVOID — plus a half-sentence why",'
+        '"conviction":"HIGH | MEDIUM | LOW",'
+        '"business":"2-4 sentences: what it does, how it makes money, its competitive position.",'
+        '"bull_case":"A full paragraph: the strongest case for owning this over the next few years.",'
+        '"bear_case":"A full paragraph: what could go wrong, the most credible reasons to pass.",'
+        '"valuation":"Is it undervalued, fairly valued, or expensive — and roughly by how much? '
+        'Reference the DCF margin-of-safety, forward PEG, and/or sector multiple. Give a rough fair-value view.",'
+        '"catalysts":"Specific events that could re-rate the stock over the coming weeks to months.",'
+        '"what_to_watch":"The concrete signals/metrics/dates to follow over the next 4-12 weeks '
+        '(earnings date, estimate revisions, a product or contract milestone, insider activity).",'
+        '"time_horizon":"Your suggested hold (e.g. 2-3 years, 5+ years, 12-month catalyst)."}'
+    )
+
+    def _metrics_block(t):
+        s = stocks.get(t, {})
+        def g(*keys):
+            for k in keys:
+                v = s.get(k)
+                if v not in (None, ""):
+                    return v
+            return None
+        rows = []
+        rows.append(f"Company: {g('companyName','name') or t}")
+        rows.append(f"Sector / Industry: {g('sector') or '—'} / {g('industry') or '—'}")
+        mc = g("mktCap")
+        if mc:
+            rows.append(f"Market cap: " + (f"${mc/1e9:.2f}B" if mc >= 1e9 else f"${mc/1e6:.0f}M"))
+        px = g("price")
+        if px:
+            rows.append(f"Price: ${px:.2f}")
+        pe = g("pe", "peRatio", "peTTM")
+        if pe:
+            try: rows.append(f"P/E (TTM): {float(pe):.1f}")
+            except Exception: pass
+        peg = g("peg", "pegRatio")
+        if peg is not None:
+            _basis = " (trailing-growth basis)" if s.get("pegBasis") == "T" else " (forward-estimate basis)" if s.get("pegBasis") == "F" else ""
+            rows.append(f"PEG: {peg}{_basis}")
+        iv = g("iv", "dcf", "intrinsicValue", "dcfValue")
+        if iv:
+            try: rows.append(f"DCF intrinsic value: ${float(iv):.2f}")
+            except Exception: pass
+        mos = g("mos", "mosCustom", "marginOfSafety")
+        if mos is not None:
+            try: rows.append(f"Margin of safety vs DCF: {float(mos)*100:+.0f}%")
+            except Exception: pass
+        roic = g("roic")
+        if roic:
+            try: rows.append(f"ROIC: {float(roic)*100:.0f}%")
+            except Exception: pass
+        gm = g("grossMargin")
+        if gm:
+            try: rows.append(f"Gross margin: {float(gm)*100:.0f}%")
+            except Exception: pass
+        om = g("operatingMargin")
+        if om:
+            try: rows.append(f"Operating margin: {float(om)*100:.0f}%")
+            except Exception: pass
+        rg = g("revGrowth", "revenueGrowthYoy")
+        if rg:
+            try: rows.append(f"Revenue growth YoY: {float(rg)*100:.0f}%")
+            except Exception: pass
+        fy = g("fcfYield")
+        if fy:
+            try: rows.append(f"FCF yield: {float(fy)*100:.1f}%")
+            except Exception: pass
+        yh, yl = g("yearHigh"), g("yearLow")
+        if px and yh and yl and yh > yl:
+            try: rows.append(f"52-week position: {(px-yl)/(yh-yl)*100:.0f}% of range (low ${yl:.0f} / high ${yh:.0f})")
+            except Exception: pass
+        ac = g("analystCount")
+        if ac is not None:
+            rows.append(f"Sell-side analysts covering: {ac}")
+        return "\n".join(rows)
+
+    macro_line = ""
+    if macro:
+        try:
+            macro_line = (f"Macro backdrop: 10Y={macro.get('dgs10','?')}, "
+                          f"VIX={macro.get('vix','?')}, yield curve={macro.get('yield_curve','?')}.")
+        except Exception:
+            macro_line = ""
+
+    _sys = (
+        "You are a senior investment analyst writing a comprehensive, balanced research memo on a "
+        "single stock — the kind of thorough, even-handed analysis a thoughtful investor would get by "
+        "asking for a full write-up. You think for yourself: you weigh the bull and bear cases honestly, "
+        "you are clear-eyed about valuation, and you are willing to conclude WATCH or AVOID when that is "
+        "the honest call. You have live FMP data tools — use them to verify the business, the trajectory, "
+        "the valuation and recent news before you commit to a view.\n\n"
+        "Grounding rule: every specific figure you cite must come from the provided data or a tool lookup. "
+        "Never invent or recall numbers from training knowledge — wrong numbers mislead a real investor.\n\n"
+        f"Today is {datetime.date.today()}. {macro_line}"
+    )
+
+    _hdrs = {"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01",
+             "content-type": "application/json"}
+
+    def _research_one(pick):
+        t = (pick.get("ticker") or "").upper()
+        if not t:
+            return None
+        endorsed = pick.get("endorsed_by", "")
+        synopsis = pick.get("business_synopsis", "")
+        spec_story = pick.get("story", pick.get("rationale", ""))
+        _usr = (
+            f"Write a full investment memo on {t} ({pick.get('company', t)}).\n\n"
+            f"WHY IT'S ON THE LIST — endorsed by these specialist analysts: {endorsed or 'n/a'}.\n"
+            f"Specialist one-liner: {spec_story[:400]}\n\n"
+            f"SCREENER DATA (use as evidence; verify or extend with tools as needed):\n{_metrics_block(t)}\n"
+            + (f"\nWhat it does: {synopsis}\n" if synopsis else "")
+            + f"\nResearch the name (tools encouraged, budget ≤5 calls), then respond ONLY with valid JSON "
+              f"(no markdown):\n{_MEMO_SCHEMA}"
+        )
+        try:
+            if USE_FMP_TOOLS:
+                _msgs = [{"role": "user", "content": _usr}]
+                resp = None
+                for _round in range(6):
+                    resp = requests.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers=_hdrs,
+                        json={"model": _MODEL, "max_tokens": _MEMO_MAXTOK,
+                              "system": _sys, "messages": _msgs, "tools": FMP_AGENT_TOOLS},
+                        timeout=_MEMO_TIMEOUT,
+                    )
+                    if resp.status_code != 200 or resp.json().get("stop_reason") != "tool_use":
+                        break
+                    _content = resp.json().get("content", [])
+                    _msgs.append({"role": "assistant", "content": _content})
+                    _tr = []
+                    for _blk in _content:
+                        if _blk.get("type") != "tool_use":
+                            continue
+                        print(f"      🔧 Research tool: {_blk['name']}({_blk.get('input',{}).get('ticker','?')}) [{t}]")
+                        _tr.append({"type": "tool_result", "tool_use_id": _blk["id"],
+                                    "content": _execute_fmp_tool(_blk["name"], _blk.get("input", {}))})
+                    _msgs.append({"role": "user", "content": _tr})
+            else:
+                resp = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers=_hdrs,
+                    json={"model": _MODEL, "max_tokens": _MEMO_MAXTOK,
+                          "system": _sys, "messages": [{"role": "user", "content": _usr}]},
+                    timeout=_MEMO_TIMEOUT,
+                )
+            if resp is None or resp.status_code != 200:
+                print(f"    ⚠️ Research memo {t} error {getattr(resp,'status_code','?')}")
+                return None
+            # If we exhausted all rounds and Opus is still in tool_use mode,
+            # send one final prompt to force the JSON response.
+            if resp.json().get("stop_reason") == "tool_use":
+                _final_content = resp.json().get("content", [])
+                _msgs.append({"role": "assistant", "content": _final_content})
+                _tr2 = [{"type": "tool_result", "tool_use_id": b["id"], "content": ""}
+                        for b in _final_content if b.get("type") == "tool_use"]
+                _msgs.append({"role": "user", "content": _tr2 + [
+                    {"type": "text", "text": f"Stop tool use. Respond ONLY with valid JSON:\n{_MEMO_SCHEMA}"}
+                ]})
+                resp = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers=_hdrs,
+                    json={"model": _MODEL, "max_tokens": _MEMO_MAXTOK,
+                          "system": _sys, "messages": _msgs},
+                    timeout=_MEMO_TIMEOUT,
+                )
+                if resp is None or resp.status_code != 200:
+                    print(f"    ⚠️ Research memo {t} error on final round {getattr(resp,'status_code','?')}")
+                    return None
+            # Find the first text block (content[0] may be an empty pre-tool-use text block)
+            text = next((b.get("text", "") for b in resp.json().get("content", [])
+                         if b.get("type") == "text"), "").strip()
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            text = text.strip().rstrip("`")
+            memo = json.loads(text)
+            memo.setdefault("ticker", t)
+            memo.setdefault("company", pick.get("company", t))
+            memo["endorsed_by"]   = endorsed
+            memo["position_tier"] = pick.get("position_tier", "")
+            print(f"    ✅ Research memo done — {t} ({memo.get('verdict','')[:40]})")
+            return memo
+        except Exception as exc:
+            print(f"    ⚠️ Research memo {t} failed: {str(exc)[:100]}")
+            return None
+
+    from concurrent.futures import ThreadPoolExecutor as _TPE
+    memos = []
+    with _TPE(max_workers=4) as _pool:
+        for _m in _pool.map(_research_one, top):
+            if _m:
+                memos.append(_m)
+
+    print(f"  ✅ Deep-Research Analyst complete — {len(memos)} memos written")
+    return {"memos": memos}
 
 
 # ── Claude Chat weekly prompt templates ────────────────────────────────
@@ -9576,7 +9970,7 @@ def build_picks_tracking(wb, stocks):
 
 def build_quality_compounders(wb, stocks):
     """Tab 3b: Quality Compounders — Buffett's 'wonderful businesses at fair prices'.
-    ROE > 15%, ROIC > 15%, consistent growth, low debt, Altman Z > 1.5 (distress gate).
+    ROE > 15%, ROIC > 20%, consistent growth, low debt, Altman Z > 1.5 (distress gate).
     Piotroski removed: it penalises buyback-heavy and asset-light (SaaS) companies unfairly.
     Gross margin replaces Piotroski as the moat/pricing-power signal.
     These are businesses with durable competitive advantages (moats).
@@ -9591,7 +9985,7 @@ def build_quality_compounders(wb, stocks):
         de   = s.get("de")
         rg   = s.get("revGrowth")
 
-        # Quality gates: ROIC > 15%, ROE > 15%, FCF positive, Altman Z > 1.5
+        # Quality gates: ROIC > 20%, ROE > 15%, FCF positive, Altman Z > 1.5
         # ROIC > ROE: ROIC measures true capital efficiency regardless of leverage
         # Real Estate excluded: land appreciation inflates ROIC; lumpy/asset-heavy; not a moat business
         # Basic Materials excluded: commodity-cycle peaks inflate ROIC/FCF for miners; not durable moats
@@ -9601,7 +9995,7 @@ def build_quality_compounders(wb, stocks):
         _sector_qc = (s.get("sector") or "")
         if _sector_qc == "Real Estate":     continue
         if _sector_qc == "Basic Materials": continue
-        if not roic or roic < 0.15:         continue   # moat signal
+        if not roic or roic < 0.20:         continue   # moat signal — 20%+ is where durable advantages show
         if not roe  or roe  < 0.15:         continue
         if not fcf  or fcf  <= 0:           continue   # FCF must be positive
         if not s.get("mktCap", 0) > 1e9:   continue
@@ -9752,7 +10146,7 @@ def build_quality_compounders(wb, stocks):
     ws.sheet_view.showGridLines = False
     sr = add_title(ws,
                    "🏆 Quality Compounders — Buffett's Wonderful Businesses",
-                   f"ROE >15% + ROIC >15% + Positive FCF + Altman Z >1.5 (no Piotroski gate). "
+                   f"ROE >15% + ROIC >20% + Positive FCF + Altman Z >1.5 (no Piotroski gate). "
                    f"Gross margin replaces Piotroski as moat signal — surfaces NVDA/META/PAYC style "
                    f"asset-light compounders previously excluded by Piotroski. {datetime.date.today()}")
 
@@ -10189,6 +10583,384 @@ def build_hold_forever_tab(wb, stocks):
     write_table(ws, qualified[:25], headers, sr, header_color="6A1B9A", widths=widths)
     print(f"  ✅ Hold Forever tab done — {min(len(qualified), 25)} (from {len(qualified)} qualifying)")
     return qualified[:25]
+
+
+def _merge_master(sources, metric):
+    """Master-screen consolidation: union of sub-screens, deduped by ticker, re-ranked.
+    sources = [(screen_label, rows), ...]; metric = rank tiebreaker within screen-count.
+    A stock matching several sub-screens ranks higher — cross-screen consensus signal."""
+    merged = {}
+    for label, rows in sources:
+        for r in (rows or []):
+            t = r.get("Ticker")
+            if not t:
+                continue
+            if t not in merged:
+                merged[t] = dict(r)
+                merged[t]["_screens"] = []
+            if label not in merged[t]["_screens"]:
+                merged[t]["_screens"].append(label)
+    out = list(merged.values())
+    def _mv(r):
+        v = r.get(metric)
+        return v if isinstance(v, (int, float)) else float("-inf")
+    out.sort(key=lambda r: (len(r["_screens"]), _mv(r)), reverse=True)
+    for i, r in enumerate(out, 1):
+        r["Rank"]    = i
+        r["Screens"] = " · ".join(r["_screens"])
+    return out[:30]
+
+
+def _build_master_screens(hold_forever, quality_compounders, fcf_compounders, stalwarts,
+                          iv_rows, asset_plays, turnarounds, cyclicals, slow_growers,
+                          fast_growers, ten_baggers, off_the_radar):
+    """Build the 3 master lists (Quality / Value / Growth) from the sub-screen outputs."""
+    quality_master = _merge_master([
+        ("Hold-Forever", hold_forever), ("Quality", quality_compounders),
+        ("FCF", fcf_compounders), ("Stalwart", stalwarts),
+    ], "ROIC")
+    value_master = _merge_master([
+        ("IV-Discount", iv_rows), ("Asset-Play", asset_plays), ("Turnaround", turnarounds),
+        ("Cyclical", cyclicals), ("Slow-Grower", slow_growers),
+    ], "MoS")
+    growth_master = _merge_master([
+        ("Fast-Grower", fast_growers), ("10-Bagger", ten_baggers), ("Off-Radar", off_the_radar),
+    ], "Rev Growth")
+    return quality_master, value_master, growth_master
+
+
+def _percentile_ranks(vals: dict) -> dict:
+    """{ticker: value} → {ticker: 0–100 percentile rank}, higher = better.
+    Cross-sectional ranking loses less information than binary threshold gates."""
+    items = [(t, v) for t, v in vals.items() if isinstance(v, (int, float))]
+    n = len(items)
+    if n < 2:
+        return {t: 50 for t, _ in items}
+    items.sort(key=lambda x: x[1])
+    return {t: round(100 * i / (n - 1)) for i, (t, _) in enumerate(items)}
+
+
+def build_composite_value(wb, stocks):
+    """Tab: 🎯 Composite Value — systematic cross-sectional cheapness.
+
+    O'Shaughnessy/Gray-style value composite: mean percentile rank across up to
+    6 valuation metrics (≥3 required), blended 70/30 with a quality overlay
+    (ROIC, gross margin, Altman Z), then a 6-month-momentum value-trap filter
+    on the finalists only (API-cheap two-stage design). No threshold gates —
+    rank-based, so it degrades gracefully when metrics are missing.
+    """
+    print("\n📊 Building Tab: 🎯 Composite Value...")
+    pool = {}
+    for t, s in stocks.items():
+        if not _is_common_stock(s):                continue
+        if (s.get("mktCap") or 0) <= 200e6:        continue
+        if (s.get("avgDollarVol") or 0) <= 500_000: continue
+        if s.get("goingConcernRisk"):              continue
+        if not s.get("price") or s["price"] <= 0:  continue
+        pool[t] = s
+
+    # ── Value metrics → universe-wide percentiles (higher = cheaper) ───────
+    def _collect(fn):
+        out = {}
+        for t, s in pool.items():
+            v = fn(s)
+            if v is not None:
+                out[t] = v
+        return out
+
+    _val_metrics = {
+        "ey":   _collect(lambda s: (1 / s["pe"]) if s.get("pe") and s["pe"] > 0 else None),
+        "fcfy": _collect(lambda s: s.get("fcfYield")),
+        "eby":  _collect(lambda s: (1 / s["evEbitda"]) if s.get("evEbitda") and s["evEbitda"] > 0 else None),
+        "spy_": _collect(lambda s: (1 / s["ps"]) if s.get("ps") and s["ps"] > 0 else None),
+        "bpy":  _collect(lambda s: (1 / s["pb"]) if s.get("pb") and s["pb"] > 0 else None),
+        "shy":  _collect(lambda s: ((s.get("netBuybackYield") or 0) + (s.get("divYield") or 0))
+                         if (s.get("netBuybackYield") is not None or s.get("divYield") is not None)
+                         else None),
+    }
+    _val_pcts = {k: _percentile_ranks(v) for k, v in _val_metrics.items()}
+
+    # ── Quality overlay percentiles ────────────────────────────────────────
+    _q_pcts = {
+        "roic": _percentile_ranks(_collect(lambda s: s.get("roic"))),
+        "gm":   _percentile_ranks(_collect(lambda s: s.get("grossMargin"))),
+        "az":   _percentile_ranks(_collect(lambda s: s.get("altmanZ"))),
+    }
+
+    scored = []
+    for t, s in pool.items():
+        v_avail = [p[t] for p in _val_pcts.values() if t in p]
+        if len(v_avail) < 3:
+            continue   # too little valuation data to rank credibly
+        value_pct = sum(v_avail) / len(v_avail)
+        q_avail = [p[t] for p in _q_pcts.values() if t in p]
+        quality_pct = (sum(q_avail) / len(q_avail)) if len(q_avail) >= 2 else 50
+        composite = 0.70 * value_pct + 0.30 * quality_pct
+        scored.append((composite, value_pct, quality_pct, t, s))
+    scored.sort(key=lambda x: -x[0])
+
+    # ── Value-trap filter: 6M momentum on the top-60 finalists only ────────
+    finalists = scored[:60]
+    moms = {}
+    if finalists:
+        hist = fetch_daily_history([t for _, _, _, t, _ in finalists])
+        for _, _, _, t, _ in finalists:
+            closes = (hist.get(t) or {}).get("c") or []
+            if len(closes) >= 130 and closes[-127] > 0:
+                moms[t] = closes[-1] / closes[-127] - 1   # ~126 trading days ≈ 6 months
+
+    _mom_vals = sorted(moms.values())
+    _mom_floor = (_mom_vals[max(0, int(len(_mom_vals) * 0.15) - 1)]
+                  if len(_mom_vals) >= 7 else None)
+
+    qualified = []
+    for composite, value_pct, quality_pct, t, s in finalists:
+        mom = moms.get(t)
+        if mom is not None:
+            # Falling knives stay cheap: drop the worst-momentum tail
+            if mom < -0.25 or (_mom_floor is not None and mom < _mom_floor):
+                continue
+        else:
+            # No price data — fall back to estimate-revision / consistency check
+            er = s.get("estRevision30d")
+            rc = s.get("revConsistency")
+            if er is not None and er < -0.05:           continue
+            if rc is not None and rc < 0.40:            continue
+        row = format_stock_row(s)
+        row["Value %ile"]   = round(value_pct)
+        row["Quality %ile"] = round(quality_pct)
+        row["EY %ile"]      = _val_pcts["ey"].get(t, "—")
+        row["FCFY %ile"]    = _val_pcts["fcfy"].get(t, "—")
+        row["Shldr Yld"]    = _val_metrics["shy"].get(t)
+        row["6M Mom"]       = mom
+        row["Score"]        = round(composite, 1)
+        qualified.append(row)
+    qualified = qualified[:30]
+    for i, row in enumerate(qualified):
+        row["Rank"] = i + 1
+
+    ws = wb.create_sheet("CompositeValue")
+    ws.sheet_view.showGridLines = False
+    sr = add_title(ws, "🎯 Composite Value — Systematic Cross-Sectional Cheapness",
+                   f"Mean percentile across ≤6 value metrics (EY, FCF yield, EV/EBITDA, P/S, P/B, "
+                   f"shareholder yield; ≥3 required) ×70% + quality percentile (ROIC, gross margin, "
+                   f"Altman Z) ×30%. 6M-momentum value-trap filter on finalists. {datetime.date.today()}")
+    headers = ["Rank", "Ticker", "Company", "Sector", "Price", "Value %ile", "Quality %ile",
+               "EY %ile", "FCFY %ile", "Shldr Yld", "6M Mom", "P/E", "EV/EBITDA", "P/B",
+               "MktCap ($B)", "Score"]
+    widths = [5, 8, 24, 15, 8, 9, 10, 8, 9, 9, 8, 7, 9, 6, 10, 7]
+    write_table(ws, qualified, headers, sr, header_color="00695C", widths=widths)
+    print(f"  ✅ Composite Value tab done — {len(qualified)} stocks "
+          f"(from {len(scored)} ranked, {len(pool)} in universe)")
+    return qualified
+
+
+def build_earnings_momentum(wb, stocks):
+    """Tab: ⚡ Earnings Momentum — estimate-revisions drift (Zacks-Rank-style).
+
+    The market systematically underreacts to analyst estimate changes; prices
+    drift for 1–6 months after upgrades. Rank = 50% revision strength (30d FY1
+    EPS consensus change from estimates_snapshots.json) + 30% 6M price momentum
+    (finalists only, shared _daily_hist cache) + 20% fundamental acceleration.
+    Quality floor keeps out junk squeezes. Expected holding period: 1–6 months.
+    """
+    print("\n📊 Building Tab: ⚡ Earnings Momentum...")
+    cands = {}
+    for t, s in stocks.items():
+        if not _is_common_stock(s):                 continue
+        if (s.get("mktCap") or 0) <= 200e6:         continue
+        if (s.get("avgDollarVol") or 0) <= 500_000: continue
+        if s.get("goingConcernRisk"):               continue
+        if s.get("estRevision30d") is None:         continue
+        # Quality floor: must be profitable or FCF-positive; no distress
+        _fcf = s.get("fcfYield"); _pe = s.get("pe")
+        if not ((_fcf is not None and _fcf > 0) or (_pe is not None and _pe > 0)):
+            continue
+        az = s.get("altmanZ")
+        if az is not None and az < 1.5:             continue
+        cands[t] = s
+
+    rev_pcts = _percentile_ranks({t: s["estRevision30d"] for t, s in cands.items()})
+
+    def _accel(s):
+        parts = []
+        rg, rgp = s.get("revGrowth"), s.get("revGrowthPrev")
+        eg, egp = s.get("epsGrowth"), s.get("epsGrowthPrev")
+        if rg is not None and rgp is not None: parts.append(rg - rgp)
+        if eg is not None and egp is not None: parts.append(eg - egp)
+        return sum(parts) if parts else None
+    accel_pcts = _percentile_ranks({t: a for t, s in cands.items()
+                                    if (a := _accel(s)) is not None})
+
+    # Pre-rank on the API-free signals, fetch price momentum for top-80 finalists only
+    pre = sorted(cands, key=lambda t: -(0.5 * rev_pcts.get(t, 0) + 0.2 * accel_pcts.get(t, 50)))
+    finalists = pre[:80]
+    moms = {}
+    if finalists:
+        hist = fetch_daily_history(finalists)
+        for t in finalists:
+            closes = (hist.get(t) or {}).get("c") or []
+            if len(closes) >= 130 and closes[-127] > 0:
+                moms[t] = closes[-1] / closes[-127] - 1
+    mom_pcts = _percentile_ranks(moms)
+
+    # Momentum strategies crash at regime turns — soften scores in risk-off
+    _regime_mult = 0.85 if _MACRO_REGIME == "risk_off" else 1.0
+    if _regime_mult < 1.0:
+        print("  ⚠️ risk_off regime — momentum scores ×0.85 (regime-turn crash risk)")
+
+    scored = []
+    for t in finalists:
+        s = cands[t]
+        score = (0.50 * rev_pcts.get(t, 0)
+                 + 0.30 * mom_pcts.get(t, 50)
+                 + 0.20 * accel_pcts.get(t, 50)) * _regime_mult
+        scored.append((score, t, s))
+    scored.sort(key=lambda x: -x[0])
+
+    qualified = []
+    for score, t, s in scored[:25]:
+        row = format_stock_row(s)
+        row["Rev 30d"]    = s.get("estRevision30d")
+        row["Mom 6M"]     = moms.get(t)
+        row["Accel %ile"] = accel_pcts.get(t, "—")
+        row["Rev %ile"]   = rev_pcts.get(t, "—")
+        row["Score"]      = round(score, 1)
+        qualified.append(row)
+    for i, row in enumerate(qualified):
+        row["Rank"] = i + 1
+
+    ws = wb.create_sheet("EarningsMomentum")
+    ws.sheet_view.showGridLines = False
+    sr = add_title(ws, "⚡ Earnings Momentum — Estimate-Revisions Drift",
+                   f"Rank = 50% estimate-revision strength (30d FY1 EPS consensus change) + 30% 6M price "
+                   f"momentum + 20% rev/EPS acceleration. Quality floor: profitable or FCF-positive, "
+                   f"Altman Z ≥1.5. Hold 1–6 months. Regime: {_MACRO_REGIME}. {datetime.date.today()}")
+    headers = ["Rank", "Ticker", "Company", "Sector", "Price", "Rev 30d", "Mom 6M",
+               "Accel %ile", "Rev %ile", "PEG", "P/E", "MktCap ($B)", "Score"]
+    widths = [5, 8, 24, 15, 8, 9, 8, 9, 8, 6, 7, 10, 7]
+    write_table(ws, qualified, headers, sr, header_color="E65100", widths=widths)
+    print(f"  ✅ Earnings Momentum tab done — {len(qualified)} stocks "
+          f"(from {len(cands)} with revision data)")
+    return qualified
+
+
+def _sma(closes: list, n: int):
+    """Simple moving average of the last n closes, or None if not enough bars."""
+    if len(closes) < n:
+        return None
+    return sum(closes[-n:]) / n
+
+
+def _rsi14(closes: list, n: int = 14):
+    """Wilder-smoothed RSI on daily closes. Returns None if not enough bars."""
+    if len(closes) < n + 1:
+        return None
+    deltas = [closes[i + 1] - closes[i] for i in range(len(closes) - 1)]
+    avg_gain = sum(d for d in deltas[:n] if d > 0) / n
+    avg_loss = sum(-d for d in deltas[:n] if d < 0) / n
+    for d in deltas[n:]:
+        avg_gain = (avg_gain * (n - 1) + (d if d > 0 else 0)) / n
+        avg_loss = (avg_loss * (n - 1) + (-d if d < 0 else 0)) / n
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return round(100 - 100 / (1 + rs), 1)
+
+
+def build_swing_setups(wb, candidates, stocks):
+    """Tab: 📈 Swing Setups — technical timing overlay on already-vetted names.
+
+    candidates = [(ticker, source_label), ...] from the master screens + AI picks
+    (~90–140 names) — NOT the full universe, capping API cost at one daily-history
+    call per name. Two setups:
+      A "Pullback": price > SMA200, SMA50 > SMA200, near/at SMA50 or RSI < 40
+      B "Breakout": fresh 60-day high within last 5 bars on >1.3× volume
+    These are entry-timing signals on vetted names, not standalone buy signals.
+    """
+    print("\n📊 Building Tab: 📈 Swing Setups...")
+    # Dedup, keep all source labels per ticker
+    _srcs = {}
+    for t, label in candidates:
+        if t:
+            _srcs.setdefault(t, [])
+            if label not in _srcs[t]:
+                _srcs[t].append(label)
+
+    hist = fetch_daily_history(list(_srcs)) if _srcs else {}
+    rows = []
+    for t, labels in _srcs.items():
+        entry = hist.get(t)
+        if not entry:
+            continue
+        closes, vols, dates = entry["c"], entry["v"], entry["dates"]
+        if len(closes) < 210:
+            continue   # need a meaningful SMA200
+        # Split/gap guard: a >40% single-day move means unadjusted data or a bad print
+        if any(abs(closes[i + 1] / closes[i] - 1) > 0.40
+               for i in range(len(closes) - 1) if closes[i] > 0):
+            continue
+        close  = closes[-1]
+        sma50  = _sma(closes, 50)
+        sma200 = _sma(closes, 200)
+        rsi    = _rsi14(closes[-80:])   # 80 bars ≈ stable Wilder smoothing window
+        if not (sma50 and sma200 and close > 0):
+            continue
+        vol20 = sum(vols[-20:]) / 20 if len(vols) >= 20 else 0
+        vol60 = sum(vols[-60:]) / 60 if len(vols) >= 60 else 0
+        vol_ratio = (vol20 / vol60) if vol60 > 0 else None
+
+        d50  = close / sma50 - 1
+        d200 = close / sma200 - 1
+        setup = None
+        entry_zone = ""
+        uptrend = close > sma200 and sma50 > sma200
+        if uptrend and ((0 <= d50 <= 0.04) or (rsi is not None and rsi < 40 and d50 > -0.05)):
+            setup = "🟢 Pullback"
+            entry_zone = f"${sma50:.2f}–${sma50 * 1.02:.2f}"
+        else:
+            # Fresh 60-day high within the last 5 bars + volume expansion
+            hi60       = max(closes[-60:])
+            _recent_hi = max(closes[-5:])
+            _prior_hi  = max(closes[-60:-5])
+            if (_recent_hi >= _prior_hi and vol_ratio is not None and vol_ratio > 1.3
+                    and close >= 0.97 * hi60):
+                setup = "🚀 Breakout"
+                entry_zone = f"> ${_prior_hi:.2f}"
+        if not setup:
+            continue
+
+        s = stocks.get(t, {})
+        rows.append({
+            "Ticker": t,
+            "Company": s.get("name", ""),
+            "Setup": setup,
+            "Price": close,
+            "Entry Zone": entry_zone,
+            "Dist SMA50": d50,
+            "Dist SMA200": d200,
+            "RSI": rsi,
+            "52w Pos": s.get("priceVs52H"),
+            "Vol 20/60": f"{vol_ratio:.2f}x" if vol_ratio is not None else "—",
+            "Source": " · ".join(labels[:3]),
+            "As-of": dates[-1],
+        })
+
+    # Pullbacks first (closest to the 50DMA on top), then breakouts
+    rows.sort(key=lambda r: (0 if "Pullback" in r["Setup"] else 1, abs(r["Dist SMA50"])))
+
+    ws = wb.create_sheet("SwingSetups")
+    ws.sheet_view.showGridLines = False
+    sr = add_title(ws, "📈 Swing Setups — Timing Overlay on Vetted Names",
+                   f"Setup A: pullback to SMA50 inside an uptrend (price>SMA200, SMA50>SMA200). "
+                   f"Setup B: fresh 60-day high on >1.3× volume. Candidates = master screens + AI picks "
+                   f"only — entry timing, not standalone signals. {datetime.date.today()}")
+    headers = ["Ticker", "Company", "Setup", "Price", "Entry Zone", "Dist SMA50", "Dist SMA200",
+               "RSI", "52w Pos", "Vol 20/60", "Source", "As-of"]
+    widths = [8, 24, 11, 8, 14, 9, 10, 6, 8, 9, 20, 11]
+    write_table(ws, rows, headers, sr, header_color="01579B", widths=widths)
+    print(f"  ✅ Swing Setups tab done — {len(rows)} setups (from {len(_srcs)} candidates)")
+    return rows
 
 
 def build_sector_relative_bargains(wb, stocks):
@@ -11479,10 +12251,17 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       sparklines=None,
                       hold_forever=None,
                       mall=None,           # 🛍️ Mall Manager picks (Lynch consumer-observable)
+                      research=None,       # 📋 Deep-Research Analyst memos (Opus, top picks)
                       off_the_radar=None,  # 🛰️ Off-the-Radar Compounders (pre-discovery setups)
                       spinoff_events=None,  # 🔔 Front-page spin-off alert events
                       fcf_compounders=None,             # 💸 FCF Compounders — pure cash flow lens
                       index_valuations=None,            # 📊 SPY/QQQ/IWM valuation pulse
+                      composite_value=None,             # 🎯 Composite Value — percentile cheapness
+                      earnings_momentum=None,           # ⚡ Earnings Momentum — revisions drift
+                      swing_setups=None,                # 📈 Swing Setups — timing overlay
+                      quality_master=None,              # 💎 master screens — built in main() so the
+                      value_master=None,                #    Swing pool can reuse them; fallback
+                      growth_master=None,               #    construction below if not passed
                       chat_results=None) -> str:        # 💬 Claude Chat weekly analysis cards
     """Generate a self-contained mobile-responsive HTML dashboard.
     Reads the same data structures that feed the Excel — no extra computation.
@@ -11507,6 +12286,8 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
         "Quality Compounders":quality_compounders,
         "Off-the-Radar":      off_the_radar,
         "Hold Forever":       hold_forever,
+        "Composite Value":    composite_value,
+        "Earnings Momentum":  earnings_momentum,
     }
     for _strat_name, _rows in _strat_to_rows.items():
         if not _rows: continue
@@ -12111,7 +12892,15 @@ function showMacroDetail(el, id) {
             for c in cols:
                 v = r.get(c)
                 # Apply color logic per column
-                if c in ("PEG", "Fwd PEG"):
+                if c == "PEG":
+                    _pdisp = _num(v)
+                    # Flag trailing-growth-based PEGs (less reliable than forward estimates)
+                    if v is not None and _pdisp != "—" and r.get("pegBasis") == "T":
+                        _pdisp = (f'{_pdisp}<sup style="color:#ff8a65;font-size:.7em" '
+                                  f'title="Based on trailing 1-year growth (analyst estimates unavailable) '
+                                  f'— less reliable; can overstate cheapness when growth is decelerating">T</sup>')
+                    cells.append(_cell(_pdisp, v, _peg_cls(v)))
+                elif c == "Fwd PEG":
                     cells.append(_cell(_num(v), v, _peg_cls(v)))
                 elif c == "ROIC":
                     cells.append(_cell(_pct(v), v, _roic_cls(v)))
@@ -12130,8 +12919,26 @@ function showMacroDetail(el, id) {
                 elif c == "Price":
                     cells.append(_cell(_money(v), v))
                 elif c in ("FCF Yield", "Rev Growth", "EPS Growth", "Rev Growth 5Y",
-                           "EPS Growth 5Y", "Div Yield", "Gross Margin", "Oper Margin"):
+                           "EPS Growth 5Y", "Div Yield", "Gross Margin", "Oper Margin",
+                           "Shldr Yld", "52w Pos"):
                     cells.append(_cell(_pct(v), v))
+                elif c in ("6M Mom", "Est Rev 30d", "Mom 6M", "Rev 30d",
+                           "Dist SMA50", "Dist SMA200"):
+                    # Signed percent with directional color
+                    if not isinstance(v, (int, float)):
+                        cells.append("<td style='text-align:right;color:#78909c'>—</td>")
+                    else:
+                        _mcol = ("color:#66bb6a;font-weight:600" if v > 0.02
+                                 else "color:#ef5350;font-weight:600" if v < -0.02 else "color:#b0bec5")
+                        cells.append(f"<td style='text-align:right;{_mcol}'>{v:+.1%}</td>")
+                elif c.endswith("%ile"):
+                    # 0–100 percentile rank — green when strong
+                    if not isinstance(v, (int, float)):
+                        cells.append("<td style='text-align:center;color:#78909c'>—</td>")
+                    else:
+                        _pcol = ("color:#66bb6a;font-weight:600" if v >= 85
+                                 else "color:#ef9a9a" if v <= 30 else "color:#b0bec5")
+                        cells.append(f"<td style='text-align:center;{_pcol}'>{round(v)}</td>")
                 elif c == "Conviction":
                     cells.append(f"<td>{_conv_badge(v)}</td>")
                 elif c == "Urgency":
@@ -12275,9 +13082,11 @@ function showMacroDetail(el, id) {
                 "Finds investment opportunities Wall Street's major banks can't or won't cover — "
                 "coverage gaps, spinoffs, orphaned names, sin-sector discounts, IPO aftermath."),
         }
-        _AGENT_ORDER = ["GoldmanSC", "LynchBWYK", "SocialArb", "Mayer100x",
-                        "CathieWood", "MagicFormula", "Pabrai", "HowardMarks",
-                        "NickSleep", "Burry", "InsiderTrack", "WallStBlind"]
+        # Active 6-agent core (simplification 2026-06). Benched agents are skipped
+        # automatically because they produce no picks (not in _sp), but listing only
+        # the active six keeps the render order explicit.
+        _AGENT_ORDER = ["NickSleep", "HowardMarks", "Burry",
+                        "InsiderTrack", "CathieWood", "MagicFormula"]
 
         sections_html = []
         for ak in _AGENT_ORDER:
@@ -12334,23 +13143,19 @@ function showMacroDetail(el, id) {
 </section>"""
 
     # ── NAV TABS ──────────────────────────────────────────────────────────
+    # 10-tab layout (2026-06): three master screens + three systematic screens
+    # (Composite Value, Earnings Momentum, Swing Setups) + AI hub + utility views.
     tabs = [
         ("ai",       "🤖 AI Analysis"),
-        ("macro",    "🌍 Macro"),
-        ("hold",     "💎 Hold Forever"),
-        ("qual",     "🏆 Quality Comp."),
-        ("fcfcomp",  "💸 FCF Comp."),
-        ("offradar", "🛰️ Off-the-Radar"),
-        ("fastg",    "🚀 Fast Growers"),
-        ("tenb",     "🎯 10-Baggers"),
-        ("turn",     "🔁 Turnarounds"),
-        ("asset",    "🏗 Asset Plays"),
-        ("cycl",     "🔄 Cyclicals"),
-        ("slowg",    "🐢 Slow Growers"),
+        ("qual",     "💎 Quality"),
+        ("value",    "📊 Value"),
+        ("cval",     "🎯 Composite Value"),
+        ("growth",   "🚀 Growth"),
+        ("emom",     "⚡ Earnings Momentum"),
+        ("swing",    "📈 Swing Setups"),
         ("sector",   "🗺 Sectors"),
+        ("macro",    "🌍 Macro"),
         ("perf",     "📈 Performance"),
-        ("iv",       "📊 IV Discount"),
-        ("stalwart", "🏛 Stalwarts"),
     ]
     nav_html = "\n".join(
         f'<button onclick="showTab(\'{tid}\', this)" class="{"active" if i==0 else ""}">{label}</button>'
@@ -13346,9 +14151,11 @@ function showMacroDetail(el, id) {
                 "Finds investment opportunities Wall Street's major banks can't or won't cover — "
                 "coverage gaps, spinoffs, orphaned names, sin-sector discounts, IPO aftermath."),
         }
-        _AGENT_ORDER = ["GoldmanSC", "LynchBWYK", "SocialArb", "Mayer100x",
-                        "CathieWood", "MagicFormula", "Pabrai", "HowardMarks",
-                        "NickSleep", "Burry", "InsiderTrack", "WallStBlind"]
+        # Active 6-agent core (simplification 2026-06). Benched agents are skipped
+        # automatically because they produce no picks (not in _sp), but listing only
+        # the active six keeps the render order explicit.
+        _AGENT_ORDER = ["NickSleep", "HowardMarks", "Burry",
+                        "InsiderTrack", "CathieWood", "MagicFormula"]
 
         # ── Strategy Picks Summary table ──────────────────────────────────
         _strat_defs = [
@@ -13376,6 +14183,9 @@ function showMacroDetail(el, id) {
             _co    = (_top1.get("Company") or "")[:28]
             _n     = len(_sd)
             _peg_s = f'{_peg:.2f}' if _peg else '—'
+            if _peg and _top1.get("pegBasis") == "T":
+                _peg_s += ('<sup style="color:#ff8a65;font-size:.7em" '
+                           'title="Trailing 1y growth basis — less reliable than forward estimates">T</sup>')
             _mos_s = f'{_mos*100:.0f}%' if _mos else '—'
             _pio_s = str(int(_pio)) if _pio else '—'
             _pio_color = ("#1b5e20" if _pio and _pio >= 7 else
@@ -13470,6 +14280,260 @@ function showMacroDetail(el, id) {
                                      mall_inner,
                                      open_by_default=True, accent="#26a69a")
                         if mall_inner and not mall_inner.startswith("<!--") else "")
+
+        # ── 📋 DEEP-RESEARCH ANALYST SECTION (Opus memos on top consensus picks) ──
+        research_section_html = ""
+        try:
+            _memos = (research or {}).get("memos", []) if research else []
+            if _memos:
+                import html as _html_r
+                def _esc(s):
+                    return _html_r.escape(str(s or ""))
+                def _bi_chip(text, color):
+                    return (f'<span style="background:{color}22;color:{color};font-size:.6rem;'
+                            f'font-weight:700;padding:1px 6px;border-radius:10px;'
+                            f'white-space:nowrap">{text}</span>')
+
+                def _make_memo_card(_i, _mo):
+                    _rt   = (_mo.get("ticker") or "?").upper()
+                    _rco  = (_mo.get("company") or "")[:46]
+                    _verdict = _mo.get("verdict", "")
+                    _conv = (_mo.get("conviction") or "MEDIUM").upper()
+                    _tier = _mo.get("position_tier", "")
+                    _endorsed = _mo.get("endorsed_by", "")
+                    _vupper = _verdict.upper()
+                    _vcol = ("#66bb6a" if _vupper.startswith("BUY")
+                             else "#ef5350" if _vupper.startswith("AVOID")
+                             else "#ffb74d")
+                    _ccol = "#66bb6a" if _conv == "HIGH" else ("#ef5350" if _conv == "LOW" else "#90caf9")
+                    _rs = stocks.get(_rt, {})
+                    _rprice = _rs.get("price")
+                    _rpx = f"${_rprice:.2f}" if _rprice else "—"
+                    _rspark = _sparkline_svg(_rt)
+
+                    # Valuation chips in the header — surface "is it undervalued?" at a glance
+                    _vchips = ""
+                    _bmos = _rs.get("mos")
+                    if _bmos is not None:
+                        _bmc = "#66bb6a" if _bmos > 0.20 else ("#ffb74d" if _bmos > 0 else "#ef5350")
+                        _vchips += _bi_chip(f"MoS {_bmos*100:+.0f}%", _bmc)
+                    _bpeg = _rs.get("peg")
+                    if _bpeg:
+                        _btf = "ᵀ" if _rs.get("pegBasis") == "T" else ""
+                        _vchips += _bi_chip(f"PEG {_bpeg:.2f}{_btf}", "#90caf9")
+
+                    def _sect(lbl, key, col="#b0bec5"):
+                        v = _mo.get(key, "")
+                        if not v:
+                            return ""
+                        return (f'<p style="margin:8px 0 0;font-size:.74rem;line-height:1.6;color:{col}">'
+                                f'<b style="color:#90caf9">{lbl}:</b> {_esc(v)}</p>')
+
+                    return (
+                        f'<div class="mm-card xcard" onclick="toggleExpand(this)" '
+                        f'style="border-left:4px solid {_vcol}">'
+                        f'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">'
+                        f'<span class="mm-rank" style="background:#1a237e;color:#90caf9">#{_i+1}</span>'
+                        f'<span class="mm-ticker">{_rt}</span>'
+                        f'<span class="mm-co">{_esc(_rco)}</span>'
+                        f'<span class="badge" style="background:{_vcol};color:#000;font-size:.62rem;'
+                        f'padding:1px 6px;border-radius:3px;font-weight:700">{_esc(_verdict)[:30]}</span>'
+                        f'<span class="badge" style="background:{_ccol}22;color:{_ccol};font-size:.6rem;'
+                        f'padding:1px 6px;border-radius:3px;font-weight:700">{_conv}</span>'
+                        + (f'<span style="font-size:.6rem;color:#546e7a">{_tier}</span>' if _tier else "")
+                        + _vchips
+                        + f'<span class="xarrow">▼</span>'
+                        f'</div>'
+                        + (f'<p style="margin:6px 0 0;font-size:.66rem;color:#546e7a">Endorsed by: {_esc(_endorsed)}</p>'
+                           if _endorsed else "")
+                        + f'<div class="xbody" style="display:none">'
+                        + (f'<div class="sparkline-wrap" style="margin-top:8px"><div style="width:100%">{_rspark}</div></div>'
+                           if _rspark else "")
+                        + _sect("Business", "business")
+                        + _sect("Bull case", "bull_case", "#a5d6a7")
+                        + _sect("Bear case", "bear_case", "#ef9a9a")
+                        + _sect("Valuation", "valuation", "#ffe082")
+                        + _sect("Catalysts", "catalysts")
+                        + _sect("What to watch (4–12 wks)", "what_to_watch", "#80cbc4")
+                        + _sect("Time horizon", "time_horizon", "#b0bec5")
+                        + f'<div style="font-size:.63rem;color:#546e7a;margin-top:8px">Price {_rpx}</div>'
+                        + f'</div>'
+                        f'</div>'
+                    )
+
+                # Light card for a consensus pick that did NOT get a full Opus memo —
+                # shows the specialist thesis + valuation chips, expandable.
+                def _make_light_card(_i, _pk):
+                    _lt   = (_pk.get("ticker") or "?").upper()
+                    _lco  = (_pk.get("company") or "")[:46]
+                    _lconv = (_pk.get("conviction") or "MEDIUM").upper()
+                    _ltier = _pk.get("position_tier", "")
+                    _lend  = _pk.get("endorsed_by", "")
+                    _lccol = "#66bb6a" if _lconv == "HIGH" else ("#ef5350" if _lconv == "LOW" else "#90caf9")
+                    _ls   = stocks.get(_lt, {})
+                    _lspark = _sparkline_svg(_lt)
+                    _lchips = ""
+                    _lmos = _ls.get("mos")
+                    if _lmos is not None:
+                        _lmc = "#66bb6a" if _lmos > 0.20 else ("#ffb74d" if _lmos > 0 else "#ef5350")
+                        _lchips += _bi_chip(f"MoS {_lmos*100:+.0f}%", _lmc)
+                    _lpeg = _ls.get("peg")
+                    if _lpeg:
+                        _ltf = "ᵀ" if _ls.get("pegBasis") == "T" else ""
+                        _lchips += _bi_chip(f"PEG {_lpeg:.2f}{_ltf}", "#90caf9")
+                    def _lsect(lbl, key, col="#b0bec5"):
+                        v = _pk.get(key, "")
+                        if not v:
+                            return ""
+                        return (f'<p style="margin:8px 0 0;font-size:.74rem;line-height:1.6;color:{col}">'
+                                f'<b style="color:#90caf9">{lbl}:</b> {_esc(v)}</p>')
+                    return (
+                        f'<div class="mm-card xcard" onclick="toggleExpand(this)" '
+                        f'style="border-left:4px solid #42a5f5">'
+                        f'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">'
+                        f'<span class="mm-rank" style="background:#1a237e;color:#90caf9">#{_i+1}</span>'
+                        f'<span class="mm-ticker">{_lt}</span>'
+                        f'<span class="mm-co">{_esc(_lco)}</span>'
+                        f'<span class="badge" style="background:{_lccol}22;color:{_lccol};font-size:.6rem;'
+                        f'padding:1px 6px;border-radius:3px;font-weight:700">{_lconv}</span>'
+                        + (f'<span style="font-size:.6rem;color:#546e7a">{_ltier}</span>' if _ltier else "")
+                        + _lchips
+                        + f'<span class="xarrow">▼</span>'
+                        f'</div>'
+                        + (f'<p style="margin:6px 0 0;font-size:.66rem;color:#546e7a">Endorsed by: {_esc(_lend)}</p>'
+                           if _lend else "")
+                        + f'<div class="xbody" style="display:none">'
+                        + (f'<div class="sparkline-wrap" style="margin-top:8px"><div style="width:100%">{_lspark}</div></div>'
+                           if _lspark else "")
+                        + _lsect("Thesis", "story")
+                        + _lsect("Valuation", "valuation_view", "#ffe082")
+                        + _lsect("Catalyst", "catalyst")
+                        + _lsect("What to watch", "what_to_watch", "#80cbc4")
+                        + _lsect("Risks", "risks", "#ef9a9a")
+                        + _lsect("Time horizon", "time_horizon")
+                        + f'</div>'
+                        f'</div>'
+                    )
+
+                # Best Ideas = deep memos (top consensus) + remaining consensus picks, one ranked list.
+                _memo_tickers = {(_mo.get("ticker") or "").upper() for _mo in _memos}
+                _rcards = [_make_memo_card(_i, _mo) for _i, _mo in enumerate(_memos)]
+                _extra_picks = [_p for _p in (ai or {}).get("picks", [])
+                                if (_p.get("ticker") or "").upper() not in _memo_tickers]
+                _lcards = [_make_light_card(len(_memos) + _j, _p)
+                           for _j, _p in enumerate(_extra_picks)]
+                research_section_html = (
+                    '<div style="background:#0d1117;border:1px solid #5c6bc044;border-radius:8px;'
+                    'padding:12px 14px;margin-bottom:18px">'
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
+                    '<span style="font-size:1rem;font-weight:700;color:#7986cb">🎯 Best Ideas</span>'
+                    f'<span style="font-size:.72rem;color:#78909c">— undervalued &amp; high-conviction now: '
+                    f'{len(_memos)} deep memos + {len(_lcards)} consensus picks</span>'
+                    '</div>'
+                    '<p style="font-size:.72rem;color:#546e7a;margin-bottom:8px;line-height:1.5">'
+                    'The week&apos;s highest-conviction names, ranked by cross-specialist consensus. Top picks '
+                    'carry a full Opus research memo (business, bull &amp; bear, valuation, catalysts, what to '
+                    'watch); the rest carry the specialist thesis. <b style="color:#78909c">MoS</b> = margin of '
+                    'safety vs DCF. Click any card to expand.</p>'
+                    + f'<div class="mm-grid">{"".join(_rcards + _lcards)}</div>'
+                    + '</div>'
+                )
+        except Exception as _eres:
+            research_section_html = f"<!-- research_section error: {str(_eres)[:80]} -->"
+
+        wrapped_research = (_collapsible("🎯 Best Ideas — Undervalued &amp; High-Conviction",
+                                         "— merged consensus + Opus deep-research memos + valuation",
+                                         research_section_html.strip(),
+                                         open_by_default=True, accent="#7986cb")
+                            if research_section_html.strip()
+                            and not research_section_html.strip().startswith("<!--") else "")
+
+        # ── 🔭 WATCHLIST — what's undervalued + what to follow over coming weeks/months ──
+        watchlist_html = ""
+        try:
+            import html as _html_w
+            def _esc_w(s):
+                return _html_w.escape(str(s or ""))
+
+            def _chip(text, color):
+                return (f'<span style="background:{color}22;color:{color};font-size:.62rem;'
+                        f'font-weight:700;padding:1px 7px;border-radius:10px;white-space:nowrap">{text}</span>')
+
+            _wl_memos = {(_m.get("ticker") or "").upper(): _m
+                         for _m in (research or {}).get("memos", [])}
+            _wl_picks = {(_p.get("ticker") or "").upper(): _p
+                         for _p in (ai or {}).get("picks", [])}
+            # Order: research-memo names first (highest conviction), then remaining consensus picks
+            _wl_order, _seen_wl = [], set()
+            for _src in ((research or {}).get("memos", []), (ai or {}).get("picks", [])):
+                for _row in _src:
+                    _t = (_row.get("ticker") or "").upper()
+                    if _t and _t not in _seen_wl:
+                        _wl_order.append(_t); _seen_wl.add(_t)
+
+            _wl_rows = []
+            for _t in _wl_order:
+                _memo = _wl_memos.get(_t, {})
+                _pick = _wl_picks.get(_t, {})
+                _watch = _memo.get("what_to_watch") or _pick.get("what_to_watch") or ""
+                if not _watch:
+                    continue   # only list names that actually have a "what to watch" signal
+                _s = stocks.get(_t, {})
+                _co = (_memo.get("company") or _pick.get("company") or _s.get("name") or _t)[:38]
+                _chips = []
+                _mos = _s.get("mos")
+                if _mos is not None:
+                    _mc = "#66bb6a" if _mos > 0.20 else ("#ffb74d" if _mos > 0 else "#ef5350")
+                    _chips.append(_chip(f"MoS {_mos*100:+.0f}%", _mc))
+                _peg = _s.get("peg")
+                if _peg:
+                    _tflag = "ᵀ" if _s.get("pegBasis") == "T" else ""
+                    _chips.append(_chip(f"PEG {_peg:.2f}{_tflag}", "#90caf9"))
+                _px, _yh, _yl = _s.get("price"), _s.get("yearHigh"), _s.get("yearLow")
+                if _px and _yh and _yl and _yh > _yl:
+                    _pos = (_px - _yl) / (_yh - _yl) * 100
+                    _pc = "#66bb6a" if _pos < 33 else ("#ffb74d" if _pos < 66 else "#90a4ae")
+                    _chips.append(_chip(f"52w {_pos:.0f}%", _pc))
+                _er = _s.get("estRevision30d")
+                if _er:
+                    _ec = "#66bb6a" if _er > 0 else "#ef5350"
+                    _chips.append(_chip(f"Est {'▲' if _er > 0 else '▼'}{abs(_er)*100:.0f}% 30d", _ec))
+                if _s.get("insiderBuys", 0) >= 1:
+                    _chips.append(_chip("🏦 Insider", "#ab47bc"))
+                _verdict = _memo.get("verdict", "")
+                _wl_rows.append(
+                    '<div style="padding:9px 2px;border-bottom:1px solid #ffffff0d">'
+                    '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">'
+                    f'<span style="font-family:monospace;font-weight:700;font-size:.82rem;color:#4dd0e1">{_t}</span>'
+                    f'<span style="font-size:.68rem;color:#78909c">{_esc_w(_co)}</span>'
+                    + "".join(_chips)
+                    + '</div>'
+                    f'<p style="margin:5px 0 0;font-size:.74rem;color:#b0bec5;line-height:1.55">'
+                    f'🔭 {_esc_w(_watch)}</p>'
+                    + (f'<p style="margin:2px 0 0;font-size:.65rem;color:#546e7a">{_esc_w(_verdict)}</p>'
+                       if _verdict else "")
+                    + '</div>'
+                )
+            if _wl_rows:
+                watchlist_html = (
+                    '<div style="background:#0d1117;border:1px solid #4dd0e144;border-radius:8px;padding:12px 14px">'
+                    '<p style="font-size:.72rem;color:#546e7a;margin:0 0 8px;line-height:1.5">'
+                    'The names to follow closely over the next 4–12 weeks — a valuation snapshot '
+                    '(margin of safety vs DCF, PEG, position in the 52-week range) plus the specific '
+                    'catalysts and signals to watch. <b style="color:#78909c">Est ▲/▼</b> = 30-day change '
+                    'in FY1 analyst EPS estimates.</p>'
+                    + "".join(_wl_rows)
+                    + '</div>'
+                )
+        except Exception as _ewl:
+            watchlist_html = f"<!-- watchlist error: {str(_ewl)[:80]} -->"
+
+        watchlist_wrapped = (_collapsible("🔭 Watchlist — Next 4–12 Weeks",
+                                          "— what's undervalued and what to follow closely",
+                                          watchlist_html.strip(),
+                                          open_by_default=True, accent="#4dd0e1")
+                             if watchlist_html.strip()
+                             and not watchlist_html.strip().startswith("<!--") else "")
 
         consensus_wrapped = (_collapsible("🎯 High-Consensus Picks",
                                           f"— tickers nominated by 3+ of today's {n_agents} specialists",
@@ -13566,14 +14630,9 @@ function showMacroDetail(el, id) {
 <div class="mm-card xcard" style="border-left-color:#{chx}" onclick="toggleExpand(this)">
   <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px">
     <span class="mm-ticker">{tk}</span>
-    {_sp_cap}
     <span class="mm-co">{_sp_co}{(' · ' + _sp_sector) if _sp_sector else ''}</span>
     {_conv_badge(conv2)}
-    {_sp_trend}
     {_lb3}
-    {_familiar_badge(s2)}
-    {_undercovered_badge(s2)}
-    {_ceo_badge(s2)}
     {_divergence_badge(s2)}
     <span class="xarrow">▼</span>
   </div>
@@ -13917,10 +14976,15 @@ function openSpec(id){{
                 accent="#7c4dff",
             )
 
+        # Simplified AI section (2026-06): one ranked "Best Ideas" list (consensus +
+        # Opus memos + valuation) on top, then the Watchlist, then the 6 specialist
+        # collapsibles. The old strategy-summary table, standalone consensus panel, and
+        # Mall Manager are gone — folded into Best Ideas or replaced by the master tabs.
         return f"""
 <section id="ai" class="active">
   <div class="section-title">🤖 AI Analysis — {n_agents} Specialists</div>
-  {strat_summary_html}
+  {wrapped_research}
+  {watchlist_wrapped}
   {_nav_grid}
   {"".join(spec_collapsibles)}
 </section>"""
@@ -14279,22 +15343,23 @@ function openSpec(id){{
         import csv as _csv
 
         _AGENT_ICONS = {
-            # Active 12-agent lineup (2026-05-13)
-            "AI-GoldmanSC":       "💼 Goldman SC",
-            "AI-LynchBWYK":       "🛒 Lynch BWYK",
-            "AI-SocialArb":       "📱 Social Arb",
-            "AI-Mayer100x":       "💯 100-Bagger",
+            # Active 6-agent core lineup (simplification 2026-06)
             "AI-CathieWood":      "🚀 Disruptive",
             "AI-MagicFormula":    "🔢 Magic Form.",
-            "AI-Pabrai":          "🎲 Pabrai",
             "AI-HowardMarks":     "🔄 Marks 2nd-Lvl",
             "AI-NickSleep":       "🌀 Scale Econ",
             "AI-Burry":           "🕳️ Deep Value",
             "AI-InsiderTrack":    "👁️ Insider+13F",
-            "AI-WallStBlind":     "🛰️ WallSt Blind",
             # Retired agents — labels kept so historical CSV entries display correctly.
             # The "(retired)" suffix is what _AGENT_ORDER below uses to filter them out of the
             # active leaderboard while still rendering archived rows with their old emoji.
+            # Benched 2026-06 (roster trimmed 12 → 6):
+            "AI-GoldmanSC":       "💼 Goldman SC (retired)",
+            "AI-LynchBWYK":       "🛒 Lynch BWYK (retired)",
+            "AI-SocialArb":       "📱 Social Arb (retired)",
+            "AI-Mayer100x":       "💯 100-Bagger (retired)",
+            "AI-Pabrai":          "🎲 Pabrai (retired)",
+            "AI-WallStBlind":     "🛰️ WallSt Blind (retired)",
             "AI-BuffettQ":        "🏰 Buffett Q (retired)",
             "AI-Judge":           "⚖️ Master Manager (retired)",
             "AI-MallManager":     "🛍️ Mall Manager (retired)",
@@ -14761,6 +15826,26 @@ Sharpe on alpha series. Click any column header to sort.</p>
                   "PEG","Fwd PEG","P/E","P/E 10Y Avg","ROIC","ROE","FCF Yield",
                   "MoS","Rev Growth","Piotroski","MktCap ($B)"]
 
+    _MASTER_COLS = ["Rank","Ticker","Company","Sector","Screens","Price","PEG","ROIC",
+                    "ROE","MoS","FCF Yield","Rev Growth","Piotroski","MktCap ($B)"]
+
+    _CVAL_COLS = ["Rank","Ticker","Company","Sector","Price","Value %ile","Quality %ile",
+                  "EY %ile","FCFY %ile","Shldr Yld","6M Mom","P/E","EV/EBITDA","P/B","MktCap ($B)"]
+
+    _EMOM_COLS = ["Rank","Ticker","Company","Sector","Price","Rev 30d","Mom 6M","Accel %ile",
+                  "Rev %ile","PEG","P/E","MktCap ($B)"]
+
+    _SWING_COLS = ["Ticker","Company","Setup","Price","Entry Zone","Dist SMA50","Dist SMA200",
+                   "RSI","52w Pos","Vol 20/60","Source","As-of"]
+
+    # Masters are normally built in main() (the Swing pool needs them before HTML);
+    # fall back to building here so build_html_report stays usable standalone.
+    if quality_master is None:
+        quality_master, value_master, growth_master = _build_master_screens(
+            hold_forever, quality_compounders, fcf_compounders, stalwarts,
+            iv_rows, asset_plays, turnarounds, cyclicals, slow_growers,
+            fast_growers, ten_baggers, off_the_radar)
+
     # ── 🔔 SPIN-OFF ALERT BANNER (Greenblatt edge — only renders when events present) ─
     def _spinoff_banner(events: list) -> str:
         if not events:
@@ -14901,59 +15986,40 @@ Sharpe on alpha series. Click any column header to sort.</p>
     <h1>📈 FMP Stock Screener</h1>
     <small>{now} · {len(stocks):,} stocks · {fmp_call_count} API calls</small>
   </div>
-  <small style="color:#9fa8da">12 Specialists</small>
+  <small style="color:#9fa8da">6 Specialists</small>
 </div>
 {_spinoff_html}
 <nav class="nav">{nav_html}</nav>
 {_ai_section()}
 {_macro_section()}
-{_strategy_table(iv_rows,   STRAT_COLS + ["IV","MoS (Custom)","IV (Custom)","Implied 5Y Growth","D/E","EV/EBITDA"],   "iv",       "📊 IV Discount Picks",
-    "DCF intrinsic value discount ≥5% · Altman Z ≥1.5 (distress filter) · no Piotroski gate. "
-    "Ranked on: MoS + Lynch quality (rev consistency, FCF conversion, EPS growth, buybacks) "
-    "+ FCF yield + ROIC + ROE + multi-metric cheapness. Top 50.")}
-{_strategy_table(stalwarts,  STRAT_COLS + ["CEO Score","FCF/Sh 5Y","Divergence"],    "stalwart", "🏛 Stalwarts",
-    "Revenue growth 5–25% · MktCap >$2B · P/E <50 · FCF positive · "
-    "Rev consistency ≥60% · Excl. Basic Materials. Lynch 'boring but reliable' category.")}
-{_strategy_table(fast_growers, STRAT_COLS + ["MoS (Custom)","IV (Custom)","Rev Growth 5Y","EPS Growth 5Y"], "fastg",    "🚀 Fast Growers",
-    "Revenue growth >20% · PEG <1.5 · ROIC >10% · FCF positive or high-growth exception. "
-    "Lynch's highest-return category — find the next 10-bagger before it's obvious.")}
-{_strategy_table(ten_baggers or [], STRAT_COLS + ["MoS (Custom)","IV (Custom)","Gross Margin","Oper Margin","Net Debt/EBITDA"], "tenb", "🎯 Lynch 10-Baggers",
-    "Small-cap $50M–$2B · PEG<2 · Gross margin>20% · Operating margin>0. "
-    "Lynch's real criteria: pricing power + growth at a reasonable price. No FCF kill — early Amazon had negative FCF too.")}
-{_strategy_table(slow_growers, STRAT_COLS + ["MoS (Custom)","IV (Custom)","Div Yield"],              "slowg",    "🐢 Slow Growers",
-    "Dividend yield ≥2% · Stable multi-year earnings · Large established companies. "
-    "Lynch category: own for income + capital preservation, not growth.")}
-{_strategy_table(cyclicals,  STRAT_COLS,                               "cycl",     "🔄 Cyclicals",
-    "Cyclical sectors (Industrials, Energy, Materials, Consumer Cyclical) at earnings trough. "
-    "Lynch: P/E is INVERTED for cyclicals — HIGH or missing P/E = depressed earnings = BUY. "
-    "LOW P/E = peak earnings = SELL. Best entry: decline decelerating + FCF positive + net debt &lt; 3× EBITDA.")}
-{_strategy_table(turnarounds, STRAT_COLS + ["MoS (Custom)","IV (Custom)"],                              "turn",     "🔁 Turnarounds",
-    "Down ≥40% from 52W high · Revenue recovering (positive growth trend) · Altman Z ≥0.5 (no Piotroski gate). "
-    "Lynch: near-bankrupt companies that survive can be 10x — but require highest conviction.")}
-{_strategy_table(asset_plays, STRAT_COLS + ["P/B","Graham NN"],        "asset",    "🏗 Asset Plays",
-    "P/B <1 · Hidden tangible asset value (real estate, cash, IP) · FCF positive. "
-    "Lynch/Graham: buy $1 of assets for <$1. Best in Financial Services, Real Estate, Industrials.")}
-{_strategy_table(quality_compounders, STRAT_COLS + ["MoS (Custom)","IV (Custom)","P/FCF","EV/EBITDA","Gross Margin","CEO Score","FCF/Sh 5Y","Net Buyback Yld","BB Consistency","Divergence"], "qual",  "🏆 Quality Compounders",
-    "ROIC >15% · ROE >15% · Positive FCF · Altman Z >1.5 (no Piotroski gate). "
-    "Gross margin replaces Piotroski as moat signal — now surfaces NVDA/META/PAYC style asset-light compounders. "
-    "Buffett category: wonderful companies at fair prices — hold forever, let compounding work.")}
-{_strategy_table(fcf_compounders or [], ["Rank","Ticker","Streak","Company","Sector","Price","Score",
-    "P/FCF","FCF Yield","FCF Margin","FCF Conv.","FCF Consist.","FCF/Sh 5Y",
-    "Net Buyback Yld","BB Consistency","CEO Score","Rev Growth","Rev Consist.","MktCap ($B)"], "fcfcomp", "💸 FCF Compounders — Pure Cash Flow Lens",
-    "Gate: FCF yield >2.5% + FCF margin >8% + FCF growth consistency >50% of last 5 years. "
-    "Excludes Financial Services + Utilities (FCF structurally incomparable for banks/insurance/regulated capex). "
-    "Primary rank: FCF per-share 5Y CAGR — actual cash created under current management. "
-    "No Piotroski, no ROE gate, no PEG primary. Surfaces companies expensive on earnings but cheap on cash "
-    "(BKNG / MSFT / ADBE style). FCF Conv. ≥1.0 = FCF exceeds net income → high-quality accrual accounting.")}
-{_strategy_table(hold_forever or [], STRAT_COLS + ["MoS (Custom)","IV (Custom)","FCF Margin","CEO Score","FCF/Sh 5Y","Net Buyback Yld","BB Consistency","BB Announced","Divergence"], "hold",  "💎 Hold Forever — Buy-and-Forget",
-    "Strict cuts: ROIC >15% · 80%+ rev consistency · 5–25% steady CAGR · moat (gross margin >40% or oper margin >15%) · "
-    "no dilution · low debt · Altman Z gate (no Piotroski). Top 25 names. The user's natural buy-and-hold candidate pool — "
-    "scan for 🛒 (Familiar Brand) and 🔍 (Wall St under-coverage) tags; cross-check against personal knowledge before sizing.")}
-{_strategy_table(off_the_radar or [], ["Rank","Ticker","Streak","Company","Sector","Familiar","Price","MoS (Custom)","IV (Custom)","MktCap ($B)","Coverage","Insider Cluster","52w Pos","Net Cash/Sh","FCF Yield","Rev Growth","Rev Gr Prev","CEO Score","Catalyst","Score"], "offradar",  "🛰️ Off-the-Radar Compounders — Pre-Discovery Setups",
-    "$200M-$3B + ≤5 analysts + $500K+ liquidity + (positive FCF/net cash/insider cluster/consistent revenue/familiar brand) + "
-    "(base-building 0.50-0.85 of 52W high / insider cluster / rev acceleration / Hidden Gem / active buyback). "
-    "The IREN/Nokia profile — quality in institutional blindspots, BEFORE the re-rating. "
-    "Scan for 🛒 Familiar Brand + low Coverage as the strongest setups.")}
+{_strategy_table(quality_master, _MASTER_COLS, "qual", "💎 Quality — Compounders &amp; Cash Machines",
+    "The wonderful-businesses bucket: union of Hold-Forever, Quality Compounders, FCF Compounders and "
+    "Stalwarts, deduped and re-ranked. Core gates across the sub-screens: ROIC &gt;20% · durable FCF · "
+    "revenue consistency · moats (high gross/operating margin). The <b>Screens</b> column shows which "
+    "sub-screens each name hit — multi-screen names rank first. Buffett territory: hold and let compounding work.")}
+{_strategy_table(value_master, _MASTER_COLS, "value", "📊 Value — Undervalued &amp; Special Situations",
+    "The cheap-for-a-reason bucket: union of IV-Discount (DCF margin of safety), Asset Plays (P/B &lt;1, hidden "
+    "assets), Turnarounds (recovering after a ≥40% drawdown), Cyclicals (earnings-trough entry) and Slow Growers "
+    "(income). Ranked by margin of safety. The <b>Screens</b> column shows which value lenses each name matched.")}
+{_strategy_table(growth_master, _MASTER_COLS, "growth", "🚀 Growth — Fast Growers &amp; Pre-Discovery",
+    "The growth bucket: union of Fast Growers (rev &gt;20%, PEG &lt;1.5), Lynch 10-Baggers (small-cap pricing power) "
+    "and Off-the-Radar pre-discovery setups ($200M–$3B, ≤5 analysts). Ranked by revenue growth. The <b>Screens</b> "
+    "column shows which growth lenses each name hit — find the next 10-bagger before it is obvious.")}
+{_strategy_table(composite_value, _CVAL_COLS, "cval", "🎯 Composite Value — Systematic Cheapness",
+    "Cross-sectional percentile composite — no threshold gates. Mean percentile rank across up to 6 value metrics "
+    "(earnings yield, FCF yield, EV/EBITDA, P/S, P/B, shareholder yield; ≥3 required) weighted 70%, plus a quality "
+    "overlay (ROIC, gross margin, Altman Z) weighted 30%. A 6-month-momentum value-trap filter drops the "
+    "worst-momentum tail — cheap stocks still falling usually stay cheap. Percentile columns: 0–100, higher = better.")}
+{_strategy_table(earnings_momentum, _EMOM_COLS, "emom", "⚡ Earnings Momentum — Estimate Revisions",
+    "Zacks-style revisions drift: the market underreacts to analyst estimate changes, so prices drift for 1–6 months "
+    "after upgrades. Rank = 50% estimate-revision strength (30d FY1 EPS consensus change) + 30% 6-month price momentum "
+    "+ 20% fundamental acceleration. Quality floor: profitable or FCF-positive, Altman Z ≥1.5. "
+    "<b>Expected holding period 1–6 months — higher turnover than the other tabs.</b>")}
+{_strategy_table(swing_setups, _SWING_COLS, "swing", "📈 Swing Setups — Timing Overlay",
+    "Technical timing overlay on <b>already-vetted names only</b> (the Quality/Value/Growth master screens and AI "
+    "picks) — not standalone signals. Setup A: pullback to the 50-day MA inside an uptrend (price &gt; SMA200, "
+    "SMA50 &gt; SMA200). Setup B: fresh 60-day breakout on &gt;1.3× volume. Check the As-of date — bars are "
+    "end-of-day and go stale between runs.")}
 {_sector_section()}
 {_perf_section()}
 <footer style="padding:16px;color:#555;font-size:.72rem;text-align:center">
@@ -15564,6 +16630,8 @@ def main():
                         help="C4: Walk-forward portfolio replay from date (or all-time if omitted)")
     parser.add_argument("--force-fresh-ai", action="store_true",
                         help="Bypass the daily AI cache and re-run all specialists + judge for this run")
+    parser.add_argument("--skip-sc", action="store_true",
+                        help="Skip small-cap supplemental enrichment (faster dev/AI verification runs)")
     parser.add_argument("--neutral-judge", action="store_true",
                         help="Strip all macro context from the judge — picks purely on fundamentals and specialist consensus")
     args = parser.parse_args()
@@ -15640,7 +16708,7 @@ def main():
     # Start notification — sent before the heavy lifting begins
     if NTFY_TOPIC:
         _cache_warm = bool(_cache.get("universe"))
-        _eta_start = "~10–15 min (cache warm)" if _cache_warm else "~2.5–3 h (full fetch)"
+        _eta_start = "~15–25 min (cache warm)" if _cache_warm else "~1–4 h (weekly full fetch)"
         _purl_start = (f"https://{GITHUB_REPO.split('/', 1)[0]}.github.io/"
                        f"{GITHUB_REPO.split('/', 1)[1]}/"
                        if GITHUB_REPO and '/' in GITHUB_REPO else "")
@@ -15677,7 +16745,7 @@ def main():
                   and profiles[t].get("price", 0) > 1]
     # Sort by market cap, take top N for detailed analysis
     candidates.sort(key=lambda t: -(profiles.get(t, {}).get("mktCap") or 0))
-    enrich_count = 20 if DEBUG else 4000
+    enrich_count = 20 if DEBUG else 8000   # weekly run: deep-enrich down to ~$400M caps
     top_for_enrichment = candidates[:enrich_count]
     print(f"\n  📊 {len(candidates)} stocks > $50M mktcap, enriching top {len(top_for_enrichment)}")
     phase_start("enrichment", f"Enriching top {len(top_for_enrichment)} stocks (fundamentals)")
@@ -15699,13 +16767,15 @@ def main():
     ratings = fetch_ratings(top_for_enrichment)
     growth_data = fetch_financial_growth(top_for_enrichment)
     balance_sheet = fetch_balance_sheet(top_for_enrichment)
-    earnings_surp = fetch_earnings_surprises(top_for_enrichment)
+    # earnings-surprises endpoint 404s on this plan — estRevision30d is the working
+    # execution-quality signal (30d consensus change from estimates_snapshots.json)
+    earnings_surp = {}
     insider_data = fetch_insider_trading(tickers=top_for_enrichment)
 
     # ── Capital allocator data: CEO tenure + 5Y financials ─────────
-    # Lighter universe: only top 2000 by mktcap (where capital-allocation
-    # analysis matters most — covers all strategy tab universes)
-    capalloc_universe = top_for_enrichment[:2000]
+    # Lighter universe: only top 4000 by mktcap (where capital-allocation
+    # analysis matters most — covers all strategy tab universes incl. smaller names)
+    capalloc_universe = top_for_enrichment[:4000]
     bs_5y_data        = fetch_balance_sheet_5y(capalloc_universe)
     cfs_5y_data       = fetch_cash_flow_5y(capalloc_universe)
     cfs_ttm_data      = fetch_cash_flow_ttm(capalloc_universe)   # Tier 2.1: quarterly for TTM freshness
@@ -15723,8 +16793,9 @@ def main():
     save_cache()
 
     # ── Small-cap supplemental enrichment for Lynch 10-Baggers tab ────────────
-    # Main enrichment covers top 4000 by market cap (roughly $2.5B+).
-    # Small-caps ($50M–$2B) need a targeted pass for the 2 critical fields:
+    # Main enrichment now covers top 8000 by market cap (roughly $400M+).
+    # The remaining micro-caps ($50M–$400M not in the main set) still need a
+    # targeted pass for the 2 critical fields:
     #   grossMargin / operatingMargin (ratios-ttm) + revGrowth (financial-growth)
     # Uses separate cache keys to avoid disrupting the main cache.
     phase_start("sc_enrichment", "Small-cap supplemental enrichment (10-Baggers tab)")
@@ -15739,6 +16810,9 @@ def main():
     _sc_candidates.sort(key=lambda t: -(profiles.get(t, {}).get("mktCap") or 0))
     _sc_candidates = _sc_candidates[:3500]  # top 3500 small-caps by mktCap (covers ~$200M+)
     print(f"  🎯 {len(_sc_candidates)} small-cap candidates for 10-Baggers enrichment")
+    if getattr(args, "skip_sc", False):
+        print("  ⏭️  --skip-sc: skipping small-cap supplemental enrichment")
+        _sc_candidates = []
 
     # Invalidate SC cache if the cached entries are sparse relative to candidates.
     # If the cache was built from a smaller candidate set (e.g. 1500) and we now have
@@ -15751,6 +16825,8 @@ def main():
         print(f"  🔄 SC cache sparse ({_sc_cached_ratios_count} entries / {len(_sc_candidates)} candidates = {_sc_density:.0%}) — clearing for full refresh")
         _cache.pop("ratios_ttm_sc", None)
         _cache.pop("growth_sc", None)
+        _cache.pop("ratios_ttm_sc__empty", None)   # clear empties sentinel for a true full refresh
+        _cache.pop("growth_sc__empty", None)
 
     if _sc_candidates:
         # Fetch ratios (gross/oper margin) — uses separate cache key to avoid
@@ -15801,6 +16877,7 @@ def main():
             if t not in growth_data:
                 growth_data[t] = d
         print(f"  ✅ SC merge: +{_sc_ratios_added} ratios, +{_sc_growth_added} growth entries")
+        save_cache()   # checkpoint: SC ratios+growth now safe even if interrupted
 
         # ── SC 52w range fetch ────────────────────────────────────────────────
         # The FMP company screener does NOT return yearHigh/yearLow for small-caps
@@ -15867,6 +16944,7 @@ def main():
                 universe[_t3]["yearLow"]  = _rng3.get("yearLow")
                 _rng_applied += 1
         print(f"  ✅ SC 52w applied: +{_rng_applied} stocks now have yearHigh")
+        save_cache()   # checkpoint: SC 52w ranges now safe
 
         # ── SC 5Y cash-flow fetch — enables Custom IV / DCF for 10-Bagger candidates ──
         # The main capalloc_universe (top 2000 by mktcap) does NOT include most small-caps
@@ -15911,6 +16989,7 @@ def main():
                 if t not in key_metrics:
                     key_metrics[t] = d
             print(f"  ✅ SC key_metrics merge: +{_km_added} stocks (ROIC, FCF Yield, EV/EBITDA enabled)")
+            save_cache()   # checkpoint: SC key_metrics now safe
         else:
             _sc_km_cached = _cache.get("key_metrics_sc") or {}
             for t, d in _sc_km_cached.items():
@@ -15929,6 +17008,7 @@ def main():
                 if t not in scores:
                     scores[t] = d
             print(f"  ✅ SC scores merge: +{_sc_added} stocks (Piotroski enabled)")
+            save_cache()   # checkpoint: SC Piotroski scores now safe
         else:
             _sc_scores_cached = _cache.get("scores_sc") or {}
             for t, d in _sc_scores_cached.items():
@@ -16072,11 +17152,12 @@ def main():
         if s.get("pe") and 0 < s.get("pe") < 20: sc += 3
         roic = s.get("roic")
         if roic and roic > 0.15: sc += 4
-        # Earnings beat rate — consistent executors are the best Stalwarts
-        br = s.get("beatRate")
-        if br and br >= 0.875: sc += 7
-        elif br and br >= 0.75: sc += 4
-        elif br and br >= 0.625: sc += 2
+        # Estimate revisions — analysts raising numbers = the steady grower is delivering
+        er = s.get("estRevision30d")
+        if er is not None:
+            if er >= 0.05:    sc += 7
+            elif er >= 0:     sc += 4
+            elif er <= -0.05: sc -= 4
         # Revenue acceleration — growth improving YoY = re-accelerating Stalwart
         rg = s.get("revGrowth") or 0
         rg_prev = s.get("revGrowthPrev")
@@ -16376,18 +17457,6 @@ def main():
         if pfcf and 0 < pfcf < 20:    sc += 4   # cheap on FCF basis
         elif pfcf and 0 < pfcf < 35:  sc += 2
 
-        # Earnings beat rate — management consistently delivers vs expectations
-        br = s.get("beatRate")
-        if br and br >= 0.875:  sc += 8   # beat 7+ of 8 quarters = very reliable compounder
-        elif br and br >= 0.75: sc += 5
-        elif br and br >= 0.625: sc += 2
-
-        # A4: EPS beat streak — consecutive quarters beating = execution momentum building
-        ebs = s.get("epsBeatStreak")
-        if ebs is not None:
-            if ebs >= 4:   sc += 8   # 4+ consecutive beats — strong execution momentum
-            elif ebs >= 2: sc += 4
-
         # Valuation sanity
         pe = s.get("pe")
         if pe and 0 < pe < 25:   sc += 3
@@ -16422,7 +17491,7 @@ def main():
         "Fwd PEG", "PEG", "Fwd P/E", "P/E", "ROIC",
         "FCF Yield", "FCF Margin", "FCF Conv.", "FCF Consist.",
         "Rev Growth", "Rev Gr Prev", "Rev Growth 5Y", "EPS Growth 5Y",
-        "Rev Consist.", "Grwth Gap", "Shares Δ", "Beat Rate", "52w vs High", "ROE", "Gross Margin",
+        "Rev Consist.", "Grwth Gap", "Shares Δ", "Est Rev 30d", "52w vs High", "ROE", "Gross Margin",
         "P/FCF", "MktCap ($B)", "Cap Size", "Score", "🏦 Insider",
     ]
     _fg_widths = [5, 8, 22, 15, 8, 7, 6, 7, 7, 8, 8, 9, 8, 9, 9, 10, 11, 11, 9, 8, 8, 8, 9, 7, 11, 7, 10, 7, 6, 14]
@@ -16715,10 +17784,9 @@ def main():
         if s.get("revGrowth5y") and s.get("revGrowth5y") > 0.05:
             recovery_signals += 1  # analysts expect sustained growth ahead
         if pio and pio >= 5:     recovery_signals += 1  # improving financial health
-        # Beat rate >= 0.625 (5 of 8 quarters beating) = execution is consistently improving
-        if s.get("beatRate") and s.get("beatRate") >= 0.625: recovery_signals += 1
-        # B5: EPS beat streak — 3+ consecutive beats = management executing on recovery
-        if s.get("epsBeatStreak") and s.get("epsBeatStreak") >= 3: recovery_signals += 1
+        # Estimate revisions flat-or-up = sell-side sees the recovery taking hold
+        _er_ta = s.get("estRevision30d")
+        if _er_ta is not None and _er_ta >= 0: recovery_signals += 1
 
         return recovery_signals >= _required_signals
 
@@ -16778,11 +17846,12 @@ def main():
         elif rg5 and rg5 > 0.08: sc += 4
         elif rg5 and rg5 > 0.03: sc += 2
 
-        # ── Earnings beat rate — consistently beating = execution improving ─
-        br = s.get("beatRate")
-        if br and br >= 0.875:  sc += 10  # beat 7/8 quarters = high-conviction recovery
-        elif br and br >= 0.75: sc += 7
-        elif br and br >= 0.625: sc += 4
+        # ── Estimate revisions — analysts upgrading = recovery being recognised ─
+        er = s.get("estRevision30d")
+        if er is not None:
+            if er >= 0.05:    sc += 10  # numbers going up into a turnaround = high conviction
+            elif er >= 0:     sc += 6
+            elif er <= -0.05: sc -= 5   # cuts while "recovering" = thesis not working
 
         # ── 52-week positioning: deep drawdown = more of the pain is priced in ─
         pvs52h = s.get("priceVs52H")
@@ -16798,7 +17867,7 @@ def main():
     _ta_headers = [
         "Rank", "Ticker", "Company", "Sector", "Price",
         "MoS", "P/B", "Rev Growth", "EPS Growth", "FCF Yield",
-        "Beat Rate", "52w Pos", "52w vs Low", "Net D/E", "Piotroski", "Altman Z", "Rev Growth 5Y",
+        "Est Rev 30d", "52w Pos", "52w vs Low", "Net D/E", "Piotroski", "Altman Z", "Rev Growth 5Y",
         "MktCap ($B)", "Score", "🏦 Insider",
     ]
     _ta_widths = [5, 8, 22, 15, 8, 7, 6, 9, 9, 9, 8, 7, 9, 7, 8, 8, 11, 10, 6, 14]
@@ -17156,6 +18225,12 @@ def main():
     # Sprint 3 A4: 💎 Hold Forever — strict long-term shortlist (~25 names)
     hold_forever = build_hold_forever_tab(wb, stocks)
 
+    # 🎯 Composite Value — systematic percentile cheapness + quality + momentum trap filter
+    composite_value = build_composite_value(wb, stocks)
+
+    # ⚡ Earnings Momentum — estimate-revisions drift (Zacks-style) + price momentum
+    earnings_momentum = build_earnings_momentum(wb, stocks)
+
     # Sector-Relative Bargains — stocks cheap on ≥2 valuation metrics vs sector peers
     sector_bargains = build_sector_relative_bargains(wb, stocks)
 
@@ -17195,6 +18270,8 @@ def main():
         "Cyclicals": cyclicals, "Asset Plays": asset_plays,
         "Lynch 10-Baggers": ten_baggers,
         "Off-the-Radar": off_the_radar,
+        "Composite Value": composite_value,
+        "Earnings Momentum": earnings_momentum,
     }, current_prices)
 
     # ── AI analysis (single call — result shared across Overview + AI tab) ──
@@ -17238,50 +18315,52 @@ def main():
     )
 
     if _ai_from_cache:
-        ai_result   = _cached_ai["result"]
-        mall_result = _cached_ai.get("mall_result", {}) or {}
+        ai_result       = _cached_ai["result"]
+        mall_result     = _cached_ai.get("mall_result", {}) or {}
+        research_result = _cached_ai.get("research_result", {}) or {}
         n_picks = len(ai_result.get("picks", []))
         n_specs = len(ai_result.get("_specialist_picks", {}))
         n_mall  = len(mall_result.get("picks", []))
+        n_memos = len(research_result.get("memos", []))
         mall_note = f" + {n_mall} mall" if n_mall else ""
+        memo_note = f" + {n_memos} memos" if n_memos else ""
         _cache_date = _cached_ai.get("date", "?")
-        print(f"\n  📦 Using cached AI analysis ({n_picks} consensus picks, {n_specs} specialists{mall_note}"
+        print(f"\n  📦 Using cached AI analysis ({n_picks} consensus picks, {n_specs} specialists{mall_note}{memo_note}"
               f" — from {_cache_date}, {_ai_age_days}d ago — next refresh in {_AI_CACHE_DAYS - _ai_age_days}d)")
     else:
         if args.force_fresh_ai and _cached_ai.get("date") == _today_str:
             print("\n  🔄 --force-fresh-ai: bypassing today's AI cache, re-running all specialists")
-        phase_start("ai_analysis", "Running multi-agent AI analysis (12 specialists)")
+        phase_start("ai_analysis", "Running multi-agent AI analysis (6 specialists)")
         ai_result = call_claude_analysis(picks_data, stocks, macro=macro_data,
                                          market_intel=market_intel,
                                          agent_perf=agent_perf)
+        # Mall Manager retired 2026-06 (its Lynch consumer lens is covered by the
+        # consensus + Best Ideas layer). Kept as an empty dict for render compatibility.
         mall_result = {}
+        research_result = {}
         if ai_result and ai_result.get("picks"):
-            # Mall Manager: consumer-lens filter on specialist pool
-            mall_result = call_mall_manager(ai_result, stocks,
-                                            macro=macro_data,
-                                            market_intel=market_intel,
-                                            fast_growers=fast_growers,
-                                            quality_compounders=quality_compounders,
-                                            off_the_radar=off_the_radar) or {}
-            # Cache result for remainder of today
+            # Deep-Research Analyst (Opus): full investment memos on the top consensus picks
+            research_result = call_research_analyst(ai_result, stocks,
+                                                    macro=macro_data,
+                                                    market_intel=market_intel) or {}
+            # Cache result for the week
             _cache[_AI_CACHE_KEY] = {"date": _today_str,
                                      "result": ai_result,
-                                     "mall_result": mall_result}
+                                     "mall_result": mall_result,
+                                     "research_result": research_result}
             save_cache()
 
-    # If cache was loaded but mall_result is missing (older cache schema), run only mall manager
-    if ai_result and ai_result.get("picks") and not mall_result and _ai_from_cache:
-        print("  🛍️ Cache pre-dates Mall Manager — running it now to backfill")
-        mall_result = call_mall_manager(ai_result, stocks,
-                                        macro=macro_data,
-                                        market_intel=market_intel,
-                                        fast_growers=fast_growers,
-                                        quality_compounders=quality_compounders,
-                                        off_the_radar=off_the_radar) or {}
-        if mall_result:
-            _cache[_AI_CACHE_KEY] = {"date": _today_str,
+    # If cache pre-dates the Deep-Research layer, backfill the memos
+    if ai_result and ai_result.get("picks") and not research_result and _ai_from_cache:
+        print("  📋 Cache pre-dates Deep-Research Analyst — running it now to backfill")
+        research_result = call_research_analyst(ai_result, stocks,
+                                                macro=macro_data,
+                                                market_intel=market_intel) or {}
+        if research_result:
+            _cache[_AI_CACHE_KEY] = {"date": _cached_ai.get("date", _today_str),
                                      "result": ai_result,
-                                     "mall_result": mall_result}
+                                     "mall_result": mall_result,
+                                     "research_result": research_result}
             save_cache()
 
     # Auto-log AI picks every run (no flag needed)
@@ -17309,6 +18388,22 @@ def main():
     _sparklines = fetch_sparkline_data(list(_sparkline_tickers)) if _sparkline_tickers else {}
     if _sparklines:
         save_cache()   # persist sparkline cache (7-day TTL) for next run
+
+    # ── Master screens + Swing Setups ────────────────────────────────────
+    # Masters are built here (not inside build_html_report) so the swing pool
+    # is exactly the rendered top-30×3 + AI consensus picks (~90–140 names).
+    quality_master, value_master, growth_master = _build_master_screens(
+        hold_forever, quality_compounders, fcf_compounders, stalwarts,
+        iv_rows, asset_plays, turnarounds, cyclicals, slow_growers,
+        fast_growers, ten_baggers, off_the_radar)
+    _swing_candidates = (
+        [(r.get("Ticker"), "Quality") for r in quality_master]
+        + [(r.get("Ticker"), "Value") for r in value_master]
+        + [(r.get("Ticker"), "Growth") for r in growth_master]
+        + [(p.get("ticker"), "AI") for p in (ai_result or {}).get("picks", [])]
+    )
+    swing_setups = build_swing_setups(wb, _swing_candidates, stocks)
+    save_cache()   # persist _daily_hist (1-day TTL) for same-day re-runs
 
     # ── AI Portfolio Manager ─────────────────────────────────────────
     phase_start("portfolio", "Running AI Portfolio Manager")
@@ -17446,10 +18541,17 @@ def main():
         sparklines=_sparklines,  # 5Y price history for AI pick mini-charts
         hold_forever=hold_forever,  # Sprint 3 A4: long-term shortlist tab
         mall=mall_result,        # 🛍️ Mall Manager picks (Lynch consumer-observable)
+        research=research_result,  # 📋 Deep-Research Analyst memos (Opus, top consensus picks)
         off_the_radar=off_the_radar,  # 🛰️ Off-the-Radar Compounders (pre-discovery)
         spinoff_events=spinoff_events,  # 🔔 Front-page spin-off alert
         fcf_compounders=fcf_compounders,                       # 💸 FCF Compounders — pure cash
         index_valuations=_index_val,  # 📊 SPY/QQQ/IWM valuation pulse for sector tab
+        composite_value=composite_value,      # 🎯 systematic percentile cheapness
+        earnings_momentum=earnings_momentum,  # ⚡ estimate-revisions drift
+        swing_setups=swing_setups,            # 📈 technical timing overlay
+        quality_master=quality_master,        # 💎 master screens (built above so the
+        value_master=value_master,            #    swing pool reuses them exactly)
+        growth_master=growth_master,
         chat_results=chat_results,    # 💬 Claude Chat weekly analysis cards
     )
     html_file = output_file.replace(".xlsx", ".html")
@@ -17473,6 +18575,9 @@ def main():
     print(f"  ⏱  Total run time: {_fmt_elapsed(total_elapsed)}")
     print(f"  📊 FMP API calls: {_fmp_call_count}")
     print(f"  📦 Cache: {CACHE_FILE} (valid {CACHE_DAYS} days)")
+    if _COVERAGE_WARNINGS:
+        print(f"  ⚠️ DATA INTEGRITY — {len(_COVERAGE_WARNINGS)} dataset(s) below "
+              f"{COVERAGE_MIN:.0%} coverage this run: {'; '.join(_COVERAGE_WARNINGS)}")
     if pages_url:
         print(f"  🌐 Dashboard: {pages_url}")
     if NTFY_TOPIC:
@@ -17480,14 +18585,17 @@ def main():
     print(f"{'=' * 65}")
 
     # Phone notification — includes clickable dashboard link
+    _cov_alert = (f"\n⚠️ Incomplete data: {'; '.join(_COVERAGE_WARNINGS)}"
+                  if _COVERAGE_WARNINGS else "")
     notify_phone(
-        title="FMP Screener Done ✅",
+        title=("FMP Screener Done ⚠️ (data gaps)" if _COVERAGE_WARNINGS else "FMP Screener Done ✅"),
         message=(
             f"Run complete in {_fmt_elapsed(total_elapsed)}\n"
             f"{n_picks} AI picks | {_fmp_call_count} FMP calls\n"
             + (f"📱 View: {pages_url}" if pages_url else f"File: {os.path.basename(output_file)}")
+            + _cov_alert
         ),
-        tags="chart_with_upwards_trend",
+        tags=("warning" if _COVERAGE_WARNINGS else "chart_with_upwards_trend"),
     )
 
 

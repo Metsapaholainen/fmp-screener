@@ -1,16 +1,16 @@
-name: Daily FMP Screener
+name: Weekly FMP Screener
 
 on:
   schedule:
     # 20:00 UTC = 23:00 Helsinki (EEST, UTC+3 in summer)
-    # Runs Mon–Fri on market weekdays
-    - cron: '0 20 * * 1-5'
+    # Runs once a week on Sunday so a fresh dataset is ready for Monday's open
+    - cron: '0 20 * * 0'
   workflow_dispatch:   # Manual "Run workflow" button in GitHub UI
 
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 25   # screener takes ~10 min; 25 gives headroom
+    timeout-minutes: 350   # weekly cold fetch (~8000 stocks) + Sonnet/Opus AI; 6h job cap
 
     steps:
       # ── 1. Check out this private repo (code + data files) ──────────────────
@@ -30,13 +30,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ── 3. Restore FMP cache between runs (saves ~200 API calls/day) ─────────
+      # ── 3. Restore FMP cache between runs (lets intra-week manual re-runs reuse data) ──
       - name: Cache FMP data
         uses: actions/cache@v4
         with:
           path: fmp_screener_cache.json
-          # Cache key rotates daily so we always get fresh prices at day-start
-          # but keep the cache within a day if re-runs happen
+          # Key rotates per run; restore-keys lets a manual mid-week re-run reuse the
+          # most recent cache. The 6-day TTL (CACHE_DAYS) forces the weekly run to refetch.
           key: fmp-cache-${{ github.run_id }}
           restore-keys: fmp-cache-
 
@@ -50,6 +50,8 @@ jobs:
           # GITHUB_TOKEN here is a PAT with write access to the PUBLIC pages repo
           GITHUB_TOKEN:      ${{ secrets.PAGES_TOKEN }}
           NTFY_TOPIC:        ${{ secrets.NTFY_TOPIC }}
+          # Give specialists live FMP tool access (financial statements, estimates, news, insiders)
+          USE_FMP_TOOLS:     "1"
         run: python FMP_stock_screener.py
 
       # ── 5. Commit updated data files back to THIS private repo ───────────────
