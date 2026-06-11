@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 28320.16589999999,
+  "cash": 28162.60849999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,16 +100,16 @@
       "sector": "Healthcare"
     },
     {
-      "ticker": "DAVE",
-      "company": "Dave Inc.",
-      "shares": 18,
-      "entry_price": 270.9,
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 138,
+      "entry_price": 35.99,
       "entry_date": "2026-06-11",
-      "rationale": "UNLOCK FASTGROWER REBALANCE: DAVE is FastGrower (category at 6/4 after BAH sale \u2192 5/4). However, DAVE offers exceptional quality: ROIC 44%, PEG 0.24 (elite), +60% revenue growth. Fintech lending thesi",
+      "rationale": "IV Discount Stalwart fills Financial Services slot (only 1/4 currently). ROIC 39%, FCF 15.7% is exceptional; PEG 0.29 is rare. Tax services durability + digital transition thesis. MoS 70% provides saf",
       "conviction": "HIGH",
-      "sell_trigger": "Revenue growth declines below 25% for 2 consecutive quarters OR credit loss rates exceed 8%",
-      "lynch_category": "FastGrower",
-      "sector": "Technology"
+      "sell_trigger": "Tax filing volume declines >15% YoY or FCF margin compresses below 12%",
+      "lynch_category": "SlowGrower+Turnaround",
+      "sector": "Consumer Cyclical"
     }
   ],
   "transactions": [
@@ -2056,6 +2056,30 @@
       "return_pct": 0.0,
       "transaction_cost": 5.88,
       "rationale": "UNLOCK FASTGROWER REBALANCE: DAVE is FastGrower (category at 6/4 after BAH sale \u2192 5/4). However, DAVE offers exceptional quality: ROIC 44%, PEG 0.24 (elite), +60% revenue growth. Fintech lending thesi"
+    },
+    {
+      "date": "2026-06-11",
+      "action": "SELL",
+      "ticker": "DAVE",
+      "company": "Dave Inc.",
+      "shares": 18,
+      "price": 267.82,
+      "value": 4815.03,
+      "return_pct": -1.14,
+      "transaction_cost": 5.82,
+      "rationale": "THESIS BROKEN ON STRUCTURAL PORTFOLIO CONSTRAINT: DAVE entry yesterday was tactical to reduce FastGrower overload (7\u21928/4), but portfolio still grossly overweight at 8/4 FastGrowers and 6/3 Turnarounds. DAVE (FastGrower, PGY is duplicate thesis), despite excellent metrics (ROIC 44%, PEG 0.24, RG +60%), cannot be justified when portfolio violates Lynch caps on two critical categories. Selling DAVE creates cash to deploy into underrepresented sectors (Financial Services, Healthcare) and rebalances FastGrower to 7/4. This is not a quality deterioration\u2014it is portfolio construction discipline."
+    },
+    {
+      "date": "2026-06-11",
+      "action": "BUY",
+      "ticker": "HRB",
+      "company": "H&R Block, Inc.",
+      "shares": 138,
+      "price": 35.99,
+      "value": 4966.62,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "IV Discount Stalwart fills Financial Services slot (only 1/4 currently). ROIC 39%, FCF 15.7% is exceptional; PEG 0.29 is rare. Tax services durability + digital transition thesis. MoS 70% provides saf"
     }
   ],
   "last_updated": "2026-06-11"
