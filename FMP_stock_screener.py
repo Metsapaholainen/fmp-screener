@@ -5510,14 +5510,22 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
                 if resp is None or resp.status_code != 200:
                     print(f"    ⚠️ Verify {t} final-round error")
                     return None
-            text = next((b.get("text", "") for b in resp.json().get("content", [])
-                         if b.get("type") == "text"), "").strip()
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-            text = text.strip().rstrip("`")
-            dossier = json.loads(text)
+            # Concatenate all text blocks (model sometimes adds prose before JSON)
+            _all_text = " ".join(b.get("text", "") for b in resp.json().get("content", [])
+                                 if b.get("type") == "text").strip()
+            # Strip code fences
+            if "```" in _all_text:
+                import re as _re
+                _m = _re.search(r'```(?:json)?\s*([\s\S]*?)```', _all_text)
+                _json_str = _m.group(1).strip() if _m else _all_text
+            else:
+                _json_str = _all_text
+            # If prose surrounds JSON, extract the first {...} object
+            if not _json_str.startswith("{"):
+                import re as _re
+                _obj = _re.search(r'\{[\s\S]*\}', _json_str)
+                _json_str = _obj.group(0) if _obj else _json_str
+            dossier = json.loads(_json_str)
             dossier["ticker"]      = t
             dossier["company"]     = candidate.get("company", dossier.get("company", t))
             dossier["proposed_by"] = candidate.get("proposed_by", [])
@@ -8261,8 +8269,8 @@ def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
         if agent_key not in specialist_picks:
             continue
         sr_data = specialist_picks[agent_key]
-        picks = sr_data.get("picks", [])
-        label_str = sr_data.get("label", agent_key)
+        picks = sr_data if isinstance(sr_data, list) else sr_data.get("picks", [])
+        label_str = (sr_data.get("label", agent_key) if isinstance(sr_data, dict) else agent_key)
         desc_info = AGENT_DESCRIPTIONS.get(agent_key, (label_str, ""))
         _, desc_text = desc_info
         color_hex = AGENT_COLORS.get(agent_key, "455A64")
@@ -14624,7 +14632,8 @@ function showMacroDetail(el, id) {
         # ── Build spec-picks reverse-index: ticker → [agent keys] ────────────
         _spec_map = {}
         for _ak, _av in _sp.items():
-            for _p2 in _av.get("picks", []):
+            _av_list = _av if isinstance(_av, list) else _av.get("picks", [])
+            for _p2 in _av_list:
                 _tk2 = _p2.get("ticker", "")
                 if _tk2:
                     _spec_map.setdefault(_tk2, []).append(_ak)
@@ -19332,7 +19341,8 @@ def main():
         for _sp in ai_result.get("picks", []):
             _sparkline_tickers.add(_sp.get("ticker", ""))
         for _av in ai_result.get("_specialist_picks", {}).values():
-            for _sp in _av.get("picks", []):
+            _av_picks = _av if isinstance(_av, list) else _av.get("picks", [])
+            for _sp in _av_picks:
                 _sparkline_tickers.add(_sp.get("ticker", ""))
     _sparkline_tickers.discard("")
     _sparklines = fetch_sparkline_data(list(_sparkline_tickers)) if _sparkline_tickers else {}
