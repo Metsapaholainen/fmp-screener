@@ -177,7 +177,10 @@ def _load_sector_overrides() -> dict:
 
 # B6: Version stamp on every pick row — bump when prompts or scoring logic changes
 # so backtest / attribution can group pre/post change comparisons correctly.
-PROMPT_VERSION = "3.0.0"   # Phase A+B+C complete
+PROMPT_VERSION = "4.0.0"   # Investment Desk pipeline (generate → verify → Opus PM)
+# Cache-shape tag for the AI result: lets a new pipeline coexist with an old cached
+# result (migrated on read) instead of crashing or silently re-spending tokens.
+_AI_PIPELINE = "desk-v1"
 PORTFOLIO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fmp_portfolio.json")
 OUTPUT_DIR = "."
 
@@ -4363,7 +4366,7 @@ def write_table(ws, rows, headers, start_row, header_color="1A237E", widths=None
                 elif v < 0.40:
                     cell.fill = PatternFill("solid", fgColor="FFCDD2")
             elif h in ("Est Rev 30d", "6M Mom", "Rev 30d", "Mom 6M",
-                       "Dist SMA50", "Dist SMA200") and isinstance(v, (int, float)):
+                       "Dist SMA50", "Dist SMA200", "vs SMA50") and isinstance(v, (int, float)):
                 cell.number_format = "+0.0%;-0.0%;0%"
                 if v >= 0.05:      # estimates raised — green
                     cell.font = Font(name="Arial", size=9, color="1B5E20")
@@ -4873,6 +4876,748 @@ def _repair_truncated_json(text: str) -> dict:
         result["picks"] = picks
 
     return result if result.get("picks") else {}
+
+
+def _migrate_legacy_ai_result(cached_result: dict) -> dict:
+    """Wrap old-pipeline cache shape into desk-v1 shape so first post-deploy run reuses cache.
+
+    Old shape: picks (list) + _specialist_picks (dict → {picks: [...], ...}) + no pipeline key.
+    New shape: pipeline='legacy' + _specialist_picks (dict → [list]) + _memos (from old memos).
+    """
+    if not cached_result or not isinstance(cached_result, dict):
+        return {}
+    if cached_result.get("pipeline"):
+        return cached_result   # already new shape — no migration needed
+
+    result = dict(cached_result)
+    result["pipeline"] = "legacy"
+    result["_legacy"]  = True
+
+    # Normalise _specialist_picks: old shape has {agent: {picks: [...], ...}}
+    old_specs = cached_result.get("_specialist_picks", {})
+    if isinstance(old_specs, dict):
+        new_specs = {}
+        for agent, val in old_specs.items():
+            if isinstance(val, dict) and "picks" in val:
+                ideas = []
+                for p in val.get("picks", []):
+                    ideas.append({
+                        "ticker":      p.get("ticker", ""),
+                        "company":     p.get("company", ""),
+                        "source":      agent,
+                        "proposed_by": [agent],
+                        "thesis":      p.get("story") or p.get("rationale", ""),
+                        "conviction":  p.get("conviction", "MEDIUM"),
+                    })
+                new_specs[agent] = ideas
+            elif isinstance(val, list):
+                new_specs[agent] = val   # already a list — no change needed
+        result["_specialist_picks"] = new_specs
+
+    # Synthesise _memos from old picks (no dossier data, but keep verdicts)
+    if not result.get("_memos"):
+        result["_memos"] = [
+            {
+                "ticker":        p.get("ticker", ""),
+                "company":       p.get("company", ""),
+                "verdict":       (p.get("position_tier", "WATCH")
+                                  + " — " + (p.get("story") or "")[:80]),
+                "conviction":    p.get("conviction", "MEDIUM"),
+                "business":      p.get("business_synopsis", ""),
+                "bull_case":     p.get("story", ""),
+                "bear_case":     p.get("risks", ""),
+                "valuation":     "",
+                "catalysts":     p.get("catalysts", ""),
+                "what_to_watch": "",
+                "time_horizon":  p.get("time_horizon", ""),
+                "endorsed_by":   p.get("endorsed_by", ""),
+                "position_tier": p.get("position_tier", "WATCH"),
+            }
+            for p in cached_result.get("picks", [])
+        ]
+
+    return result
+
+
+def build_market_brief(stocks: dict, macro: dict = None, agent_perf: dict = None,
+                       quality_rows=None, value_rows=None, growth_rows=None,
+                       garp_rows=None, contrarian_rows=None, emom_rows=None) -> str:
+    """Compact plain-text market digest (~4K tokens) for AI generators."""
+    lines = ["=== MARKET BRIEF ===", ""]
+
+    # ── Macro regime ─────────────────────────────────────────────────────────
+    if macro:
+        try:
+            lines.append(
+                f"MACRO: 10Y={macro.get('dgs10','?')}%  VIX={macro.get('vix','?')}"
+                f"  YieldCurve={macro.get('yield_curve','?')}"
+                f"  Regime={macro.get('regime','?')}"
+            )
+        except Exception:
+            lines.append("MACRO: (unavailable)")
+    lines.append("")
+
+    # ── Sector valuations ─────────────────────────────────────────────────────
+    sector_stats: dict = {}
+    for t, s in stocks.items():
+        sect = s.get("sector", "Unknown")
+        if sect not in sector_stats:
+            sector_stats[sect] = {"pegs": [], "fcfs": [], "rgs": []}
+        peg = s.get("peg")
+        if peg and 0 < peg < 15:
+            sector_stats[sect]["pegs"].append(peg)
+        fcf = s.get("fcfYield")
+        if fcf is not None:
+            sector_stats[sect]["fcfs"].append(fcf)
+        rg = s.get("revGrowth")
+        if rg is not None:
+            sector_stats[sect]["rgs"].append(rg)
+
+    def _med(lst): return sorted(lst)[len(lst) // 2] if lst else None
+    def _avg(lst): return sum(lst) / len(lst) if lst else None
+
+    lines.append("SECTOR VALUATIONS (median PEG / avg FCF yield / avg RevGrowth):")
+    for sect, d in sorted(sector_stats.items(), key=lambda x: (_med(x[1]["pegs"]) or 99)):
+        if len(d["pegs"]) + len(d["fcfs"]) < 3:
+            continue
+        parts = []
+        mp = _med(d["pegs"])
+        if mp:
+            parts.append(f"PEG={mp:.1f}")
+        af = _avg(d["fcfs"])
+        if af is not None:
+            parts.append(f"FCF={af:.1%}")
+        ar = _avg(d["rgs"])
+        if ar is not None:
+            parts.append(f"RevGr={ar:.1%}")
+        if parts:
+            lines.append(f"  {sect}: {' | '.join(parts)}")
+    lines.append("")
+
+    # ── Master screen one-liners ──────────────────────────────────────────────
+    def _screen_block(title, rows, max_n=10):
+        if not rows:
+            return []
+        out = [f"{title} (top {min(max_n, len(rows))}/{len(rows)}):"]
+        for r in rows[:max_n]:
+            t = r.get("Ticker", "?")
+            s = stocks.get(t, {})
+            co   = s.get("companyName") or s.get("name") or t
+            sect = s.get("sector", "")
+            pe   = s.get("pe") or s.get("peRatio")
+            rg   = s.get("revGrowth")
+            peg  = s.get("peg")
+            bits = [f"{t} ({co[:26]})", f"Sect:{sect[:12]}"]
+            if pe:
+                try: bits.append(f"PE={float(pe):.0f}x")
+                except Exception: pass
+            if peg:
+                try: bits.append(f"PEG={float(peg):.1f}")
+                except Exception: pass
+            if rg is not None:
+                try: bits.append(f"RevGr={rg:.0%}")
+                except Exception: pass
+            out.append("  " + "  ".join(bits))
+        return out
+
+    for _title, _rows in [
+        ("QUALITY",           quality_rows),
+        ("VALUE",             value_rows),
+        ("GROWTH",            growth_rows),
+        ("GARP",              garp_rows),
+        ("CONTRARIAN",        contrarian_rows),
+        ("EARNINGS MOMENTUM", emom_rows),
+    ]:
+        lines += _screen_block(_title, _rows or [])
+        lines.append("")
+
+    # ── Estimate revision leaders ─────────────────────────────────────────────
+    est_leaders = sorted(
+        [(t, s) for t, s in stocks.items()
+         if s.get("mktCap", 0) >= 1e9 and s.get("adv", 0) >= 1e6
+         and s.get("estRevision30d") is not None],
+        key=lambda x: -(x[1].get("estRevision30d") or 0),
+    )[:10]
+    if est_leaders:
+        lines.append("ESTIMATE REVISION LEADERS (30d, $1B+):")
+        for t, s in est_leaders:
+            rev = s.get("estRevision30d", 0)
+            co  = s.get("companyName") or t
+            sign = "+" if rev >= 0 else ""
+            lines.append(f"  {t} ({co[:24]}): est {sign}{rev:.0%}")
+        lines.append("")
+
+    # ── Insider buying clusters ───────────────────────────────────────────────
+    insider_clusters = sorted(
+        [(t, s) for t, s in stocks.items() if s.get("insiderBuys", 0) >= 2],
+        key=lambda x: -(x[1].get("insiderValue", 0) or 0),
+    )[:10]
+    if insider_clusters:
+        lines.append("INSIDER BUYING CLUSTERS (≥2 buys):")
+        for t, s in insider_clusters:
+            ib   = s.get("insiderBuys", 0)
+            iv   = s.get("insiderValue", 0) or 0
+            co   = s.get("companyName") or t
+            sect = s.get("sector", "")
+            lines.append(f"  {t} ({co[:22]}): {ib} buys  ${iv/1e3:.0f}K  [{sect}]")
+        lines.append("")
+
+    # ── Portfolio holdings ────────────────────────────────────────────────────
+    try:
+        _pf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fmp_portfolio.json")
+        if os.path.exists(_pf_path):
+            with open(_pf_path, "r", encoding="utf-8") as _pf:
+                _portfolio = json.load(_pf)
+            holdings = _portfolio.get("holdings", [])
+            if holdings:
+                lines.append("CURRENT PORTFOLIO:")
+                for h in holdings:
+                    ticker = h.get("ticker", "?")
+                    shares = h.get("shares", 0)
+                    basis  = h.get("avg_cost")
+                    s = stocks.get(ticker, {})
+                    px = s.get("price")
+                    ret_str = f"  ret={(px/basis-1):+.0%}" if px and basis else ""
+                    lines.append(f"  {ticker}: {shares:.0f} sh @ ${basis:.2f}" + ret_str)
+                lines.append("")
+    except Exception:
+        pass
+
+    # ── Past AI performance (feedback loop) ──────────────────────────────────
+    if agent_perf:
+        lines.append("AI PICK PERFORMANCE (source / n≥5):")
+        for src, perf in sorted(agent_perf.items(),
+                                 key=lambda x: -(x[1].get("alpha_vs_spy_pct") or 0)):
+            n = perf.get("n_picks", 0)
+            if n < 5:
+                continue
+            alpha = perf.get("alpha_vs_spy_pct")
+            wr    = perf.get("win_rate")
+            parts = [f"{src}: n={n}"]
+            if alpha is not None:
+                parts.append(f"alpha={alpha:+.1f}%")
+            if wr is not None:
+                parts.append(f"WR={wr:.0%}")
+            lines.append("  " + "  ".join(parts))
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
+                        agent_perf: dict = None) -> dict:
+    """Investment Desk — 3-stage AI pipeline.
+
+    Stage 1: 3 parallel generators propose theses (NO numbers, open universe)
+    Stage 2: Verification desk calls FMP tools to confirm/kill each idea
+    Returns shape compatible with downstream (picks, _specialist_picks, _memos).
+    """
+    if not ANTHROPIC_KEY:
+        return {}
+
+    from concurrent.futures import ThreadPoolExecutor as _TPE
+
+    # ── Model constants ───────────────────────────────────────────────────────
+    _GEN_MODEL     = "claude-sonnet-4-6"
+    _VERIFY_SONNET = "claude-sonnet-4-6"
+    _VERIFY_OPUS   = "claude-opus-4-8"
+
+    # ── Tool telemetry ────────────────────────────────────────────────────────
+    _tool_calls_made  = [0]
+    _tool_agents_used = [0]
+
+    _hdrs = {
+        "x-api-key":         ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type":      "application/json",
+    }
+
+    # ── Shared helpers ────────────────────────────────────────────────────────
+    def _parse_response(text):
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return _repair_truncated_json(text)
+
+    def _post(sys_p, usr_p, max_tok, timeout_s, model=None):
+        return requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=_hdrs,
+            json={"model":     model or _GEN_MODEL,
+                  "max_tokens": max_tok,
+                  "system":     sys_p,
+                  "messages":   [{"role": "user", "content": usr_p}]},
+            timeout=timeout_s,
+        )
+
+    def _post_with_tools(sys_p, usr_p, max_tok, timeout_s, model=None, max_rounds=6):
+        if not USE_FMP_TOOLS:
+            return _post(sys_p, usr_p, max_tok, timeout_s, model)
+        _messages = [{"role": "user", "content": usr_p}]
+        _agent_used_tool = False
+        for _round in range(max_rounds):
+            _payload = {
+                "model":      model or _GEN_MODEL,
+                "max_tokens": max_tok,
+                "system":     sys_p,
+                "messages":   _messages,
+                "tools":      FMP_AGENT_TOOLS,
+            }
+            resp = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=_hdrs,
+                json=_payload,
+                timeout=timeout_s,
+            )
+            if resp.status_code != 200:
+                return resp
+            rj          = resp.json()
+            stop_reason = rj.get("stop_reason", "end_turn")
+            content     = rj.get("content", [])
+            if stop_reason != "tool_use":
+                if _agent_used_tool:
+                    _tool_agents_used[0] += 1
+                return resp
+            _messages.append({"role": "assistant", "content": content})
+            _tool_results = []
+            for blk in content:
+                if blk.get("type") != "tool_use":
+                    continue
+                _tid   = blk.get("id", "")
+                _tname = blk.get("name", "")
+                _tinp  = blk.get("input", {})
+                _tool_calls_made[0] += 1
+                _agent_used_tool = True
+                print(f"      🔧 FMP tool: {_tname}({_tinp.get('ticker','?')}) [round {_round+1}]")
+                _result_str = _execute_fmp_tool(_tname, _tinp)
+                _tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": _tid,
+                    "content":     _result_str,
+                })
+            _messages.append({"role": "user", "content": _tool_results})
+        # max_rounds exhausted — force text response
+        _payload_final = {
+            "model":       model or _GEN_MODEL,
+            "max_tokens":  max_tok,
+            "system":      sys_p,
+            "messages":    _messages,
+            "tools":       FMP_AGENT_TOOLS,
+            "tool_choice": {"type": "none"},
+        }
+        resp_final = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=_hdrs,
+            json=_payload_final,
+            timeout=timeout_s,
+        )
+        if _agent_used_tool:
+            _tool_agents_used[0] += 1
+        return resp_final
+
+    def _metrics_block(t):
+        s = stocks.get(t, {})
+        def g(*keys):
+            for k in keys:
+                v = s.get(k)
+                if v not in (None, ""):
+                    return v
+            return None
+        rows = []
+        rows.append(f"Company: {g('companyName','name') or t}")
+        rows.append(f"Sector / Industry: {g('sector') or '—'} / {g('industry') or '—'}")
+        mc = g("mktCap")
+        if mc:
+            rows.append("Market cap: " + (f"${mc/1e9:.2f}B" if mc >= 1e9 else f"${mc/1e6:.0f}M"))
+        px = g("price")
+        if px:
+            rows.append(f"Price: ${px:.2f}")
+        pe = g("pe", "peRatio", "peTTM")
+        if pe:
+            try: rows.append(f"P/E (TTM): {float(pe):.1f}")
+            except Exception: pass
+        peg = g("peg", "pegRatio")
+        if peg is not None:
+            _basis = (" (trailing-growth basis)" if s.get("pegBasis") == "T"
+                      else " (forward-estimate basis)" if s.get("pegBasis") == "F" else "")
+            rows.append(f"PEG: {peg}{_basis}")
+        iv = g("iv", "dcf", "intrinsicValue", "dcfValue")
+        if iv:
+            try: rows.append(f"DCF intrinsic value: ${float(iv):.2f}")
+            except Exception: pass
+        mos = g("mos", "mosCustom", "marginOfSafety")
+        if mos is not None:
+            try: rows.append(f"Margin of safety vs DCF: {float(mos)*100:+.0f}%")
+            except Exception: pass
+        roic = g("roic")
+        if roic:
+            try: rows.append(f"ROIC: {float(roic)*100:.0f}%")
+            except Exception: pass
+        gm = g("grossMargin")
+        if gm:
+            try: rows.append(f"Gross margin: {float(gm)*100:.0f}%")
+            except Exception: pass
+        om = g("operatingMargin")
+        if om:
+            try: rows.append(f"Operating margin: {float(om)*100:.0f}%")
+            except Exception: pass
+        rg = g("revGrowth", "revenueGrowthYoy")
+        if rg:
+            try: rows.append(f"Revenue growth YoY: {float(rg)*100:.0f}%")
+            except Exception: pass
+        fy = g("fcfYield")
+        if fy:
+            try: rows.append(f"FCF yield: {float(fy)*100:.1f}%")
+            except Exception: pass
+        yh, yl = g("yearHigh"), g("yearLow")
+        if px and yh and yl and yh > yl:
+            try: rows.append(f"52-week position: {(px-yl)/(yh-yl)*100:.0f}% of range"
+                             f" (low ${yl:.0f} / high ${yh:.0f})")
+            except Exception: pass
+        ac = g("analystCount")
+        if ac is not None:
+            rows.append(f"Sell-side analysts covering: {ac}")
+        return "\n".join(rows)
+
+    # ── Generator system prompt ───────────────────────────────────────────────
+    _today = datetime.date.today()
+    macro_line = ""
+    if macro:
+        try:
+            macro_line = (f"Macro backdrop: 10Y={macro.get('dgs10','?')}%, "
+                          f"VIX={macro.get('vix','?')}, "
+                          f"yield curve={macro.get('yield_curve','?')}.")
+        except Exception:
+            macro_line = ""
+
+    _GEN_IDEA_SCHEMA = (
+        '{"market_view":"1-2 sentence macro/market context",'
+        '"ideas":[{"ticker":"X","company":"Name",'
+        '"source":"DeskInnovation|DeskContrarian|DeskScreener",'
+        '"thesis":"2-4 sentences: why this company, why now, what the market is missing",'
+        '"edge":"knowledge-edge insight — why would a Lynch investor already know this business",'
+        '"what_would_kill_it":"the single most credible bear case",'
+        '"time_horizon":"short (<1yr) | medium (1-3yr) | long (3+yr)",'
+        '"conviction":"HIGH | MEDIUM | LOW"}]}'
+    )
+
+    _GEN_SYS = (
+        f"You are an independent investment research analyst on the Investment Desk. "
+        f"Today is {_today}. {macro_line}\n\n"
+        "USER INVESTMENT PROFILE: Peter Lynch-style investor. Buys companies they know and "
+        "understand (knowledge-edge investing). Core circle of competence: tech, software, AI, "
+        "semiconductors, innovation-driven businesses. Appreciates all sectors but tilts toward "
+        "companies with durable competitive moats, high gross margins, and visible growth runways. "
+        "Avoids: pure asset plays, turnaround stories without clear catalyst, businesses they "
+        "don't understand.\n\n"
+        "CRITICAL RULES — violations disqualify your entire output:\n"
+        "1. Propose THESES only. Cite ZERO specific financial figures (no P/E, revenue, "
+        "   growth rates, price targets, balance sheet numbers). A verification analyst "
+        "   with live FMP data will confirm or kill every idea.\n"
+        "2. US-listed tickers and ADRs only. No private companies, no SPACs without history.\n"
+        "3. Respond ONLY with valid JSON — no markdown fences, no prose before/after.\n"
+        "4. 3-5 ideas only. Quality over quantity.\n\n"
+        f"Output JSON schema:\n{_GEN_IDEA_SCHEMA}"
+    )
+
+    # ── Stage 1: 3 parallel generators ───────────────────────────────────────
+    _GEN_DESK_INNOVATION_USR = (
+        "You are DeskInnovation — find compelling open-universe ideas in tech, software, AI, "
+        "semiconductors, fintech, biotech, and adjacent innovation sectors. Think like Peter "
+        "Lynch browsing a mall: where is the consumer or enterprise already showing up in droves "
+        "that Wall Street hasn't fully re-rated yet? Focus on businesses with strong structural "
+        "tailwinds, high switching costs, or network effects. Pick names the investor would "
+        "already know from their daily tech use or industry reading.\n\n"
+        f"Market context:\n{brief[:3000]}\n\n"
+        "Respond with your 3-5 best investment theses as JSON."
+    )
+    _GEN_DESK_CONTRARIAN_USR = (
+        "You are DeskContrarian — find quality businesses that are currently out of favour. "
+        "Sector rotation headwinds, narrative overhang (one bad quarter, macro fear), or simply "
+        "neglected due to small size. The business quality must be solid — durable revenues, "
+        "pricing power, strong balance sheet — but the market prices in permanent impairment. "
+        "Lynch's 'boring is beautiful' or 'fallen angels from tech'.\n\n"
+        f"Market context:\n{brief[:3000]}\n\n"
+        "Respond with your 3-5 best contrarian investment theses as JSON."
+    )
+    _GEN_DESK_SCREENER_USR = (
+        "You are DeskScreener — find the most compelling stories from the screener data in the "
+        "market brief. Look at names across all screens (Quality, GARP, Contrarian, Earnings "
+        "Momentum) and identify 3-5 where multiple independent signals converge (e.g. GARP + "
+        "insider buying + estimate revisions, or Contrarian + strong earnings momentum). "
+        "These should be names where quant screens confirm a qualitative thesis.\n\n"
+        f"Market context (use ALL of this data):\n{brief}\n\n"
+        "Respond with your 3-5 best screener-grounded investment theses as JSON."
+    )
+
+    def _run_generator(job):
+        desk_name, usr_p = job
+        try:
+            resp = _post(_GEN_SYS, usr_p, max_tok=8000, timeout_s=120, model=_GEN_MODEL)
+            if resp.status_code != 200:
+                print(f"    ⚠️ {desk_name} error {resp.status_code}")
+                return desk_name, [], ""
+            text = next((b.get("text", "") for b in resp.json().get("content", [])
+                         if b.get("type") == "text"), "").strip()
+            parsed = _parse_response(text)
+            ideas  = parsed.get("ideas", []) if isinstance(parsed, dict) else []
+            mv     = parsed.get("market_view", "") if isinstance(parsed, dict) else ""
+            for idea in ideas:
+                idea["source"]      = desk_name
+                idea["proposed_by"] = [desk_name]
+            print(f"    ✅ {desk_name}: {len(ideas)} ideas  — {mv[:60]}")
+            return desk_name, ideas, mv
+        except Exception as exc:
+            print(f"    ⚠️ {desk_name} failed: {str(exc)[:80]}")
+            return desk_name, [], ""
+
+    print("\n  🧠 Investment Desk Stage 1 — 3 generators (parallel)...")
+    _gen_jobs = [
+        ("DeskInnovation", _GEN_DESK_INNOVATION_USR),
+        ("DeskContrarian", _GEN_DESK_CONTRARIAN_USR),
+        ("DeskScreener",   _GEN_DESK_SCREENER_USR),
+    ]
+    _gen_results: dict = {}
+    _market_views: list = []
+    with _TPE(max_workers=3) as _pool:
+        for _name, _ideas, _mv in _pool.map(_run_generator, _gen_jobs):
+            _gen_results[_name] = _ideas
+            if _mv:
+                _market_views.append(_mv)
+
+    # ── Dedup + resolve ───────────────────────────────────────────────────────
+    _seen: dict = {}
+    _order: list = []
+    for _desk in ["DeskInnovation", "DeskContrarian", "DeskScreener"]:
+        for idea in _gen_results.get(_desk, []):
+            t = (idea.get("ticker") or "").upper().strip()
+            if not t:
+                continue
+            if t in _seen:
+                _seen[t]["proposed_by"] = list(set(_seen[t]["proposed_by"] + [_desk]))
+                if idea.get("conviction") == "HIGH" and _seen[t].get("conviction") != "HIGH":
+                    _seen[t]["conviction"] = "HIGH"
+            else:
+                _seen[t] = dict(idea, ticker=t)
+                _order.append(t)
+
+    _resolved = []
+    for t in _order:
+        if t not in stocks:
+            print(f"    ⚠️ Unresolved ticker {t} — dropped (not in FMP universe)")
+            continue
+        _resolved.append(_seen[t])
+
+    _resolved.sort(key=lambda x: (
+        -len(x.get("proposed_by", [])),
+        0 if x.get("conviction") == "HIGH" else (1 if x.get("conviction") == "MEDIUM" else 2),
+    ))
+    candidates = _resolved[:10]
+    print(f"\n  📋 {len(candidates)} candidates after dedup (from {len(_order)} proposals)")
+
+    if not candidates:
+        print("  ⚠️ No candidates resolved — returning empty AI result")
+        return {}
+
+    # ── Stage 2: Verification desk ────────────────────────────────────────────
+    _DOSSIER_SCHEMA = (
+        '{"ticker":"X","company":"Name",'
+        '"verdict":"BUY | WATCH | AVOID | KILL",'
+        '"conviction":"HIGH | MEDIUM | LOW",'
+        '"business":"2-4 sentences: what it does, how it makes money, competitive position.",'
+        '"thesis_check":"Did the generator thesis hold up? What did you confirm or refute?",'
+        '"valuation":"Is it cheap, fair, or expensive? Reference specific multiples from tools.",'
+        '"growth":"Revenue and earnings growth trajectory from tool data.",'
+        '"balance_sheet":"Financial health — net debt, cash, any distress signals.",'
+        '"catalysts":"Specific near-term events that could re-rate the stock.",'
+        '"risks":"The 2-3 most credible reasons to pass.",'
+        '"what_to_watch":"Concrete signals to track over next 4-12 weeks.",'
+        '"kill_reason":"Populate only if verdict is KILL or AVOID.",'
+        '"time_horizon":"short (<1yr) | medium (1-3yr) | long (3+yr)"}'
+    )
+
+    _VERIFY_SYS = (
+        f"You are a senior verification analyst on the Investment Desk. Today is {_today}. "
+        f"{macro_line}\n\n"
+        "Your job: CONFIRM with a grounded dossier or KILL an investment idea. "
+        "You have live FMP financial data tools.\n\n"
+        "MANDATORY: Call get_financial_statements AND get_analyst_estimates before any verdict. "
+        "Skipping these tools results in an automatic KILL.\n\n"
+        "Every specific figure you cite must come from a tool result — never from training memory. "
+        "Wrong numbers mislead a real investor.\n\n"
+        "Verdict guide: BUY = thesis confirmed + reasonable valuation; "
+        "WATCH = interesting but one concern unresolved; "
+        "AVOID = thesis weak or too expensive; "
+        "KILL = thesis factually wrong, unresolvable, or financials disqualify.\n\n"
+        f"Respond ONLY with valid JSON (no markdown):\n{_DOSSIER_SCHEMA}"
+    )
+
+    def _verify_one(idx_candidate):
+        idx, candidate = idx_candidate
+        t      = candidate.get("ticker", "").upper()
+        model  = _VERIFY_OPUS   if idx < 3 else _VERIFY_SONNET
+        maxtok = 6000           if idx < 3 else 4500
+        rounds = 6              if idx < 3 else 5
+        tier   = "Opus"         if idx < 3 else "Sonnet"
+        print(f"    🔍 Verifying {t} [{tier}]...")
+        desk_names = ", ".join(candidate.get("proposed_by", ["??"]))
+        thesis     = candidate.get("thesis", "")
+        edge       = candidate.get("edge", "")
+        wki        = candidate.get("what_would_kill_it", "")
+        _usr = (
+            f"Verify investment idea: {t} ({candidate.get('company', t)})\n\n"
+            f"PROPOSED BY: {desk_names}\n"
+            f"THESIS: {thesis}\n"
+            f"EDGE: {edge}\n"
+            f"BEAR CASE TO CHECK: {wki}\n\n"
+            f"SCREENER SNAPSHOT:\n{_metrics_block(t)}\n\n"
+            "MANDATORY FIRST STEPS: call get_financial_statements AND get_analyst_estimates "
+            "before reaching a verdict. Budget ≤5 FMP tool calls total.\n\n"
+            f"Respond ONLY with valid JSON (no markdown):\n{_DOSSIER_SCHEMA}"
+        )
+        try:
+            resp = _post_with_tools(_VERIFY_SYS, _usr, max_tok=maxtok,
+                                    timeout_s=300, model=model, max_rounds=rounds)
+            if resp.status_code != 200:
+                print(f"    ⚠️ Verify {t} error {resp.status_code}")
+                return None
+            rj = resp.json()
+            # Handle residual tool_use state
+            if rj.get("stop_reason") == "tool_use":
+                _fc   = rj.get("content", [])
+                _tr2  = [{"type": "tool_result", "tool_use_id": b["id"], "content": ""}
+                         for b in _fc if b.get("type") == "tool_use"]
+                _msgs2 = [
+                    {"role": "user",      "content": _usr},
+                    {"role": "assistant", "content": _fc},
+                    {"role": "user",      "content": _tr2 + [
+                        {"type": "text",
+                         "text": f"Stop tool use. Respond ONLY with valid JSON:\n{_DOSSIER_SCHEMA}"}
+                    ]},
+                ]
+                resp = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers=_hdrs,
+                    json={"model": model, "max_tokens": maxtok,
+                          "system": _VERIFY_SYS, "messages": _msgs2},
+                    timeout=300,
+                )
+                if resp is None or resp.status_code != 200:
+                    print(f"    ⚠️ Verify {t} final-round error")
+                    return None
+            text = next((b.get("text", "") for b in resp.json().get("content", [])
+                         if b.get("type") == "text"), "").strip()
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            text = text.strip().rstrip("`")
+            dossier = json.loads(text)
+            dossier["ticker"]      = t
+            dossier["company"]     = candidate.get("company", dossier.get("company", t))
+            dossier["proposed_by"] = candidate.get("proposed_by", [])
+            dossier["source"]      = candidate.get("source", "DeskScreener")
+            dossier["thesis"]      = thesis
+            verdict = dossier.get("verdict", "KILL")
+            icon = "✅" if verdict in ("BUY", "WATCH") else "❌"
+            print(f"    {icon} {t}: {verdict} [{dossier.get('conviction','')}]"
+                  f" — {(dossier.get('thesis_check') or '')[:60]}")
+            return dossier
+        except Exception as exc:
+            print(f"    ⚠️ Verify {t} failed: {str(exc)[:100]}")
+            return None
+
+    print(f"\n  🔬 Investment Desk Stage 2 — verifying {len(candidates)} candidates...")
+    dossiers_all: list = []
+    with _TPE(max_workers=4) as _pool:
+        for _d in _pool.map(_verify_one, list(enumerate(candidates))):
+            if _d:
+                dossiers_all.append(_d)
+
+    # ── Build return shape (downstream-compatible) ────────────────────────────
+    dossiers_buy    = [d for d in dossiers_all if d.get("verdict") in ("BUY", "WATCH")]
+    dossiers_killed = [d for d in dossiers_all if d.get("verdict") in ("AVOID", "KILL")]
+
+    picks = []
+    for d in sorted(dossiers_buy,
+                    key=lambda x: (0 if x.get("verdict") == "BUY" else 1,
+                                   0 if x.get("conviction") == "HIGH" else 1)):
+        verdict    = d.get("verdict", "WATCH")
+        conviction = d.get("conviction", "MEDIUM")
+        if verdict == "BUY" and conviction == "HIGH":
+            tier = "CORE"
+        elif verdict == "BUY":
+            tier = "SATELLITE"
+        else:
+            tier = "WATCH"
+        t = d.get("ticker", "")
+        s = stocks.get(t, {})
+        picks.append({
+            "ticker":            t,
+            "company":           d.get("company", t),
+            "position_tier":     tier,
+            "conviction":        conviction,
+            "story":             d.get("thesis_check") or d.get("thesis", ""),
+            "rationale":         d.get("thesis", ""),
+            "catalysts":         d.get("catalysts", ""),
+            "risks":             d.get("risks", ""),
+            "time_horizon":      d.get("time_horizon", ""),
+            "endorsed_by":       ", ".join(d.get("proposed_by", [])),
+            "business_synopsis": d.get("business", ""),
+            "sector":            s.get("sector", ""),
+            "price":             s.get("price"),
+        })
+
+    # _specialist_picks: per-desk ideas feed Agent Reports tab + logging unchanged
+    _specialist_picks = {
+        desk: ideas
+        for desk, ideas in _gen_results.items()
+        if ideas
+    }
+
+    # _memos: dossiers in memo-compatible format (Best Ideas panel)
+    _memos = []
+    for d in dossiers_buy:
+        t = d.get("ticker", "")
+        _tier = next((p["position_tier"] for p in picks if p["ticker"] == t), "WATCH")
+        _memos.append({
+            "ticker":        t,
+            "company":       d.get("company", ""),
+            "verdict":       (d.get("verdict", "WATCH")
+                              + " — " + (d.get("thesis_check") or "")[:80]),
+            "conviction":    d.get("conviction", "MEDIUM"),
+            "business":      d.get("business", ""),
+            "bull_case":     d.get("thesis", ""),
+            "bear_case":     d.get("risks", ""),
+            "valuation":     d.get("valuation", ""),
+            "catalysts":     d.get("catalysts", ""),
+            "what_to_watch": d.get("what_to_watch", ""),
+            "time_horizon":  d.get("time_horizon", ""),
+            "endorsed_by":   ", ".join(d.get("proposed_by", [])),
+            "position_tier": _tier,
+        })
+
+    n_tools  = _tool_calls_made[0]
+    n_agents = _tool_agents_used[0]
+    print(f"\n  ✅ Investment Desk complete — {len(picks)} picks"
+          f" ({len(dossiers_killed)} killed)"
+          f" | {n_tools} FMP tool calls ({n_agents} agents used tools)")
+
+    return {
+        "pipeline":          _AI_PIPELINE,
+        "synopsis":          _market_views[0] if _market_views else "",
+        "brief":             brief,
+        "picks":             picks,
+        "dossiers":          dossiers_all,
+        "killed":            dossiers_killed,
+        "_specialist_picks": _specialist_picks,
+        "_memos":            _memos,
+    }
 
 
 def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
@@ -7304,69 +8049,74 @@ def log_ai_picks(ai_result: dict, stocks: dict, mall_result: dict = None):
     except Exception:
         pass
 
-    # ── Specialist picks FIRST (so judge can detect echoes) ───────────────
-    # A8: Build specialist-ticker set — judge picks matching become "AI-Judge-Echo"
-    specialist_tickers_today = set()
+    # Skip logging for migrated legacy cache (already logged on original run)
+    if ai_result.get("_legacy"):
+        return
+
+    # ── Generator desk picks (DeskInnovation / DeskContrarian / DeskScreener) ─
+    specialist_tickers_today: set = set()
     specialist_rows = []
     for spec_name, sr in ai_result.get("_specialist_picks", {}).items():
-        source = f"AI-{spec_name}"   # "AI-Bull", "AI-Value", "AI-Contrarian"
-        for p in sr.get("picks", []):
-            t = p.get("ticker", "").upper()
+        source = f"AI-{spec_name}"
+        # Support both new shape (list) and migrated-legacy shape (dict with "picks" key)
+        ideas = sr if isinstance(sr, list) else sr.get("picks", [])
+        for p in ideas:
+            t = (p.get("ticker") or "").upper()
             s = stocks.get(t, {})
             price = s.get("price")
-            if _valid_ticker(t) and price:
-                _hl = (p.get("key_metric") or "")[:80]
-                if t in _strategy_today:
-                    # Strategy-echo flag: the same ticker was logged as a strategy pick today
-                    _hl = (f"[strat-echo] {_hl}")[:80]
-                specialist_rows.append({
-                    "date": today, "source": source,
-                    "ticker": t,
-                    "company": s.get("name", t)[:30],
-                    "strategy": (p.get("brief_case") or "")[:50],
-                    "conviction": p.get("conviction", ""),
-                    "entry_price": round(price, 2),
-                    "headline": _hl,
-                    "prompt_version": PROMPT_VERSION,   # B6
-                    "strategy_echo": "1" if t in _strategy_today else "",  # A8-fix
-                    "synopsis": (p.get("business_synopsis") or "")[:300],
-                    "industry": (p.get("industry") or "")[:60],
-                    "key_competitors": (p.get("key_competitors") or "")[:120],
-                })
-                specialist_tickers_today.add(t)
+            if not _valid_ticker(t) or not price:
+                continue
+            _hl = (p.get("thesis") or p.get("brief_case") or p.get("key_metric") or "")[:80]
+            if t in _strategy_today:
+                _hl = (f"[strat-echo] {_hl}")[:80]
+            specialist_rows.append({
+                "date":           today,
+                "source":         source,
+                "ticker":         t,
+                "company":        (p.get("company") or s.get("name", t))[:30],
+                "strategy":       (p.get("edge") or p.get("brief_case") or "")[:50],
+                "conviction":     p.get("conviction", ""),
+                "entry_price":    round(price, 2),
+                "headline":       _hl,
+                "prompt_version": PROMPT_VERSION,
+                "strategy_echo":  "1" if t in _strategy_today else "",
+                "synopsis":       (p.get("thesis") or p.get("business_synopsis") or "")[:300],
+                "industry":       (p.get("industry") or s.get("industry", ""))[:60],
+                "key_competitors": (p.get("key_competitors") or "")[:120],
+            })
+            specialist_tickers_today.add(t)
 
-    # ── Consensus picks (derived from specialists — already logged above as specialist rows) ──
-    # In the no-judge system, ai_result["picks"] = consensus list built from specialist votes.
-    # These tickers are a subset of specialist_tickers_today, so no duplicate rows needed.
-    judge_rows = []   # kept for downstream code compatibility; always empty now
-
-    # ── Mall Manager picks (Lynch consumer-observable lens) ───────────────
-    mall_rows = []
-    for p in (mall_result or {}).get("picks", []) if mall_result else []:
-        t = p.get("ticker", "").upper()
+    # ── Verified desk picks (AI-DeskVerified — confirmed by FMP tool research) ─
+    verified_rows = []
+    for d in ai_result.get("dossiers", []):
+        if d.get("verdict") not in ("BUY", "WATCH"):
+            continue
+        t = (d.get("ticker") or "").upper()
         s = stocks.get(t, {})
         price = s.get("price")
-        if _valid_ticker(t) and price:
-            _hl = (p.get("consumer_thesis") or p.get("headline", ""))[:80]
-            if t in _strategy_today and "strat-echo" not in _hl:
-                _hl = (f"[strat-echo] {_hl}")[:80]
-            mall_rows.append({
-                "date": today, "source": "AI-MallManager",
-                "ticker": t,
-                "company": p.get("company", s.get("name", ""))[:30],
-                "strategy": "Lynch Mall",
-                "conviction": p.get("conviction", ""),
-                "entry_price": round(price, 2),
-                "headline": _hl,
-                "prompt_version": PROMPT_VERSION,
-                "strategy_echo": "1" if t in _strategy_today else "",
-                "synopsis": (p.get("story") or p.get("consumer_thesis", ""))[:300],
-                "industry": s.get("industry", "")[:60],
-                "key_competitors": "",
-            })
+        if not _valid_ticker(t) or not price:
+            continue
+        _hl = (d.get("thesis_check") or d.get("thesis", ""))[:80]
+        if t in _strategy_today and "strat-echo" not in _hl:
+            _hl = (f"[strat-echo] {_hl}")[:80]
+        verified_rows.append({
+            "date":           today,
+            "source":         "AI-DeskVerified",
+            "ticker":         t,
+            "company":        (d.get("company") or s.get("name", t))[:30],
+            "strategy":       d.get("verdict", "WATCH"),
+            "conviction":     d.get("conviction", ""),
+            "entry_price":    round(price, 2),
+            "headline":       _hl,
+            "prompt_version": PROMPT_VERSION,
+            "strategy_echo":  "1" if t in _strategy_today else "",
+            "synopsis":       (d.get("business") or "")[:300],
+            "industry":       s.get("industry", "")[:60],
+            "key_competitors": "",
+        })
 
-    # Judge first (preserved ordering), then mall manager, then specialists
-    rows = judge_rows + mall_rows + specialist_rows
+    judge_rows = []   # kept for schema compatibility; no longer populated
+    rows = judge_rows + verified_rows + specialist_rows
 
     if not rows:
         return
@@ -8769,13 +9519,13 @@ Respond ONLY with valid JSON (no markdown):
             "content-type": "application/json",
         }
         body = {
-            "model": "claude-haiku-4-5",
-            "max_tokens": 4096,
+            "model": "claude-opus-4-8",
+            "max_tokens": 8000,
             "system": sys_prompt,
             "messages": [{"role": "user", "content": usr_prompt}],
         }
         resp = _req.post("https://api.anthropic.com/v1/messages",
-                         headers=headers, json=body, timeout=120)
+                         headers=headers, json=body, timeout=300)
         if resp.status_code == 200:
             raw = resp.json()["content"][0]["text"]
 
@@ -10620,7 +11370,7 @@ def _build_master_screens(hold_forever, quality_compounders, fcf_compounders, st
         ("FCF", fcf_compounders), ("Stalwart", stalwarts),
     ], "ROIC")
     value_master = _merge_master([
-        ("IV-Discount", iv_rows), ("Asset-Play", asset_plays), ("Turnaround", turnarounds),
+        ("IV-Discount", iv_rows), ("Turnaround", turnarounds),
         ("Cyclical", cyclicals), ("Slow-Grower", slow_growers),
     ], "MoS")
     growth_master = _merge_master([
@@ -10641,25 +11391,35 @@ def _percentile_ranks(vals: dict) -> dict:
 
 
 def build_composite_value(wb, stocks):
-    """Tab: 🎯 Composite Value — systematic cross-sectional cheapness.
+    """Alias kept for cache/log compatibility. Calls build_garp."""
+    return build_garp(wb, stocks)
 
-    O'Shaughnessy/Gray-style value composite: mean percentile rank across up to
-    6 valuation metrics (≥3 required), blended 70/30 with a quality overlay
-    (ROIC, gross margin, Altman Z), then a 6-month-momentum value-trap filter
-    on the finalists only (API-cheap two-stage design). No threshold gates —
-    rank-based, so it degrades gracefully when metrics are missing.
+
+def build_garp(wb, stocks):
+    """Tab: 💎 GARP — Quality at a Reasonable Price.
+
+    Cross-sectional composite (percentile-based, no threshold gates):
+      40% valuation   — earnings yield, FCF yield, EV/EBITDA yield (≥2 required)
+      35% growth      — revGrowth, revGrowth5y, epsGrowth, estRevision30d (≥2 required)
+      25% quality     — ROIC, gross margin, revConsistency
+    PEG sanity: −12 if PEG > 2.5. Sector tilt: +5 Tech/Comm, +3 consumer-observable.
+    6-month-momentum value-trap filter on top-60 finalists.
+    Universe: mktCap > $1B, profitable (PE>0 or FCF yield>0), no goingConcern.
     """
-    print("\n📊 Building Tab: 🎯 Composite Value...")
+    print("\n📊 Building Tab: 💎 GARP...")
+    _TECH_SECTORS = {"Technology", "Communication Services"}
     pool = {}
     for t, s in stocks.items():
-        if not _is_common_stock(s):                continue
-        if (s.get("mktCap") or 0) <= 200e6:        continue
-        if (s.get("avgDollarVol") or 0) <= 500_000: continue
-        if s.get("goingConcernRisk"):              continue
-        if not s.get("price") or s["price"] <= 0:  continue
+        if not _is_common_stock(s):                                     continue
+        if (s.get("mktCap") or 0) <= 1e9:                              continue  # $1B+ for familiar names
+        if (s.get("avgDollarVol") or 0) <= 500_000:                    continue
+        if s.get("goingConcernRisk"):                                   continue
+        if not s.get("price") or s["price"] <= 0:                      continue
+        # Profitability gate: not a money-losing speculative name
+        _pe, _fcfy = s.get("pe"), s.get("fcfYield")
+        if not ((_pe and _pe > 0) or (_fcfy and _fcfy > 0)):           continue
         pool[t] = s
 
-    # ── Value metrics → universe-wide percentiles (higher = cheaper) ───────
     def _collect(fn):
         out = {}
         for t, s in pool.items():
@@ -10668,70 +11428,85 @@ def build_composite_value(wb, stocks):
                 out[t] = v
         return out
 
+    # ── Valuation metrics (higher = cheaper) ─────────────────────────────
     _val_metrics = {
-        "ey":   _collect(lambda s: (1 / s["pe"]) if s.get("pe") and s["pe"] > 0 else None),
+        "ey":   _collect(lambda s: (1 / s["pe"])       if s.get("pe")      and s["pe"]      > 0 else None),
         "fcfy": _collect(lambda s: s.get("fcfYield")),
         "eby":  _collect(lambda s: (1 / s["evEbitda"]) if s.get("evEbitda") and s["evEbitda"] > 0 else None),
-        "spy_": _collect(lambda s: (1 / s["ps"]) if s.get("ps") and s["ps"] > 0 else None),
-        "bpy":  _collect(lambda s: (1 / s["pb"]) if s.get("pb") and s["pb"] > 0 else None),
-        "shy":  _collect(lambda s: ((s.get("netBuybackYield") or 0) + (s.get("divYield") or 0))
-                         if (s.get("netBuybackYield") is not None or s.get("divYield") is not None)
-                         else None),
     }
     _val_pcts = {k: _percentile_ranks(v) for k, v in _val_metrics.items()}
 
-    # ── Quality overlay percentiles ────────────────────────────────────────
+    # ── Growth metrics (higher = faster grower) ──────────────────────────
+    _grw_metrics = {
+        "rg":   _collect(lambda s: s.get("revGrowth")),
+        "rg5":  _collect(lambda s: s.get("revGrowth5y")),
+        "epsg": _collect(lambda s: s.get("epsGrowth")),
+        "er":   _collect(lambda s: s.get("estRevision30d")),
+    }
+    _grw_pcts = {k: _percentile_ranks(v) for k, v in _grw_metrics.items()}
+
+    # ── Quality metrics ───────────────────────────────────────────────────
     _q_pcts = {
         "roic": _percentile_ranks(_collect(lambda s: s.get("roic"))),
         "gm":   _percentile_ranks(_collect(lambda s: s.get("grossMargin"))),
-        "az":   _percentile_ranks(_collect(lambda s: s.get("altmanZ"))),
+        "rc":   _percentile_ranks(_collect(lambda s: s.get("revConsistency"))),
     }
 
     scored = []
     for t, s in pool.items():
         v_avail = [p[t] for p in _val_pcts.values() if t in p]
-        if len(v_avail) < 3:
-            continue   # too little valuation data to rank credibly
-        value_pct = sum(v_avail) / len(v_avail)
-        q_avail = [p[t] for p in _q_pcts.values() if t in p]
-        quality_pct = (sum(q_avail) / len(q_avail)) if len(q_avail) >= 2 else 50
-        composite = 0.70 * value_pct + 0.30 * quality_pct
-        scored.append((composite, value_pct, quality_pct, t, s))
+        if len(v_avail) < 2:
+            continue
+        g_avail = [p[t] for p in _grw_pcts.values() if t in p]
+        if len(g_avail) < 2:
+            continue
+        value_pct   = sum(v_avail) / len(v_avail)
+        growth_pct  = sum(g_avail) / len(g_avail)
+        q_avail     = [p[t] for p in _q_pcts.values() if t in p]
+        quality_pct = (sum(q_avail) / len(q_avail)) if q_avail else 50
+        composite   = 0.40 * value_pct + 0.35 * growth_pct + 0.25 * quality_pct
+        # PEG sanity penalty
+        peg = s.get("fwdPEG") or s.get("peg")
+        if peg and peg > 2.5:
+            composite -= 12
+        # Sector tilt
+        if (s.get("sector") or "") in _TECH_SECTORS:
+            composite += 5
+        elif s.get("consumerObservable"):
+            composite += 3
+        scored.append((composite, value_pct, growth_pct, quality_pct, t, s))
     scored.sort(key=lambda x: -x[0])
 
-    # ── Value-trap filter: 6M momentum on the top-60 finalists only ────────
+    # ── Value-trap filter: 6M momentum on the top-60 finalists only ──────
     finalists = scored[:60]
     moms = {}
     if finalists:
-        hist = fetch_daily_history([t for _, _, _, t, _ in finalists])
-        for _, _, _, t, _ in finalists:
+        hist = fetch_daily_history([t for _, _, _, _, t, _ in finalists])
+        for _, _, _, _, t, _ in finalists:
             closes = (hist.get(t) or {}).get("c") or []
             if len(closes) >= 130 and closes[-127] > 0:
-                moms[t] = closes[-1] / closes[-127] - 1   # ~126 trading days ≈ 6 months
+                moms[t] = closes[-1] / closes[-127] - 1
 
     _mom_vals = sorted(moms.values())
     _mom_floor = (_mom_vals[max(0, int(len(_mom_vals) * 0.15) - 1)]
                   if len(_mom_vals) >= 7 else None)
 
     qualified = []
-    for composite, value_pct, quality_pct, t, s in finalists:
+    for composite, value_pct, growth_pct, quality_pct, t, s in finalists:
         mom = moms.get(t)
         if mom is not None:
-            # Falling knives stay cheap: drop the worst-momentum tail
             if mom < -0.25 or (_mom_floor is not None and mom < _mom_floor):
                 continue
         else:
-            # No price data — fall back to estimate-revision / consistency check
             er = s.get("estRevision30d")
             rc = s.get("revConsistency")
-            if er is not None and er < -0.05:           continue
-            if rc is not None and rc < 0.40:            continue
+            if er is not None and er < -0.05:   continue
+            if rc is not None and rc < 0.40:    continue
         row = format_stock_row(s)
         row["Value %ile"]   = round(value_pct)
+        row["Growth %ile"]  = round(growth_pct)
         row["Quality %ile"] = round(quality_pct)
-        row["EY %ile"]      = _val_pcts["ey"].get(t, "—")
-        row["FCFY %ile"]    = _val_pcts["fcfy"].get(t, "—")
-        row["Shldr Yld"]    = _val_metrics["shy"].get(t)
+        row["PEG"]          = s.get("fwdPEG") or s.get("peg")
         row["6M Mom"]       = mom
         row["Score"]        = round(composite, 1)
         qualified.append(row)
@@ -10739,18 +11514,18 @@ def build_composite_value(wb, stocks):
     for i, row in enumerate(qualified):
         row["Rank"] = i + 1
 
-    ws = wb.create_sheet("CompositeValue")
+    ws = wb.create_sheet("GARP")
     ws.sheet_view.showGridLines = False
-    sr = add_title(ws, "🎯 Composite Value — Systematic Cross-Sectional Cheapness",
-                   f"Mean percentile across ≤6 value metrics (EY, FCF yield, EV/EBITDA, P/S, P/B, "
-                   f"shareholder yield; ≥3 required) ×70% + quality percentile (ROIC, gross margin, "
-                   f"Altman Z) ×30%. 6M-momentum value-trap filter on finalists. {datetime.date.today()}")
-    headers = ["Rank", "Ticker", "Company", "Sector", "Price", "Value %ile", "Quality %ile",
-               "EY %ile", "FCFY %ile", "Shldr Yld", "6M Mom", "P/E", "EV/EBITDA", "P/B",
-               "MktCap ($B)", "Score"]
-    widths = [5, 8, 24, 15, 8, 9, 10, 8, 9, 9, 8, 7, 9, 6, 10, 7]
-    write_table(ws, qualified, headers, sr, header_color="00695C", widths=widths)
-    print(f"  ✅ Composite Value tab done — {len(qualified)} stocks "
+    sr = add_title(ws, "💎 GARP — Quality at a Reasonable Price",
+                   f"40% valuation (EY/FCF/EV-EBITDA) + 35% growth (rev/EPS/estimates) + "
+                   f"25% quality (ROIC/margin/consistency). PEG>2.5 penalised. "
+                   f"Tech/Comm tilt +5, consumer-observable +3. 6M-momentum trap filter. "
+                   f"Universe: $1B+, profitable. {datetime.date.today()}")
+    headers = ["Rank", "Ticker", "Company", "Sector", "Price", "Value %ile", "Growth %ile",
+               "Quality %ile", "PEG", "6M Mom", "P/E", "EV/EBITDA", "MktCap ($B)", "Score"]
+    widths = [5, 8, 24, 15, 8, 9, 10, 10, 6, 8, 7, 9, 10, 7]
+    write_table(ws, qualified, headers, sr, header_color="2E7D32", widths=widths)
+    print(f"  ✅ GARP tab done — {len(qualified)} stocks "
           f"(from {len(scored)} ranked, {len(pool)} in universe)")
     return qualified
 
@@ -10842,6 +11617,181 @@ def build_earnings_momentum(wb, stocks):
     write_table(ws, qualified, headers, sr, header_color="E65100", widths=widths)
     print(f"  ✅ Earnings Momentum tab done — {len(qualified)} stocks "
           f"(from {len(cands)} with revision data)")
+    return qualified
+
+
+def build_contrarian(wb, stocks):
+    """Tab: 🔄 Contrarian — beaten-down quality with smart-money signals.
+
+    Finds quality companies that are 25%+ off their 52-week high and have at
+    least one smart-money/divergence signal (insider buying, positive estimate
+    revisions while price is down, hidden-gem flag, sector-relative cheapness).
+    A falling-knife guard (SMA50 or RSI recovering) is applied to top-60 finalists
+    via fetch_daily_history to avoid catching true deteriorating businesses.
+
+    Scoring: 35% drawdown depth + 25% smart-money signals + 25% quality percentile
+    (ROIC/grossMargin/altmanZ) + 15% sector-relative cheapness.
+    Sector tilt: +6 Technology/Communication Services, +4 consumerObservable names.
+    """
+    print("\n📊 Building Tab: 🔄 Contrarian...")
+    _TECH_SECTORS = {"Technology", "Communication Services"}
+
+    pool = {}
+    for t, s in stocks.items():
+        if not _is_common_stock(s):                                     continue
+        if (s.get("mktCap") or 0) <= 300e6:                            continue
+        if (s.get("avgDollarVol") or 0) <= 1_000_000:                  continue
+        if s.get("goingConcernRisk"):                                   continue
+        pv = s.get("priceVs52H")
+        if pv is None or pv > 0.75:                                     continue  # need ≥25% off high
+        # Quality floor: profitable or FCF-positive
+        _pe, _fcfy = s.get("pe"), s.get("fcfYield")
+        if not ((_pe and _pe > 0) or (_fcfy and _fcfy > 0)):           continue
+        # Avoid distress unless net-cash fortress
+        az = s.get("altmanZ")
+        if az is not None and az < 1.8 and (s.get("netCashRatio") or 0) < 0.15:
+            continue
+        # Avoid melting revenue (true deterioration vs temporary mispricing)
+        rg = s.get("revGrowth")
+        if rg is not None and rg < -0.15:                               continue
+        # Smart-money signal scoring
+        sm = 0
+        _ib, _iv = (s.get("insiderBuys") or 0), (s.get("insiderValue") or 0)
+        if _ib >= 2 or _iv >= 250_000:                                  sm += 12
+        if s.get("insiderBurst"):                                        sm += 8
+        er = s.get("estRevision30d")
+        if er is not None and er >= 0:                                   sm += 10  # estimates stable/rising while price down
+        div = s.get("divergence")
+        if div == "hidden_gem":                                          sm += 12
+        elif div == "quiet_signal":                                      sm += 5
+        if (s.get("sectorCheapCount") or 0) >= 3:                       sm += 8
+        if sm == 0:                                                      continue  # no smart-money signal → skip
+        s["_contraSmart"] = sm
+        pool[t] = s
+
+    if not pool:
+        print("  ⚠️ Contrarian: no candidates passed filters")
+        ws = wb.create_sheet("Contrarian")
+        return []
+
+    # --- Percentile scoring (API-free) ---
+    def _pct(vals):
+        items = [(t, v) for t, v in vals.items() if isinstance(v, (int, float))]
+        n = len(items)
+        if n < 2:
+            return {t: 50.0 for t, _ in items}
+        items.sort(key=lambda x: x[1])
+        return {t: round(100 * i / (n - 1)) for i, (t, _) in enumerate(items)}
+
+    # Drawdown depth: how far off the high (higher = more beaten down, capped at 60%)
+    draw_vals = {t: min(0.60, 1.0 - (s.get("priceVs52H") or 1.0)) for t, s in pool.items()}
+    draw_pcts = _pct(draw_vals)
+
+    # Quality: mean of available roic / grossMargin / altmanZ percentiles
+    roic_pcts   = _percentile_ranks({t: s.get("roic") for t, s in pool.items() if s.get("roic") is not None})
+    gm_pcts     = _percentile_ranks({t: s.get("grossMargin") for t, s in pool.items() if s.get("grossMargin") is not None})
+    az_pcts     = _percentile_ranks({t: s.get("altmanZ") for t, s in pool.items() if s.get("altmanZ") is not None and s.get("altmanZ") < 20})
+    def _qual_pct(t):
+        pts = [p for p in [roic_pcts.get(t), gm_pcts.get(t), az_pcts.get(t)] if p is not None]
+        return round(sum(pts) / len(pts)) if pts else 50
+
+    # Sector-relative cheapness: mean of available inverted sector percentiles (lower pctile = cheaper)
+    def _sector_cheap_pct(t, s):
+        vals = []
+        for fld in ("pe_sector_pctile", "evEbitda_sector_pctile", "pFcf_sector_pctile"):
+            v = s.get(fld)
+            if v is not None:
+                vals.append(100 - v)  # invert so higher = cheaper
+        # fcfYield sector pctile is already "higher = cheaper" (higher yield = cheaper)
+        v = s.get("fcfYield_sector_pctile")
+        if v is not None:
+            vals.append(v)
+        return round(sum(vals) / len(vals)) if vals else 50
+
+    # Smart-money: normalise raw sm points (max ~42) → 0–100
+    _sm_raw = {t: s.get("_contraSmart", 0) for t, s in pool.items()}
+    _sm_max = max(_sm_raw.values()) or 1
+    sm_pcts = {t: round(100 * v / _sm_max) for t, v in _sm_raw.items()}
+
+    # Pre-score all candidates
+    pre_scored = []
+    for t, s in pool.items():
+        qual  = _qual_pct(t)
+        cheap = _sector_cheap_pct(t, s)
+        smt   = sm_pcts.get(t, 0)
+        draw  = draw_pcts.get(t, 50)
+        score = 0.35 * draw + 0.25 * smt + 0.25 * qual + 0.15 * cheap
+        # Sector tilt
+        if (s.get("sector") or "") in _TECH_SECTORS:                    score += 6
+        elif s.get("consumerObservable"):                                score += 4
+        pre_scored.append((t, s, score, qual, cheap, smt, draw))
+    pre_scored.sort(key=lambda x: -x[2])
+    finalists = pre_scored[:60]
+
+    # --- Stage B: falling-knife guard (API, top-60 only) ---
+    fin_tickers = [t for t, *_ in finalists]
+    hist = fetch_daily_history(fin_tickers)
+
+    qualified = []
+    for t, s, score, qual, cheap, smt, draw in finalists:
+        closes = (hist.get(t) or {}).get("c", [])
+        if closes:
+            sma50 = _sma(closes, 50)
+            px = closes[-1]
+            rsi_now  = _rsi14(closes)
+            rsi_prev = _rsi14(closes[:-5]) if len(closes) > 5 else None
+            stable = (
+                (sma50 and px >= sma50) or
+                (rsi_now is not None and rsi_now >= 45 and
+                 rsi_prev is not None and rsi_now > rsi_prev)
+            )
+            if not stable:
+                continue
+            dist_sma50 = round(px / sma50 - 1, 4) if sma50 else None
+            rsi_disp = rsi_now
+        else:
+            dist_sma50 = None
+            rsi_disp = None
+
+        px_disp = s.get("price") or s.get("stockPrice")
+        row = {
+            "Rank":        0,
+            "Ticker":      t,
+            "Company":     (s.get("companyName") or s.get("name") or t)[:30],
+            "Sector":      (s.get("sector") or "")[:14],
+            "Price":       px_disp,
+            "52w Pos":     s.get("priceVs52H"),
+            "Smart $":     round(s.get("insiderValue") or 0),
+            "Quality %ile": qual,
+            "Sector Cheap": cheap,
+            "Rev 30d":     s.get("estRevision30d"),
+            "Insider":     s.get("insiderBuys") or 0,
+            "RSI":         rsi_disp,
+            "vs SMA50":    dist_sma50,
+            "P/E":         s.get("pe"),
+            "MktCap ($B)": round((s.get("mktCap") or 0) / 1e9, 1),
+            "Score":       round(score, 1),
+        }
+        qualified.append(row)
+        if len(qualified) >= 25:
+            break
+
+    for i, row in enumerate(qualified):
+        row["Rank"] = i + 1
+
+    ws = wb.create_sheet("Contrarian")
+    ws.sheet_view.showGridLines = False
+    sr = add_title(ws, "🔄 Contrarian — Beaten-Down Quality with Smart-Money Signals",
+                   f"Beaten-down quality stocks (≥25% off 52w high) with insider buying, "
+                   f"positive estimate revisions, or hidden-gem divergence. Falling-knife guard: "
+                   f"price above SMA50 or RSI recovering. Sector tilt: +6 Tech/Comm, +4 consumer-observable. "
+                   f"{datetime.date.today()}")
+    headers = ["Rank", "Ticker", "Company", "Sector", "Price", "52w Pos",
+               "Smart $", "Quality %ile", "Sector Cheap", "Rev 30d",
+               "Insider", "RSI", "vs SMA50", "P/E", "MktCap ($B)", "Score"]
+    widths = [5, 8, 24, 14, 8, 8, 9, 11, 11, 8, 7, 6, 8, 7, 10, 7]
+    write_table(ws, qualified, headers, sr, header_color="AD1457", widths=widths)
+    print(f"  ✅ Contrarian tab done — {len(qualified)} setups (from {len(pool)} candidates)")
     return qualified
 
 
@@ -12256,7 +13206,8 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       spinoff_events=None,  # 🔔 Front-page spin-off alert events
                       fcf_compounders=None,             # 💸 FCF Compounders — pure cash flow lens
                       index_valuations=None,            # 📊 SPY/QQQ/IWM valuation pulse
-                      composite_value=None,             # 🎯 Composite Value — percentile cheapness
+                      composite_value=None,             # 💎 GARP — Quality at a Reasonable Price
+                      contrarian=None,                  # 🔄 Contrarian — beaten-down quality
                       earnings_momentum=None,           # ⚡ Earnings Momentum — revisions drift
                       swing_setups=None,                # 📈 Swing Setups — timing overlay
                       quality_master=None,              # 💎 master screens — built in main() so the
@@ -12281,13 +13232,13 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
         "Slow Growers":       slow_growers,
         "Cyclicals":          cyclicals,
         "Turnarounds":        turnarounds,
-        "Asset Plays":        asset_plays,
         "Lynch 10-Baggers":   ten_baggers,
         "Quality Compounders":quality_compounders,
         "Off-the-Radar":      off_the_radar,
         "Hold Forever":       hold_forever,
-        "Composite Value":    composite_value,
+        "GARP":               composite_value,
         "Earnings Momentum":  earnings_momentum,
+        "Contrarian":         contrarian,
     }
     for _strat_name, _rows in _strat_to_rows.items():
         if not _rows: continue
@@ -12923,7 +13874,7 @@ function showMacroDetail(el, id) {
                            "Shldr Yld", "52w Pos"):
                     cells.append(_cell(_pct(v), v))
                 elif c in ("6M Mom", "Est Rev 30d", "Mom 6M", "Rev 30d",
-                           "Dist SMA50", "Dist SMA200"):
+                           "Dist SMA50", "Dist SMA200", "vs SMA50"):
                     # Signed percent with directional color
                     if not isinstance(v, (int, float)):
                         cells.append("<td style='text-align:right;color:#78909c'>—</td>")
@@ -12931,7 +13882,7 @@ function showMacroDetail(el, id) {
                         _mcol = ("color:#66bb6a;font-weight:600" if v > 0.02
                                  else "color:#ef5350;font-weight:600" if v < -0.02 else "color:#b0bec5")
                         cells.append(f"<td style='text-align:right;{_mcol}'>{v:+.1%}</td>")
-                elif c.endswith("%ile"):
+                elif c in ("Sector Cheap",) or c.endswith("%ile"):
                     # 0–100 percentile rank — green when strong
                     if not isinstance(v, (int, float)):
                         cells.append("<td style='text-align:center;color:#78909c'>—</td>")
@@ -13044,56 +13995,44 @@ function showMacroDetail(el, id) {
 
         # Updated 12-agent lineup (2026-05-13): GoldmanSC replaces slot 1, WallStBlind slot 12
         _ADESC = {
-            "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0",
-                "Goldman Sachs pre-discovery screen — finds companies growing 25%+ in the $100M–$2B "
-                "range before mainstream institutional flows arrive. Goal: tomorrow's $10B company at $500M."),
-            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F",
-                "Peter Lynch's everyday-life observation framework — simple, understandable consumer/"
-                "workplace businesses growing 15–25%/yr at PEG <1.0. Requires the 🛒 FamiliarBrand tag."),
-            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457",
-                "Chris Camillo's social-trend velocity framework — viral consumer products, app rank "
-                "momentum, and emerging behavioural shifts where revenue is accelerating BEFORE Wall "
-                "Street catches up."),
-            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D",
-                "Christopher Mayer's strict 100-bagger pattern: <$2B + ROIC >15% sustained + owner-"
-                "operator + long reinvestment runway + low dilution. Returns zero picks if nothing fits."),
-            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1",
-                "ARK Invest's disruptive-innovation screen. Pure-play names in AI, robotics, genomics, "
-                "energy storage, or blockchain riding Wright's Law exponential cost curves."),
-            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0",
-                "Joel Greenblatt's two-factor screen: ROIC >20% AND earnings yield >10%. Pre-filtered "
-                "candidate pool; agent secondarily filters for sustainability and earnings quality."),
-            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E",
-                "Mohnish Pabrai's 3:1+ upside/downside framework. Downside protected by real assets or "
-                "cash; upside driven by a specific catalyst the market is underpricing."),
-            "HowardMarks":   ("🔄 Marks Second-Level", "827717",
-                "Howard Marks' contrarian framework — find where market consensus is factually wrong. "
-                "Oversold names with improving fundamentals; sentiment-extreme sectors with mean-reversion."),
-            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0",
-                "Nick Sleep's flywheel framework — businesses that share scale benefits with customers "
-                "(Costco/Amazon model), driving self-reinforcing growth as they scale."),
-            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723",
-                "Michael Burry's catalyst-driven deep value. Hidden assets, sum-of-parts gaps, accounting "
-                "normalisations — with a SPECIFIC named catalyst (≤12mo) that forces market repricing."),
-            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238",
-                "Cluster insider buying + smart-money 13F overlap. The two groups with both information "
-                "and capital at stake. Highest priority: 🎯 Hidden Gem (cluster + Street rated Hold/Sell)."),
-            "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C",
-                "Finds investment opportunities Wall Street's major banks can't or won't cover — "
-                "coverage gaps, spinoffs, orphaned names, sin-sector discounts, IPO aftermath."),
+            # ── Investment Desk (2026-06) ──────────────────────────────────────
+            "DeskInnovation": ("💡 Desk Innovation", "0D47A1",
+                "Open-universe tech/software/AI/innovation ideas. Thinks like Peter Lynch: "
+                "where is the enterprise or consumer already showing up in droves that Wall "
+                "Street hasn't re-rated yet? Proposes theses only — a verification analyst "
+                "confirms every number."),
+            "DeskContrarian": ("🔄 Desk Contrarian", "4A148C",
+                "Quality businesses currently out of favour — sector rotation headwinds, "
+                "narrative overhang, one bad quarter. Business quality must be solid; "
+                "market prices in permanent impairment. Lynch's 'boring is beautiful'."),
+            "DeskScreener":   ("📊 Desk Screener", "1B5E20",
+                "Screener-grounded picks where multiple independent signals converge: "
+                "GARP + insider buying + estimate revisions, or Contrarian + strong "
+                "earnings momentum. Quant screens confirm a qualitative thesis."),
+            # ── Historical agents (retired 2026-06) — kept for CSV display ─────
+            "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0", ""),
+            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F", ""),
+            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457", ""),
+            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D", ""),
+            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1", ""),
+            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0", ""),
+            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E", ""),
+            "HowardMarks":   ("🔄 Marks Second-Level", "827717", ""),
+            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0", ""),
+            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723", ""),
+            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238", ""),
+            "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C", ""),
         }
-        # Active 6-agent core (simplification 2026-06). Benched agents are skipped
-        # automatically because they produce no picks (not in _sp), but listing only
-        # the active six keeps the render order explicit.
-        _AGENT_ORDER = ["NickSleep", "HowardMarks", "Burry",
-                        "InsiderTrack", "CathieWood", "MagicFormula"]
+        # Investment Desk pipeline (2026-06): 3 generator desks replace 6 specialists.
+        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener"]
 
         sections_html = []
         for ak in _AGENT_ORDER:
             if ak not in _sp:
                 continue
             sr_data = _sp[ak]
-            agent_picks = sr_data.get("picks", [])
+            # New pipeline: sr_data is a list; old/migrated: dict with "picks" key
+            agent_picks = sr_data if isinstance(sr_data, list) else sr_data.get("picks", [])
             label, color_hex, desc = _ADESC.get(ak, (ak, "37474F", ""))
 
             pick_cards_html = []
@@ -13104,8 +14043,10 @@ function showMacroDetail(el, id) {
                 prc  = s2.get("price")
                 conv2 = (pp.get("conviction") or "MEDIUM").upper()
                 conv_color = "#1b5e20" if conv2 == "HIGH" else "#0d47a1"
-                rationale2 = pp.get("rationale", "") or pp.get("brief_case", "")
-                # A9: Lynch category badge from assembled stock dict
+                # Support both new (thesis) and old (rationale/brief_case) field names
+                rationale2 = (pp.get("thesis") or pp.get("rationale", "")
+                               or pp.get("brief_case", ""))
+                edge2 = pp.get("edge", "")
                 _lb = _lynch_badge(s2.get("lynchCategory"))
                 pick_cards_html.append(f"""
 <div class="agent-pick-card" style="border-left-color:#{color_hex}">
@@ -13114,10 +14055,10 @@ function showMacroDetail(el, id) {
     <span style="font-size:.65rem;background:{conv_color};color:#fff;border-radius:3px;padding:1px 5px">{conv2}</span>
   </div>
   <div class="ap-co">{(pp.get("company") or s2.get("name",tk))[:32]}</div>
-  {f'<div class="ap-syn">{pp.get("business_synopsis","")[:120]}</div>' if pp.get("business_synopsis") else ""}
+  {f'<div class="ap-syn">{edge2[:120]}</div>' if edge2 else ""}
   {f'<div style="margin-top:4px">{_lb}</div>' if _lb else ''}
   <div class="ap-rationale">{rationale2[:350]}</div>
-  <div class="ap-metric">{(pp.get("key_metric") or "")[:60]}{"  ·  $"+f"{prc:.0f}" if prc else ""}{"  ·  $"+f"{mc_b:.1f}B" if mc_b else ""}</div>
+  <div class="ap-metric">{"  ·  $"+f"{prc:.0f}" if prc else ""}{"  ·  $"+f"{mc_b:.1f}B" if mc_b else ""}</div>
 </div>""")
 
             sections_html.append(f"""
@@ -13132,24 +14073,27 @@ function showMacroDetail(el, id) {
         n_agents = len(sections_html)
         return f"""
 <section id="agents">
-  <div class="section-title">🔬 Agent Analysis — {n_agents} Specialist Reports</div>
+  <div class="section-title">🔬 Investment Desk — {n_agents} Generator Reports</div>
   <p style="background:#1a1a2e;padding:8px 12px;border-radius:4px;font-size:.75rem;
      color:#9e9e9e;margin-bottom:14px;line-height:1.6">
-    <b style="color:#90caf9">{n_agents} specialist agents</b> each apply a distinct investment philosophy
-    to the same universe of {len(stocks):,} stocks. Stocks endorsed by multiple specialists
-    appear in <b style="color:#90caf9">AI Top Picks</b> as high-conviction consensus picks.
+    <b style="color:#90caf9">{n_agents} generator desks</b> independently propose investment theses
+    across the open universe of US-listed stocks. Every proposal is then
+    <b style="color:#90caf9">verified by a separate FMP-tool analyst</b>
+    (Opus for top-3, Sonnet for rest) before appearing in AI Top Picks.
+    Figures on AI cards come from live tool data, not generator prose.
   </p>
   {"".join(sections_html)}
 </section>"""
 
     # ── NAV TABS ──────────────────────────────────────────────────────────
-    # 10-tab layout (2026-06): three master screens + three systematic screens
-    # (Composite Value, Earnings Momentum, Swing Setups) + AI hub + utility views.
+    # 11-tab layout (2026-06): three master screens + four systematic screens
+    # (GARP, Contrarian, Earnings Momentum, Swing Setups) + AI hub + utility views.
     tabs = [
         ("ai",       "🤖 AI Analysis"),
         ("qual",     "💎 Quality"),
         ("value",    "📊 Value"),
-        ("cval",     "🎯 Composite Value"),
+        ("garp",     "💎 GARP"),
+        ("contra",   "🔄 Contrarian"),
         ("growth",   "🚀 Growth"),
         ("emom",     "⚡ Earnings Momentum"),
         ("swing",    "📈 Swing Setups"),
@@ -14110,52 +15054,34 @@ function showMacroDetail(el, id) {
         except Exception as _emall:
             mall_section_html = f"<!-- mall_section error: {str(_emall)[:80]} -->"
 
-        # ── SPECIALIST SECTIONS ───────────────────────────────────────────
-        # Updated 12-agent lineup (2026-05-13): GoldmanSC slot 1, WallStBlind slot 12
+        # ── DESK GENERATOR SECTIONS ───────────────────────────────────────
+        # Investment Desk pipeline (2026-06): 3 generator desks replace old specialists.
         _ADESC = {
-            "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0",
-                "Goldman Sachs pre-discovery screen — finds companies growing 25%+ in the $100M–$2B "
-                "range before mainstream institutional flows arrive. Goal: tomorrow's $10B company at $500M."),
-            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F",
-                "Peter Lynch's everyday-life observation framework — simple, understandable consumer/"
-                "workplace businesses growing 15–25%/yr at PEG <1.0. Requires the 🛒 FamiliarBrand tag."),
-            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457",
-                "Chris Camillo's social-trend velocity framework — viral consumer products, app rank "
-                "momentum, and emerging behavioural shifts where revenue is accelerating BEFORE Wall "
-                "Street catches up."),
-            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D",
-                "Christopher Mayer's strict 100-bagger pattern: <$2B + ROIC >15% sustained + owner-"
-                "operator + long reinvestment runway + low dilution. Returns zero picks if nothing fits."),
-            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1",
-                "ARK Invest's disruptive-innovation screen. Pure-play names in AI, robotics, genomics, "
-                "energy storage, or blockchain riding Wright's Law exponential cost curves."),
-            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0",
-                "Joel Greenblatt's two-factor screen: ROIC >20% AND earnings yield >10%. Pre-filtered "
-                "candidate pool; agent secondarily filters for sustainability and earnings quality."),
-            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E",
-                "Mohnish Pabrai's 3:1+ upside/downside framework. Downside protected by real assets or "
-                "cash; upside driven by a specific catalyst the market is underpricing."),
-            "HowardMarks":   ("🔄 Marks Second-Level", "827717",
-                "Howard Marks' contrarian framework — find where market consensus is factually wrong. "
-                "Oversold names with improving fundamentals; sentiment-extreme sectors with mean-reversion."),
-            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0",
-                "Nick Sleep's flywheel framework — businesses that share scale benefits with customers "
-                "(Costco/Amazon model), driving self-reinforcing growth as they scale."),
-            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723",
-                "Michael Burry's catalyst-driven deep value. Hidden assets, sum-of-parts gaps, accounting "
-                "normalisations — with a SPECIFIC named catalyst (≤12mo) that forces market repricing."),
-            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238",
-                "Cluster insider buying + smart-money 13F overlap. The two groups with both information "
-                "and capital at stake. Highest priority: 🎯 Hidden Gem (cluster + Street rated Hold/Sell)."),
-            "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C",
-                "Finds investment opportunities Wall Street's major banks can't or won't cover — "
-                "coverage gaps, spinoffs, orphaned names, sin-sector discounts, IPO aftermath."),
+            "DeskInnovation": ("💡 Desk Innovation", "0D47A1",
+                "Open-universe tech/software/AI/innovation ideas. Thinks like Peter Lynch: "
+                "where is the enterprise or consumer already showing up in droves that Wall "
+                "Street hasn't re-rated yet?"),
+            "DeskContrarian": ("🔄 Desk Contrarian", "4A148C",
+                "Quality businesses currently out of favour. Market prices in permanent "
+                "impairment; business quality says otherwise. Lynch's 'boring is beautiful'."),
+            "DeskScreener":   ("📊 Desk Screener", "1B5E20",
+                "Screener-grounded picks where multiple signals converge: GARP + insiders + "
+                "estimate revisions, or Contrarian + earnings momentum."),
+            # Historical agents — kept for CSV display compatibility
+            "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0", ""),
+            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F", ""),
+            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457", ""),
+            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D", ""),
+            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1", ""),
+            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0", ""),
+            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E", ""),
+            "HowardMarks":   ("🔄 Marks Second-Level", "827717", ""),
+            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0", ""),
+            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723", ""),
+            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238", ""),
+            "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C", ""),
         }
-        # Active 6-agent core (simplification 2026-06). Benched agents are skipped
-        # automatically because they produce no picks (not in _sp), but listing only
-        # the active six keeps the render order explicit.
-        _AGENT_ORDER = ["NickSleep", "HowardMarks", "Burry",
-                        "InsiderTrack", "CathieWood", "MagicFormula"]
+        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener"]
 
         # ── Strategy Picks Summary table ──────────────────────────────────
         _strat_defs = [
@@ -14167,7 +15093,6 @@ function showMacroDetail(el, id) {
             ("🔄 Turnarounds",         turnarounds,         "6A1B9A"),
             ("📉 Slow Growers",        slow_growers,        "37474F"),
             ("🔁 Cyclicals",           cyclicals,           "827717"),
-            ("🏗️ Asset Plays",         asset_plays,         "4E342E"),
             ("🎯 10-Baggers",          ten_baggers,         "BF360D"),
             ("🛰️ Off-the-Radar",       off_the_radar,       "00695C"),
         ]
@@ -14415,7 +15340,7 @@ function showMacroDetail(el, id) {
                         f'</div>'
                     )
 
-                # Best Ideas = deep memos (top consensus) + remaining consensus picks, one ranked list.
+                # Best Ideas = verified dossiers (memos) + remaining consensus picks
                 _memo_tickers = {(_mo.get("ticker") or "").upper() for _mo in _memos}
                 _rcards = [_make_memo_card(_i, _mo) for _i, _mo in enumerate(_memos)]
                 _extra_picks = [_p for _p in (ai or {}).get("picks", [])
@@ -14427,22 +15352,22 @@ function showMacroDetail(el, id) {
                     'padding:12px 14px;margin-bottom:18px">'
                     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
                     '<span style="font-size:1rem;font-weight:700;color:#7986cb">🎯 Best Ideas</span>'
-                    f'<span style="font-size:.72rem;color:#78909c">— undervalued &amp; high-conviction now: '
-                    f'{len(_memos)} deep memos + {len(_lcards)} consensus picks</span>'
+                    f'<span style="font-size:.72rem;color:#78909c">— verified dossiers + remaining picks: '
+                    f'{len(_memos)} verified + {len(_lcards)} proposals</span>'
                     '</div>'
                     '<p style="font-size:.72rem;color:#546e7a;margin-bottom:8px;line-height:1.5">'
-                    'The week&apos;s highest-conviction names, ranked by cross-specialist consensus. Top picks '
-                    'carry a full Opus research memo (business, bull &amp; bear, valuation, catalysts, what to '
-                    'watch); the rest carry the specialist thesis. <b style="color:#78909c">MoS</b> = margin of '
-                    'safety vs DCF. Click any card to expand.</p>'
+                    'Investment Desk verified dossiers — every figure fetched from live FMP data this week, '
+                    'confirmed by an Opus (top 3) or Sonnet verification analyst. '
+                    'Proposals below dossiers carry the generator thesis only. '
+                    '<b style="color:#78909c">MoS</b> = margin of safety vs DCF. Click any card to expand.</p>'
                     + f'<div class="mm-grid">{"".join(_rcards + _lcards)}</div>'
                     + '</div>'
                 )
         except Exception as _eres:
             research_section_html = f"<!-- research_section error: {str(_eres)[:80]} -->"
 
-        wrapped_research = (_collapsible("🎯 Best Ideas — Undervalued &amp; High-Conviction",
-                                         "— merged consensus + Opus deep-research memos + valuation",
+        wrapped_research = (_collapsible("🎯 Best Ideas — Investment Desk Verified",
+                                         "— FMP-tool verified dossiers + generator proposals",
                                          research_section_html.strip(),
                                          open_by_default=True, accent="#7986cb")
                             if research_section_html.strip()
@@ -14545,6 +15470,10 @@ function showMacroDetail(el, id) {
         spec_collapsibles = []
         spec_nav_cards    = []
         _NAV_TAGLINES = {
+            "DeskInnovation": "Tech/AI open universe",
+            "DeskContrarian": "Out-of-favour quality",
+            "DeskScreener":   "Screener signal fusion",
+            # Historical — kept for display
             "GoldmanSC":    "Pre-discovery growth",
             "LynchBWYK":    "Buy what you know",
             "SocialArb":    "Viral trends early",
@@ -14562,7 +15491,8 @@ function showMacroDetail(el, id) {
             if ak not in _sp:
                 continue
             sr_data   = _sp[ak]
-            ap        = sr_data.get("picks", [])
+            # New pipeline: sr_data is a list; old/migrated: dict with "picks" key
+            ap        = sr_data if isinstance(sr_data, list) else sr_data.get("picks", [])
             lbl, chx, dsc = _ADESC.get(ak, (ak, "37474F", ""))
             # Reuse already-built pick_cards from spec_sections loop
             # Re-build pick cards for this agent inline
@@ -14573,13 +15503,12 @@ function showMacroDetail(el, id) {
                 mc_b = s2.get("mktCapB")
                 prc  = s2.get("price")
                 conv2 = (pp.get("conviction") or "MEDIUM").upper()
-                brief = pp.get("brief_case", "")
-                key_m = pp.get("key_metric", "")
+                brief = pp.get("brief_case", "") or pp.get("edge", "")
                 price_disp  = f"${prc:.0f}" if prc else ""
                 mktcap_disp = f"${mc_b:.1f}B" if mc_b else ""
-                rationale3 = pp.get("rationale", "") or brief
+                rationale3 = (pp.get("thesis") or pp.get("rationale", "") or brief)
                 _lb3 = _lynch_badge(s2.get("lynchCategory"))
-                _sp_syn   = pp.get("business_synopsis", "")
+                _sp_syn   = (pp.get("business_synopsis") or pp.get("thesis") or "")
                 _sp_ind   = pp.get("industry", "") or s2.get("industry", "")
                 _sp_comp  = pp.get("key_competitors", "")
                 _sp_biz   = ""
@@ -15343,17 +16272,20 @@ function openSpec(id){{
         import csv as _csv
 
         _AGENT_ICONS = {
-            # Active 6-agent core lineup (simplification 2026-06)
-            "AI-CathieWood":      "🚀 Disruptive",
-            "AI-MagicFormula":    "🔢 Magic Form.",
-            "AI-HowardMarks":     "🔄 Marks 2nd-Lvl",
-            "AI-NickSleep":       "🌀 Scale Econ",
-            "AI-Burry":           "🕳️ Deep Value",
-            "AI-InsiderTrack":    "👁️ Insider+13F",
+            # Investment Desk pipeline (2026-06)
+            "AI-DeskInnovation": "💡 Desk Innovation",
+            "AI-DeskContrarian": "🔄 Desk Contrarian",
+            "AI-DeskScreener":   "📊 Desk Screener",
+            "AI-DeskVerified":   "✅ Desk Verified",
             # Retired agents — labels kept so historical CSV entries display correctly.
-            # The "(retired)" suffix is what _AGENT_ORDER below uses to filter them out of the
+            # The "(retired)" suffix is used by _AGENT_ORDER to filter them from the
             # active leaderboard while still rendering archived rows with their old emoji.
-            # Benched 2026-06 (roster trimmed 12 → 6):
+            "AI-CathieWood":      "🚀 Disruptive (retired)",
+            "AI-MagicFormula":    "🔢 Magic Form. (retired)",
+            "AI-HowardMarks":     "🔄 Marks 2nd-Lvl (retired)",
+            "AI-NickSleep":       "🌀 Scale Econ (retired)",
+            "AI-Burry":           "🕳️ Deep Value (retired)",
+            "AI-InsiderTrack":    "👁️ Insider+13F (retired)",
             "AI-GoldmanSC":       "💼 Goldman SC (retired)",
             "AI-LynchBWYK":       "🛒 Lynch BWYK (retired)",
             "AI-SocialArb":       "📱 Social Arb (retired)",
@@ -15829,8 +16761,12 @@ Sharpe on alpha series. Click any column header to sort.</p>
     _MASTER_COLS = ["Rank","Ticker","Company","Sector","Screens","Price","PEG","ROIC",
                     "ROE","MoS","FCF Yield","Rev Growth","Piotroski","MktCap ($B)"]
 
-    _CVAL_COLS = ["Rank","Ticker","Company","Sector","Price","Value %ile","Quality %ile",
-                  "EY %ile","FCFY %ile","Shldr Yld","6M Mom","P/E","EV/EBITDA","P/B","MktCap ($B)"]
+    _CVAL_COLS = ["Rank","Ticker","Company","Sector","Price","Value %ile","Growth %ile",
+                  "Quality %ile","PEG","6M Mom","P/E","EV/EBITDA","MktCap ($B)"]
+
+    _CONTRA_COLS = ["Rank","Ticker","Company","Sector","Price","52w Pos","Smart $",
+                    "Quality %ile","Sector Cheap","Rev 30d","Insider","RSI","vs SMA50",
+                    "P/E","MktCap ($B)","Score"]
 
     _EMOM_COLS = ["Rank","Ticker","Company","Sector","Price","Rev 30d","Mom 6M","Accel %ile",
                   "Rev %ile","PEG","P/E","MktCap ($B)"]
@@ -15986,7 +16922,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
     <h1>📈 FMP Stock Screener</h1>
     <small>{now} · {len(stocks):,} stocks · {fmp_call_count} API calls</small>
   </div>
-  <small style="color:#9fa8da">6 Specialists</small>
+  <small style="color:#9fa8da">Investment Desk</small>
 </div>
 {_spinoff_html}
 <nav class="nav">{nav_html}</nav>
@@ -15998,18 +16934,23 @@ Sharpe on alpha series. Click any column header to sort.</p>
     "revenue consistency · moats (high gross/operating margin). The <b>Screens</b> column shows which "
     "sub-screens each name hit — multi-screen names rank first. Buffett territory: hold and let compounding work.")}
 {_strategy_table(value_master, _MASTER_COLS, "value", "📊 Value — Undervalued &amp; Special Situations",
-    "The cheap-for-a-reason bucket: union of IV-Discount (DCF margin of safety), Asset Plays (P/B &lt;1, hidden "
-    "assets), Turnarounds (recovering after a ≥40% drawdown), Cyclicals (earnings-trough entry) and Slow Growers "
-    "(income). Ranked by margin of safety. The <b>Screens</b> column shows which value lenses each name matched.")}
+    "The value bucket: union of IV-Discount (DCF margin of safety), Turnarounds (recovering businesses), "
+    "Cyclicals (earnings-trough entry) and Slow Growers (income). Ranked by margin of safety. "
+    "The <b>Screens</b> column shows which value lenses each name matched.")}
+{_strategy_table(composite_value, _CVAL_COLS, "garp", "💎 GARP — Quality at a Reasonable Price",
+    "Cross-sectional percentile composite (no threshold gates) for $1B+ profitable companies. "
+    "40% valuation (EY/FCF/EV-EBITDA) + 35% growth (rev/EPS/estimate revisions) + 25% quality (ROIC/margin/consistency). "
+    "PEG &gt;2.5 penalised. Tech/Comm tilt +5, consumer-observable +3. "
+    "6M-momentum value-trap filter on finalists. Percentile columns: 0–100, higher = better.")}
+{_strategy_table(contrarian, _CONTRA_COLS, "contra", "🔄 Contrarian — Beaten-Down Quality",
+    "Quality companies ≥25% off their 52-week high with at least one smart-money signal: insider buying, "
+    "positive estimate revisions while price is down, hidden-gem divergence (insiders buying while sell-side is neutral/bearish), "
+    "or strong sector-relative cheapness. Falling-knife guard: must be above SMA50 or RSI recovering. "
+    "Sector tilt: +6 Tech/Comm, +4 consumer-observable names. Score = 35% drawdown + 25% smart money + 25% quality + 15% sector cheapness.")}
 {_strategy_table(growth_master, _MASTER_COLS, "growth", "🚀 Growth — Fast Growers &amp; Pre-Discovery",
     "The growth bucket: union of Fast Growers (rev &gt;20%, PEG &lt;1.5), Lynch 10-Baggers (small-cap pricing power) "
     "and Off-the-Radar pre-discovery setups ($200M–$3B, ≤5 analysts). Ranked by revenue growth. The <b>Screens</b> "
     "column shows which growth lenses each name hit — find the next 10-bagger before it is obvious.")}
-{_strategy_table(composite_value, _CVAL_COLS, "cval", "🎯 Composite Value — Systematic Cheapness",
-    "Cross-sectional percentile composite — no threshold gates. Mean percentile rank across up to 6 value metrics "
-    "(earnings yield, FCF yield, EV/EBITDA, P/S, P/B, shareholder yield; ≥3 required) weighted 70%, plus a quality "
-    "overlay (ROIC, gross margin, Altman Z) weighted 30%. A 6-month-momentum value-trap filter drops the "
-    "worst-momentum tail — cheap stocks still falling usually stay cheap. Percentile columns: 0–100, higher = better.")}
 {_strategy_table(earnings_momentum, _EMOM_COLS, "emom", "⚡ Earnings Momentum — Estimate Revisions",
     "Zacks-style revisions drift: the market underreacts to analyst estimate changes, so prices drift for 1–6 months "
     "after upgrades. Rank = 50% estimate-revision strength (30d FY1 EPS consensus change) + 30% 6-month price momentum "
@@ -16630,11 +17571,16 @@ def main():
                         help="C4: Walk-forward portfolio replay from date (or all-time if omitted)")
     parser.add_argument("--force-fresh-ai", action="store_true",
                         help="Bypass the daily AI cache and re-run all specialists + judge for this run")
+    parser.add_argument("--ai-dry-run", action="store_true",
+                        help="Never call Anthropic; reuse/migrate cached AI result or render empty AI sections (zero token cost)")
     parser.add_argument("--skip-sc", action="store_true",
                         help="Skip small-cap supplemental enrichment (faster dev/AI verification runs)")
     parser.add_argument("--neutral-judge", action="store_true",
                         help="Strip all macro context from the judge — picks purely on fundamentals and specialist consensus")
     args = parser.parse_args()
+    # Smoke-test convenience: --debug without --force-fresh-ai auto-enables --ai-dry-run
+    if args.debug and not args.force_fresh_ai:
+        args.ai_dry_run = True
 
     # B5: Backtest mode — run and exit without building the full report
     if args.backtest:
@@ -18226,7 +19172,10 @@ def main():
     hold_forever = build_hold_forever_tab(wb, stocks)
 
     # 🎯 Composite Value — systematic percentile cheapness + quality + momentum trap filter
-    composite_value = build_composite_value(wb, stocks)
+    composite_value = build_composite_value(wb, stocks)   # alias → build_garp
+
+    # 🔄 Contrarian — beaten-down quality with smart-money signals
+    contrarian = build_contrarian(wb, stocks)
 
     # ⚡ Earnings Momentum — estimate-revisions drift (Zacks-style) + price momentum
     earnings_momentum = build_earnings_momentum(wb, stocks)
@@ -18267,11 +19216,12 @@ def main():
         "IV Discount": iv_rows, "Quality Compounders": quality_compounders,
         "Stalwarts": stalwarts, "Fast Growers": fast_growers,
         "Turnarounds": turnarounds, "Slow Growers": slow_growers,
-        "Cyclicals": cyclicals, "Asset Plays": asset_plays,
+        "Cyclicals": cyclicals,
         "Lynch 10-Baggers": ten_baggers,
         "Off-the-Radar": off_the_radar,
-        "Composite Value": composite_value,
+        "GARP": composite_value,
         "Earnings Momentum": earnings_momentum,
+        "Contrarian": contrarian,
     }, current_prices)
 
     # ── AI analysis (single call — result shared across Overview + AI tab) ──
@@ -18283,7 +19233,6 @@ def main():
         "Turnarounds (Lynch)": turnarounds,
         "Slow Growers / Income (Lynch)": slow_growers,
         "Cyclicals (Lynch)": cyclicals,
-        "Asset Plays (Lynch)": asset_plays,
         "Lynch 10-Baggers": ten_baggers,
         "Off-the-Radar":    off_the_radar,   # Pre-discovery blindspot setups feed all specialists
     }
@@ -18314,54 +19263,55 @@ def main():
         and _cached_ai["result"].get("picks")
     )
 
+    # Build market brief from screener data available at this point
+    _brief = build_market_brief(
+        stocks, macro=macro_data, agent_perf=agent_perf,
+        quality_rows=quality_compounders,
+        value_rows=iv_rows,
+        growth_rows=fast_growers,
+        garp_rows=composite_value,
+        contrarian_rows=contrarian,
+        emom_rows=earnings_momentum,
+    )
+
     if _ai_from_cache:
-        ai_result       = _cached_ai["result"]
-        mall_result     = _cached_ai.get("mall_result", {}) or {}
-        research_result = _cached_ai.get("research_result", {}) or {}
+        ai_result   = _migrate_legacy_ai_result(_cached_ai.get("result", {}))
+        mall_result = _cached_ai.get("mall_result", {}) or {}
+        # New pipeline: _memos on ai_result; old pipeline: research_result cache key
+        _cached_rr  = _cached_ai.get("research_result", {}) or {}
+        research_result = ({"memos": ai_result.get("_memos", [])}
+                           if ai_result.get("_memos") else _cached_rr)
         n_picks = len(ai_result.get("picks", []))
         n_specs = len(ai_result.get("_specialist_picks", {}))
-        n_mall  = len(mall_result.get("picks", []))
         n_memos = len(research_result.get("memos", []))
-        mall_note = f" + {n_mall} mall" if n_mall else ""
-        memo_note = f" + {n_memos} memos" if n_memos else ""
+        memo_note  = f" + {n_memos} memos" if n_memos else ""
         _cache_date = _cached_ai.get("date", "?")
-        print(f"\n  📦 Using cached AI analysis ({n_picks} consensus picks, {n_specs} specialists{mall_note}{memo_note}"
-              f" — from {_cache_date}, {_ai_age_days}d ago — next refresh in {_AI_CACHE_DAYS - _ai_age_days}d)")
+        _pipeline   = ai_result.get("pipeline", "legacy")
+        print(f"\n  📦 Using cached AI analysis ({n_picks} picks, {n_specs} desk sources{memo_note}"
+              f" [{_pipeline}] — from {_cache_date}, {_ai_age_days}d ago"
+              f" — next refresh in {_AI_CACHE_DAYS - _ai_age_days}d)")
     else:
         if args.force_fresh_ai and _cached_ai.get("date") == _today_str:
-            print("\n  🔄 --force-fresh-ai: bypassing today's AI cache, re-running all specialists")
-        phase_start("ai_analysis", "Running multi-agent AI analysis (6 specialists)")
-        ai_result = call_claude_analysis(picks_data, stocks, macro=macro_data,
-                                         market_intel=market_intel,
-                                         agent_perf=agent_perf)
-        # Mall Manager retired 2026-06 (its Lynch consumer lens is covered by the
-        # consensus + Best Ideas layer). Kept as an empty dict for render compatibility.
+            print("\n  🔄 --force-fresh-ai: bypassing today's AI cache, re-running Investment Desk")
         mall_result = {}
-        research_result = {}
-        if ai_result and ai_result.get("picks"):
-            # Deep-Research Analyst (Opus): full investment memos on the top consensus picks
-            research_result = call_research_analyst(ai_result, stocks,
-                                                    macro=macro_data,
-                                                    market_intel=market_intel) or {}
-            # Cache result for the week
-            _cache[_AI_CACHE_KEY] = {"date": _today_str,
-                                     "result": ai_result,
-                                     "mall_result": mall_result,
-                                     "research_result": research_result}
-            save_cache()
-
-    # If cache pre-dates the Deep-Research layer, backfill the memos
-    if ai_result and ai_result.get("picks") and not research_result and _ai_from_cache:
-        print("  📋 Cache pre-dates Deep-Research Analyst — running it now to backfill")
-        research_result = call_research_analyst(ai_result, stocks,
-                                                macro=macro_data,
-                                                market_intel=market_intel) or {}
-        if research_result:
-            _cache[_AI_CACHE_KEY] = {"date": _cached_ai.get("date", _today_str),
-                                     "result": ai_result,
-                                     "mall_result": mall_result,
-                                     "research_result": research_result}
-            save_cache()
+        if getattr(args, "ai_dry_run", False):
+            print("\n  🧪 --ai-dry-run: skipping Investment Desk API calls (zero token cost)")
+            ai_result = {}
+            research_result = {}
+        else:
+            phase_start("ai_analysis", "Running Investment Desk (generate → verify → PM)")
+            ai_result = run_investment_desk(stocks, _brief, macro=macro_data,
+                                            agent_perf=agent_perf)
+            research_result = {"memos": ai_result.get("_memos", [])} if ai_result else {}
+            if ai_result and ai_result.get("picks"):
+                _cache[_AI_CACHE_KEY] = {
+                    "date":            _today_str,
+                    "result":          ai_result,
+                    "mall_result":     mall_result,
+                    "research_result": research_result,
+                    "pipeline":        _AI_PIPELINE,
+                }
+                save_cache()
 
     # Auto-log AI picks every run (no flag needed)
     if ai_result:
@@ -18410,8 +19360,7 @@ def main():
     print("\n  💼 Running AI Portfolio Manager...")
     portfolio = load_portfolio()
 
-    # Reuse the candidate pool + sector context built inside call_claude_analysis
-    # by re-building the same meta-score pool here for the PM context
+    # Build PM candidate pool from picks_data (strategy screen rows)
     _pm_meta = {}
     _pm_strat_short = {
         "IV Discount (Buffett/DCF)": "IV Discount",
@@ -18498,7 +19447,25 @@ def main():
         portfolio["holdings"] = [_h for _h in portfolio["holdings"] if _h["ticker"] not in _auto_sell_tickers]
         save_portfolio(portfolio)
 
-    pm_decisions = run_portfolio_manager(portfolio, _pm_candidates, _pm_sector_block, stocks)
+    # Prepend verified BUY/WATCH dossiers from Investment Desk to PM candidates block
+    _verified_dossiers = [d for d in (ai_result or {}).get("dossiers", [])
+                          if d.get("verdict") in ("BUY", "WATCH")]
+    if _verified_dossiers:
+        _dossiier_lines = ["=== INVESTMENT DESK VERIFIED (prefer these as BUY candidates) ==="]
+        for _d in _verified_dossiers:
+            _dt = _d.get("ticker", "")
+            _ds = stocks.get(_dt, {})
+            _dv = _d.get("verdict", "")
+            _dc = _d.get("conviction", "")
+            _dth = (_d.get("thesis_check") or _d.get("thesis", ""))[:100]
+            _dossiier_lines.append(f"  {_dt} [{_dv}/{_dc}] — {_dth}")
+        _pm_candidates = "\n".join(_dossiier_lines) + "\n\n=== SCREENER POOL (supplementary) ===\n" + _pm_candidates
+
+    if getattr(args, "ai_dry_run", False):
+        print("\n  🧪 --ai-dry-run: skipping Portfolio Manager API call")
+        pm_decisions = {}
+    else:
+        pm_decisions = run_portfolio_manager(portfolio, _pm_candidates, _pm_sector_block, stocks)
     if pm_decisions:
         portfolio = apply_portfolio_decisions(portfolio, pm_decisions, stocks)
         save_portfolio(portfolio)
@@ -18546,7 +19513,8 @@ def main():
         spinoff_events=spinoff_events,  # 🔔 Front-page spin-off alert
         fcf_compounders=fcf_compounders,                       # 💸 FCF Compounders — pure cash
         index_valuations=_index_val,  # 📊 SPY/QQQ/IWM valuation pulse for sector tab
-        composite_value=composite_value,      # 🎯 systematic percentile cheapness
+        composite_value=composite_value,      # 💎 GARP — quality at a reasonable price
+        contrarian=contrarian,               # 🔄 Contrarian — beaten-down quality
         earnings_momentum=earnings_momentum,  # ⚡ estimate-revisions drift
         swing_setups=swing_setups,            # 📈 technical timing overlay
         quality_master=quality_master,        # 💎 master screens (built above so the
