@@ -15535,6 +15535,7 @@ function showMacroDetail(el, id) {
                         + (f'<div style="font-size:.65rem;color:#78909c;margin-top:3px">{_sp_meta}</div>' if _sp_meta else "")
                         + f'</div>'
                     )
+                key_m      = (pp.get("key_metric", "") or pp.get("edge", "") or pp.get("catalysts", ""))
                 _sp_co     = (pp.get("company") or s2.get("name") or tk)[:38]
                 _sp_sector = s2.get("sector", "")
                 _sp_cap    = _cap_badge(s2.get("mktCap", 0))
