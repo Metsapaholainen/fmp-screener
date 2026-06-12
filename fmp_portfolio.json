@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 28162.60849999999,
+  "cash": 23163.65549999999,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -110,6 +110,18 @@
       "sell_trigger": "Tax filing volume declines >15% YoY or FCF margin compresses below 12%",
       "lynch_category": "SlowGrower+Turnaround",
       "sector": "Consumer Cyclical"
+    },
+    {
+      "ticker": "TIMB",
+      "company": "TIM S.A.",
+      "shares": 224,
+      "entry_price": 22.29,
+      "entry_date": "2026-06-13",
+      "rationale": "IV-discount SlowGrower fills the open slot without breaching any cap. SlowGrower category is only 1/6. Communication Services is a new, uncorrelated sector (0 current positions). ROIC 13%, FCF 16.6%, ",
+      "conviction": "MEDIUM",
+      "sell_trigger": "FCF margin falls below 8% or revenue declines for 2 consecutive years, or BRL devaluation structurally impairs USD returns",
+      "lynch_category": "SlowGrower",
+      "sector": "Communication Services"
     }
   ],
   "transactions": [
@@ -2080,7 +2092,19 @@
       "return_pct": 0.0,
       "transaction_cost": 5.97,
       "rationale": "IV Discount Stalwart fills Financial Services slot (only 1/4 currently). ROIC 39%, FCF 15.7% is exceptional; PEG 0.29 is rare. Tax services durability + digital transition thesis. MoS 70% provides saf"
+    },
+    {
+      "date": "2026-06-13",
+      "action": "BUY",
+      "ticker": "TIMB",
+      "company": "TIM S.A.",
+      "shares": 224,
+      "price": 22.29,
+      "value": 4992.96,
+      "return_pct": 0.0,
+      "transaction_cost": 5.99,
+      "rationale": "IV-discount SlowGrower fills the open slot without breaching any cap. SlowGrower category is only 1/6. Communication Services is a new, uncorrelated sector (0 current positions). ROIC 13%, FCF 16.6%, "
     }
   ],
-  "last_updated": "2026-06-11"
+  "last_updated": "2026-06-13"
 }
