@@ -2726,3 +2726,63 @@ date,strategy,ticker,entry_price,company
 2026-06-24,Contrarian,ADMA,8.78,"ADMA Biologics, Inc."
 2026-06-24,Contrarian,YELP,23.19,Yelp Inc.
 2026-06-24,Contrarian,FVRR,10.6,Fiverr International Ltd.
+2026-06-25,IV Discount,HRB,36.33,"H&R Block, Inc."
+2026-06-25,IV Discount,DLO,12.28,Dlocal Limited
+2026-06-25,IV Discount,TRV,320.74,"The Travelers Companies, Inc."
+2026-06-25,IV Discount,MMS,56.78,"Maximus, Inc."
+2026-06-25,IV Discount,NRDS,8.62,"NerdWallet, Inc."
+2026-06-25,Quality Compounders,ADBE,196.57,Adobe Inc.
+2026-06-25,Quality Compounders,QLYS,115.34,"Qualys, Inc."
+2026-06-25,Quality Compounders,DLO,12.28,Dlocal Limited
+2026-06-25,Quality Compounders,EXEL,52.87,"Exelixis, Inc."
+2026-06-25,Quality Compounders,DAVE,323.22,Dave Inc.
+2026-06-25,Stalwarts,DECK,105.7,Deckers Outdoor Corporation
+2026-06-25,Stalwarts,PTC,112.93,PTC Inc.
+2026-06-25,Stalwarts,ACN,129.15,Accenture plc
+2026-06-25,Stalwarts,ADBE,196.57,Adobe Inc.
+2026-06-25,Stalwarts,PAYC,127.22,"Paycom Software, Inc."
+2026-06-25,Fast Growers,DAVE,323.22,Dave Inc.
+2026-06-25,Fast Growers,DLO,12.28,Dlocal Limited
+2026-06-25,Fast Growers,XZO,14.43,"Exzeo Group, Inc."
+2026-06-25,Fast Growers,PLMR,118.91,"Palomar Holdings, Inc."
+2026-06-25,Fast Growers,RDDT,160.65,"Reddit, Inc."
+2026-06-25,Turnarounds,TKO,203.51,"TKO Group Holdings, Inc."
+2026-06-25,Turnarounds,AMTM,20.38,"Amentum Holdings, Inc."
+2026-06-25,Turnarounds,DUOL,132.15,"Duolingo, Inc."
+2026-06-25,Turnarounds,INSP,43.2,"Inspire Medical Systems, Inc."
+2026-06-25,Turnarounds,BILL,33.46,"Bill.com Holdings, Inc."
+2026-06-25,Slow Growers,SIGA,4.32,"SIGA Technologies, Inc."
+2026-06-25,Slow Growers,ABEV,3.13,Ambev S.A.
+2026-06-25,Slow Growers,NRT,7.32,North European Oil Royalty Trust
+2026-06-25,Slow Growers,AB,35.16,AllianceBernstein Holding L.P.
+2026-06-25,Slow Growers,APAM,34.85,Artisan Partners Asset Management Inc.
+2026-06-25,Cyclicals,MHK,119.09,"Mohawk Industries, Inc."
+2026-06-25,Cyclicals,BTU,23.29,Peabody Energy Corporation
+2026-06-25,Cyclicals,WGO,27.27,"Winnebago Industries, Inc."
+2026-06-25,Cyclicals,JBI,5.56,"Janus International Group, Inc."
+2026-06-25,Cyclicals,ADNT,20.27,Adient plc
+2026-06-25,Lynch 10-Baggers,MNTN,8.38,"MNTN, Inc Class A"
+2026-06-25,Lynch 10-Baggers,OPRA,18.29,Opera Limited
+2026-06-25,Lynch 10-Baggers,ERII,8.77,"Energy Recovery, Inc."
+2026-06-25,Lynch 10-Baggers,DV,10.35,"DoubleVerify Holdings, Inc."
+2026-06-25,Lynch 10-Baggers,VITL,11.11,"Vital Farms, Inc."
+2026-06-25,Off-the-Radar,BH,359.51,Biglari Holdings Inc.
+2026-06-25,Off-the-Radar,ALKT,15.95,"Alkami Technology, Inc."
+2026-06-25,Off-the-Radar,NATR,20.86,"Nature's Sunshine Products, Inc."
+2026-06-25,Off-the-Radar,TXO,12.34,"TXO Partners, L.P."
+2026-06-25,Off-the-Radar,VLN,2.02,Valens Semiconductor Ltd.
+2026-06-25,GARP,DAVE,323.22,Dave Inc.
+2026-06-25,GARP,HCI,174.97,"HCI Group, Inc."
+2026-06-25,GARP,ORC,6.81,"Orchid Island Capital, Inc."
+2026-06-25,GARP,PFS,23.37,"Provident Financial Services, Inc."
+2026-06-25,GARP,ENVA,216.58,"Enova International, Inc."
+2026-06-25,Earnings Momentum,CALY,18.08,Callaway Golf Company
+2026-06-25,Earnings Momentum,ELA,26.68,Envela Corporation
+2026-06-25,Earnings Momentum,MEI,13.09,"Methode Electronics, Inc."
+2026-06-25,Earnings Momentum,OOMA,18.49,"Ooma, Inc."
+2026-06-25,Earnings Momentum,AVNS,24.95,"Avanos Medical, Inc."
+2026-06-25,Contrarian,BRBR,11.91,"BellRing Brands, Inc."
+2026-06-25,Contrarian,XZO,14.43,"Exzeo Group, Inc."
+2026-06-25,Contrarian,DOCS,20.83,"Doximity, Inc."
+2026-06-25,Contrarian,FICO,1140.34,Fair Isaac Corporation
+2026-06-25,Contrarian,INSP,43.2,"Inspire Medical Systems, Inc."
