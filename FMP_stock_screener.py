@@ -35,11 +35,11 @@ Usage:
 import os, sys, json, time, datetime, csv, math, pickle, subprocess, re
 from collections import defaultdict
 
-# ── Windows UTF-8 fix: force stdout/stderr to UTF-8 so emojis don't crash on redirect ──
+# ── Windows fix: UTF-8 + line-buffering so every print() flushes immediately to log files ──
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
 if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
 
 def _load_dotenv():
     """Load .env file from the script's directory into os.environ (no extra deps)."""
@@ -1113,6 +1113,65 @@ def fetch_macro_indicators() -> dict:
     return macro
 
 
+def fetch_cross_asset() -> dict:
+    """Fetch cross-asset macro prices (commodities + FX) from FMP /stable/quote so the
+    Strategist desk can anchor its geopolitical winners/losers analysis on hard numbers.
+
+    Cached for 1 day. Degrades gracefully (402 / empty -> partial dict or {}).
+    Returns {"assets": {SYM: {"name","price","chg_pct"}}, "as_of": "YYYY-MM-DD"}.
+    """
+    cache_key = "cross_asset"
+    cached = _cache.get(cache_key)
+    if cached and isinstance(cached, dict) and cached.get("_ts"):
+        try:
+            if (time.time() - cached["_ts"]) / 3600 < 24:
+                print(f"  📦 Using cached cross-asset prices ({len(cached.get('assets', {}))} symbols)")
+                return cached
+        except Exception:
+            pass
+
+    global _fmp_call_count
+    if not FMP_KEY:
+        return {}
+
+    # FMP stable commodity + FX symbols (graceful skip on any that 402/empty).
+    SYMS = [
+        ("BZUSD", "Brent crude"), ("CLUSD", "WTI crude"), ("NGUSD", "Nat gas"),
+        ("GCUSD", "Gold"), ("SIUSD", "Silver"), ("HGUSD", "Copper"),
+        ("EURUSD", "EUR/USD"), ("USDCNY", "USD/CNY"), ("USDJPY", "USD/JPY"),
+    ]
+    print("  🛢️  Fetching cross-asset prices (commodities + FX)...")
+    assets = {}
+    for sym, name in SYMS:
+        try:
+            r = requests.get(f"{FMP_BASE}/quote",
+                             params={"symbol": sym, "apikey": FMP_KEY}, timeout=12)
+            _fmp_call_count += 1
+            if r.status_code != 200:
+                continue
+            data = r.json()
+            rec = (data[0] if isinstance(data, list) and data
+                   else (data if isinstance(data, dict) else None))
+            if not rec or rec.get("price") is None:
+                continue
+            _chg = rec.get("changePercentage")
+            assets[sym] = {
+                "name":    name,
+                "price":   round(float(rec["price"]), 4),
+                "chg_pct": (round(float(_chg), 2) if _chg is not None else None),
+            }
+        except Exception:
+            continue
+
+    out = {"assets": assets, "_ts": time.time(), "as_of": datetime.date.today().isoformat()}
+    if assets:
+        _cache[cache_key] = out
+        print(f"  ✅ Cross-asset prices: {', '.join(assets.keys())}")
+    else:
+        print("  ⚠️ Cross-asset prices unavailable (plan limit?) — Strategist will reason without them")
+    return out
+
+
 def _save_estimate_snapshot(estimates_data: dict) -> None:
     """Persist today's FY1 EPS consensus estimates to a monthly snapshot file.
 
@@ -1315,149 +1374,6 @@ def fetch_market_intelligence() -> dict:
 
     _cache[cache_key] = result
     return result
-
-
-def fetch_recent_spinoffs(days_back: int = 90, pages: int = 20) -> list:
-    """Detect recent corporate spin-offs from FMP stock news headlines.
-
-    Returns list of {ticker, company, date, headline, link} dicts (last `days_back` days).
-    24-hour cache + persistent event accumulator (events from past runs preserved).
-
-    Greenblatt edge (You Can Be a Stock Market Genius): newly-spun companies
-    are systematically mispriced because parent shareholders dump them
-    indiscriminately. Optimal entry window is the first 60-90 days post-spin.
-
-    Design: FMP's news endpoints don't support broad date queries — we fetch
-    `pages` pages of latest news (~1-2 days of headlines) and merge new
-    discoveries into a 90-day rolling list cached on disk. Daily runs catch
-    new announcements within 24h; cache holds prior discoveries until they
-    age out of the 90-day window.
-    """
-    global _fmp_call_count
-    cache_key = "spinoffs_alert"
-    cached = _cache.get(cache_key, {})
-    accumulated = cached.get("events", []) if isinstance(cached, dict) else []
-    cache_age_h = None
-    if isinstance(cached, dict) and cached.get("_ts"):
-        try:
-            cache_age_h = (time.time() - cached["_ts"]) / 3600
-        except Exception:
-            cache_age_h = None
-    # Skip live fetch if cache <24h old (still age out events past 90d below)
-    if cache_age_h is not None and cache_age_h < 24:
-        cutoff_iso = (datetime.date.today() - datetime.timedelta(days=days_back)).isoformat()
-        live_events = [e for e in accumulated if e.get("date", "") >= cutoff_iso]
-        print(f"  📦 Using cached spin-off alerts ({len(live_events)} active events, "
-              f"cache age {cache_age_h:.1f}h)")
-        return live_events
-
-    print(f"  🔔 Scanning {pages} pages of news for spin-off announcements...")
-    if not FMP_KEY:
-        return accumulated
-
-    # Strict title-keyword regex — captures press-release announcement phrasings
-    title_kw = re.compile(
-        r"\b(spin[\s\-]?off|spinoff|spin[\s\-]?out|spinout|demerger|"
-        r"to\s+separate\s+(?:its\s+)?(?:industrial|aerospace|business|division|unit|segment)|"
-        r"separating\s+(?:its\s+)?(?:business|division|unit|segment)|"
-        r"complete[ds]?\s+(?:the\s+)?separation|"
-        r"completes?\s+spin|"
-        r"begin[s]?\s+trading\s+(?:as\s+a\s+separate|on\s+a\s+when[\s\-]?issued)|"
-        r"separation\s+(?:and\s+)?distribution\s+agreement|"
-        r"tax[\s\-]?free\s+distribution|"
-        r"(?:announce[ds]?|complete[ds]?|plan[s]?\s+to)\s+(?:the\s+)?spin)\b",
-        re.IGNORECASE)
-    # Body fallback for confirmation (e.g. "to spin off its X division")
-    body_kw = re.compile(
-        r"\b(spin[\s\-]?off\s+of|spinoff\s+of|spin[\s\-]?out\s+of|spinout\s+of|"
-        r"distribution\s+of\s+(?:common\s+)?shares\s+of|"
-        r"tax[\s\-]?free\s+distribution\s+of|"
-        r"separate\s+(?:from|into\s+two|into\s+independent))\b",
-        re.IGNORECASE)
-    # Noise filter — these contexts use "spin" but aren't real spin-offs
-    noise_kw = re.compile(
-        r"\b(no\s+longer\s+(?:planning|plan)\s+to\s+spin|"
-        r"abandons?\s+spin|cancel(?:s|led)?\s+spin|"
-        r"reject(?:s|ed)?\s+spin|consider(?:s|ed|ing)?\s+(?:a\s+)?spin|"
-        r"hidden\s+(?:ai\s+)?spinoff|"
-        r"weigh(?:s|ed|ing)\s+(?:a\s+)?spin|"
-        r"spin[\s\-]?off\s+(?:fund|etf|portfolio))\b",
-        re.IGNORECASE)
-
-    cutoff = datetime.date.today() - datetime.timedelta(days=days_back)
-    raw_items = []
-    for page in range(pages):
-        try:
-            r = requests.get(
-                f"{FMP_BASE}/news/stock-latest?page={page}&limit=250&apikey={FMP_KEY}",
-                timeout=30)
-            _fmp_call_count += 1
-            if r.status_code != 200:
-                break
-            d = r.json()
-            if not isinstance(d, list) or not d:
-                break
-            raw_items.extend(d)
-            # Stop if we've gone past the cutoff date
-            oldest = (d[-1].get("publishedDate") or "")[:10]
-            if oldest and oldest < cutoff.isoformat():
-                break
-        except Exception as e:
-            print(f"  ⚠️ Spin-off scan error: {str(e)[:60]}")
-            break
-
-    # Build set of tickers already in accumulated cache (avoid re-adding stale events)
-    seen_tickers = {e.get("ticker") for e in accumulated}
-    new_events = []
-    for item in raw_items:
-        if not isinstance(item, dict):
-            continue
-        date_raw = (item.get("publishedDate") or "")
-        try:
-            f_date = datetime.date.fromisoformat(str(date_raw)[:10])
-        except Exception:
-            continue
-        if f_date < cutoff:
-            continue
-        title = str(item.get("title") or "")
-        text  = str(item.get("text") or "")[:600]
-        # Reject noise contexts even if they contain "spin"
-        if noise_kw.search(title + " " + text):
-            continue
-        title_hit = bool(title_kw.search(title))
-        body_hit  = (("spin" in title.lower() or "separation" in title.lower())
-                     and bool(body_kw.search(text)))
-        if not (title_hit or body_hit):
-            continue
-        ticker = str(item.get("symbol") or "").upper()
-        if not ticker or ticker in seen_tickers:
-            continue
-        seen_tickers.add(ticker)
-        new_events.append({
-            "ticker":   ticker,
-            "company":  "",
-            "date":     str(date_raw)[:10],
-            "headline": title[:160],
-            "link":     str(item.get("url") or ""),
-        })
-
-    # Merge: existing accumulated + new discoveries, then age out >90 days
-    merged = accumulated + new_events
-    cutoff_iso = cutoff.isoformat()
-    merged = [e for e in merged if e.get("date", "") >= cutoff_iso]
-    # Dedupe by ticker, prefer newest date per ticker
-    by_ticker = {}
-    for e in merged:
-        t = e.get("ticker")
-        if t and (t not in by_ticker or e.get("date", "") > by_ticker[t].get("date", "")):
-            by_ticker[t] = e
-    merged = list(by_ticker.values())
-    merged.sort(key=lambda e: e["date"], reverse=True)
-
-    _cache[cache_key] = {"events": merged, "_ts": time.time()}
-    print(f"  ✅ Spin-off events: {len(merged)} active in last {days_back}d "
-          f"(+{len(new_events)} new this run, scanned {len(raw_items)} headlines)")
-    return merged
 
 
 def fetch_special_sit_news(tickers: list) -> str:
@@ -1790,6 +1706,24 @@ FMP_AGENT_TOOLS = [
             "required": ["ticker"],
         },
     },
+    {
+        "name": "get_earnings_transcript",
+        "description": (
+            "Fetch the most recent earnings-call transcript(s) for a stock. Use this to read "
+            "management's own words: forward guidance, tone and confidence, demand commentary, "
+            "capital-allocation intentions, and how candidly they handle tough questions. "
+            "Invaluable for assessing management quality and whether the narrative matches the "
+            "numbers. Content is truncated per call; request limit=1 for the latest quarter."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL)"},
+                "limit":  {"type": "integer", "default": 1, "description": "Number of recent transcripts"},
+            },
+            "required": ["ticker"],
+        },
+    },
 ]
 
 
@@ -1948,6 +1882,412 @@ def _execute_fmp_tool(tool_name: str, tool_input: dict) -> str:
 
     except Exception as exc:
         return json.dumps({"error": f"Tool execution error: {str(exc)[:300]}"})
+
+
+def _build_metrics_block(t: str, stocks: dict) -> str:
+    """Module-level screener snapshot for one ticker (formerly a closure inside
+    run_investment_desk). Promoted so the --ai-prepare handoff can reuse the exact
+    same per-ticker metrics the verifier sees. Pure formatting over the stocks dict."""
+    s = stocks.get(t, {})
+    def g(*keys):
+        for k in keys:
+            v = s.get(k)
+            if v not in (None, ""):
+                return v
+        return None
+    rows = []
+    rows.append(f"Company: {g('companyName','name') or t}")
+    rows.append(f"Sector / Industry: {g('sector') or '—'} / {g('industry') or '—'}")
+    mc = g("mktCap")
+    if mc:
+        rows.append("Market cap: " + (f"${mc/1e9:.2f}B" if mc >= 1e9 else f"${mc/1e6:.0f}M"))
+    px = g("price")
+    if px:
+        rows.append(f"Price: ${px:.2f}")
+    pe = g("pe", "peRatio", "peTTM")
+    if pe:
+        try: rows.append(f"P/E (TTM): {float(pe):.1f}")
+        except Exception: pass
+    peg = g("peg", "pegRatio")
+    if peg is not None:
+        _basis = (" (trailing-growth basis)" if s.get("pegBasis") == "T"
+                  else " (forward-estimate basis)" if s.get("pegBasis") == "F" else "")
+        rows.append(f"PEG: {peg}{_basis}")
+    iv = g("iv", "dcf", "intrinsicValue", "dcfValue")
+    if iv:
+        try: rows.append(f"DCF intrinsic value: ${float(iv):.2f}")
+        except Exception: pass
+    mos = g("mos", "mosCustom", "marginOfSafety")
+    if mos is not None:
+        try: rows.append(f"Margin of safety vs DCF: {float(mos)*100:+.0f}%")
+        except Exception: pass
+    roic = g("roic")
+    if roic:
+        try: rows.append(f"ROIC: {float(roic)*100:.0f}%")
+        except Exception: pass
+    gm = g("grossMargin")
+    if gm:
+        try: rows.append(f"Gross margin: {float(gm)*100:.0f}%")
+        except Exception: pass
+    om = g("operatingMargin")
+    if om:
+        try: rows.append(f"Operating margin: {float(om)*100:.0f}%")
+        except Exception: pass
+    rg = g("revGrowth", "revenueGrowthYoy")
+    if rg:
+        try: rows.append(f"Revenue growth YoY: {float(rg)*100:.0f}%")
+        except Exception: pass
+    fy = g("fcfYield")
+    if fy:
+        try: rows.append(f"FCF yield: {float(fy)*100:.1f}%")
+        except Exception: pass
+    yh, yl = g("yearHigh"), g("yearLow")
+    if px and yh and yl and yh > yl:
+        try: rows.append(f"52-week position: {(px-yl)/(yh-yl)*100:.0f}% of range"
+                         f" (low ${yl:.0f} / high ${yh:.0f})")
+        except Exception: pass
+    ac = g("analystCount")
+    if ac is not None:
+        rows.append(f"Sell-side analysts covering: {ac}")
+    # Capital allocation / stewardship — buybacks net of dilution, SBC, insider conviction
+    _cap = []
+    byq = g("buybackYieldTTM")
+    if byq is not None:
+        try: _cap.append(f"net buyback yield {float(byq)*100:+.1f}%/yr (TTM)")
+        except Exception: pass
+    sg = g("sharesGrowth")
+    if sg is not None:
+        try:
+            _cap.append(f"share count {float(sg)*100:+.1f}%/yr"
+                        + (" (shrinking — owner-friendly)" if float(sg) < -0.005
+                           else " (diluting)" if float(sg) > 0.01 else ""))
+        except Exception: pass
+    sbc5 = g("sbc5yAvg")
+    if sbc5:
+        try: _cap.append(f"SBC ~${float(sbc5)/1e6:.0f}M/yr (5y avg)")
+        except Exception: pass
+    ib = g("insiderBuys")
+    if ib:
+        _iv = g("insiderValue")
+        _cap.append(f"{ib} insider buys"
+                    + (f" (${float(_iv)/1e3:.0f}K)" if _iv else ""))
+    if _cap:
+        rows.append("Capital allocation: " + "; ".join(_cap))
+    # 5-year financial trends — reveals whether the moat is widening or narrowing
+    _tr = []
+    rg5 = g("revGrowth5y")
+    if rg5 is not None:
+        try: _tr.append(f"Rev CAGR 5y: {float(rg5)*100:.0f}%")
+        except Exception: pass
+    rg0 = g("revGrowth"); rgp = g("revGrowthPrev")
+    if rg0 is not None and rgp is not None:
+        try:
+            _diff = float(rg0) - float(rgp)
+            _direction = "accelerating" if _diff > 0.03 else "decelerating" if _diff < -0.03 else "stable"
+            _tr.append(f"Rev growth {float(rg0)*100:.0f}% (prev {float(rgp)*100:.0f}%) — {_direction}")
+        except Exception: pass
+    rcon = g("revConsistency")
+    if rcon is not None:
+        try: _tr.append(f"Rev consistent {float(rcon)*100:.0f}% of yrs")
+        except Exception: pass
+    fcon = g("fcfGrowthConsistency")
+    if fcon is not None:
+        try: _tr.append(f"FCF consistent {float(fcon)*100:.0f}% of yrs")
+        except Exception: pass
+    if _tr:
+        rows.append("5yr trend: " + "; ".join(_tr))
+    return "\n".join(rows)
+
+
+def _fmp_verification_bundle(ticker: str, news_limit: int = 4) -> dict:
+    """Bundle the FMP verification data the AI desk needs for one ticker, reusing
+    _execute_fmp_tool so the data matches the live tool-use path exactly. Used by
+    --ai-prepare (candidate menu) and --fetch (ad-hoc tickers). FMP key only — no
+    Anthropic call, so it is free to call for the whole candidate pool."""
+    def _call(name, **inp):
+        try:
+            return json.loads(_execute_fmp_tool(name, {"ticker": ticker, **inp}))
+        except Exception as exc:
+            return {"error": str(exc)[:200]}
+    return {
+        "financial_statements": _call("get_financial_statements", limit=4),
+        "analyst_estimates":    _call("get_analyst_estimates"),
+        "company_news":         _call("get_company_news", limit=news_limit),
+        "insider_trades":       _call("get_insider_trades", limit=8),
+        "sec_filings":          _call("get_sec_filings", limit=5),
+        "earnings_transcript":  _call("get_earnings_transcript", limit=1),
+    }
+
+
+def _moat_summary_from(d: dict) -> str:
+    """Flatten a dossier's moat{} dict into the one-line summary the cards render."""
+    _m = d.get("moat") or {}
+    if not (isinstance(_m, dict) and _m):
+        return ""
+    return (f"{_m.get('strength','')} moat — {_m.get('sources','')}. "
+            f"Durability: {_m.get('durability','')}. "
+            f"Key threat: {_m.get('threats','')}")
+
+
+def _assemble_ai_result(dossiers_buy: list, dossiers_killed: list, dossiers_all: list,
+                        specialist_picks: dict, cio, synopsis: str, brief: str,
+                        stocks: dict, watch_history: dict = None) -> dict:
+    """Build the render-ready ai_result dict from verified dossiers. SINGLE SOURCE OF
+    TRUTH shared by run_investment_desk (paid API path) and --ai-from-file (subscription
+    path) so both produce identical picks[]/_memos[] shapes. Pure transformation — no AI,
+    no network. dossiers_buy are CIO-ordered BUY/WATCH; dossiers_killed are AVOID/KILL."""
+    watch_history = watch_history or {}
+    picks = []
+    for d in dossiers_buy:
+        verdict    = d.get("verdict", "WATCH")
+        conviction = d.get("conviction", "MEDIUM")
+        if d.get("best_idea") or (verdict == "BUY" and conviction == "HIGH"):
+            tier = "CORE"
+        elif verdict == "BUY":
+            tier = "SATELLITE"
+        else:
+            tier = "WATCH"
+        t = d.get("ticker", "")
+        s = stocks.get(t, {})
+        picks.append({
+            "ticker":            t,
+            "company":           d.get("company", t),
+            "position_tier":     tier,
+            "conviction":        conviction,
+            "best_idea":         bool(d.get("best_idea")),
+            "cio_one_line":      d.get("cio_one_line", ""),
+            "story":             d.get("thesis_check") or d.get("thesis", ""),
+            "rationale":         d.get("thesis", ""),
+            "catalysts":         d.get("catalysts", ""),
+            "risks":             d.get("risks", ""),
+            "time_horizon":      d.get("time_horizon", ""),
+            "endorsed_by":       ", ".join(d.get("proposed_by", [])),
+            "business_synopsis": d.get("business", ""),
+            "margin_of_safety":  d.get("margin_of_safety", ""),
+            "expected_return":   d.get("expected_return_3_5y", ""),
+            "debated":           bool(d.get("debated")),
+            "deep_memo":         d.get("deep_memo", ""),
+            "bear_case":         d.get("bear_case", ""),
+            "capital_allocation_grade": d.get("capital_allocation_grade", ""),
+            "what_would_change_our_mind": d.get("what_would_change_our_mind", ""),
+            "data_flags":        d.get("data_flags", []),
+            "sector":            s.get("sector", ""),
+            "price":             s.get("price"),
+            "entry_trigger":     d.get("entry_trigger", ""),
+            "competitor_analysis": d.get("competitor_analysis", ""),
+            "moat_summary":      _moat_summary_from(d),
+        })
+
+    _memos = []
+    for d in dossiers_buy:
+        t = d.get("ticker", "")
+        _tier = next((p["position_tier"] for p in picks if p["ticker"] == t), "WATCH")
+        _memos.append({
+            "ticker":        t,
+            "company":       d.get("company", ""),
+            "verdict":       (d.get("verdict", "WATCH")
+                              + " — " + (d.get("thesis_check") or "")[:80]),
+            "conviction":    d.get("conviction", "MEDIUM"),
+            "best_idea":     bool(d.get("best_idea")),
+            "cio_one_line":  d.get("cio_one_line", ""),
+            "business":      d.get("business", ""),
+            "bull_case":     d.get("thesis", ""),
+            "bear_case":     d.get("bear_case") or d.get("risks", ""),
+            "valuation":     d.get("valuation", ""),
+            "margin_of_safety": d.get("margin_of_safety", ""),
+            "expected_return":  d.get("expected_return_3_5y", ""),
+            "debated":       bool(d.get("debated")),
+            "deep_memo":     d.get("deep_memo", ""),
+            "capital_allocation_grade": d.get("capital_allocation_grade", ""),
+            "what_would_change_our_mind": d.get("what_would_change_our_mind", ""),
+            "data_flags":    d.get("data_flags", []),
+            "catalysts":     d.get("catalysts", ""),
+            "what_to_watch": d.get("what_to_watch", ""),
+            "time_horizon":  d.get("time_horizon", ""),
+            "endorsed_by":   ", ".join(d.get("proposed_by", [])),
+            "position_tier": _tier,
+            "entry_trigger":     d.get("entry_trigger", ""),
+            "competitor_analysis": d.get("competitor_analysis", ""),
+            "moat_summary":  _moat_summary_from(d),
+            "repeat_count": len([
+                e for e in (watch_history.get(t) or [])
+                if e.get("verdict") in ("BUY", "WATCH")
+            ]),
+        })
+
+    return {
+        "pipeline":          _AI_PIPELINE,
+        "synopsis":          synopsis,
+        "brief":             brief,
+        "picks":             picks,
+        "dossiers":          dossiers_all,
+        "killed":            dossiers_killed,
+        "cio":               cio,
+        "_specialist_picks": specialist_picks,
+        "_memos":            _memos,
+    }
+
+
+def build_pm_context(picks_data: dict, stocks: dict) -> tuple:
+    """Build the Portfolio Manager candidate pool + sector context from the strategy
+    screens. Returns (pm_candidates_text, pm_sector_block). Extracted from main() so
+    both the normal render path and --ai-prepare produce the identical PM input."""
+    _pm_meta = {}
+    _pm_strat_short = {
+        "IV Discount (Buffett/DCF)": "IV Discount",
+        "Quality Compounders (Buffett)": "Quality Compounder",
+        "Stalwarts (Lynch)": "Stalwart",
+        "Fast Growers (Lynch)": "Fast Grower",
+        "Turnarounds (Lynch)": "Turnaround",
+        "Slow Growers / Income (Lynch)": "Slow Grower",
+        "Cyclicals (Lynch)": "Cyclical",
+        "Asset Plays (Lynch)": "Asset Play",
+        "Lynch 10-Baggers": "10-Bagger",
+    }
+    for _tab_name, _rows in picks_data.items():
+        _short = _pm_strat_short.get(_tab_name, _tab_name)
+        for _ri, _row in enumerate(_rows[:15]):
+            _t = _row.get("Ticker", "?")
+            _sc = _row.get("Score", 0) or 0
+            if _t not in _pm_meta:
+                _pm_meta[_t] = {"strategies": [], "best_rank": _ri+1, "max_score": _sc, "row": _row}
+            _pm_meta[_t]["strategies"].append(_short)
+            if _sc > _pm_meta[_t]["max_score"]: _pm_meta[_t]["max_score"] = _sc
+            if _ri+1 < _pm_meta[_t]["best_rank"]: _pm_meta[_t]["best_rank"] = _ri+1
+
+    # Build compact candidates block for PM (top 40 by meta-score)
+    _pm_top = sorted(_pm_meta.values(),
+                     key=lambda x: -(len(x["strategies"])*25 + x["max_score"]*0.4))[:40]
+
+    def _pm_fmt(m):
+        r2 = m["row"]; t2 = r2.get("Ticker","?"); s2 = stocks.get(t2,{})
+        strats2 = "+".join(m["strategies"])
+        parts2 = [f"{t2}({r2.get('Company','')[:18]}) [{strats2}]"]
+        roic2 = s2.get("roic"); fcf2 = s2.get("fcfYield")
+        peg2 = s2.get("fwdPEG") or s2.get("peg"); rg2 = s2.get("revGrowth")
+        if roic2: parts2.append(f"ROIC={roic2*100:.0f}%")
+        if fcf2:  parts2.append(f"FCF={fcf2:.1%}")
+        if peg2:  parts2.append(f"PEG={peg2:.2f}")
+        if rg2:   parts2.append(f"RG={rg2:+.0%}")
+        mos2 = s2.get("mos")
+        if mos2:  parts2.append(f"MoS={mos2:.0%}")
+        return "  " + " | ".join(parts2)
+
+    _pm_candidates = "\n".join(_pm_fmt(m) for m in _pm_top)
+
+    # Simple sector context for PM
+    _pm_sec_lines = []
+    _pm_sec = {}
+    for _sv in stocks.values():
+        _sec = _sv.get("sector","Unknown")
+        if _sec not in _pm_sec: _pm_sec[_sec] = []
+        _peg = _sv.get("peg")
+        if _peg and 0 < _peg < 15: _pm_sec[_sec].append(_peg)
+    for _sec, _pegs in sorted(_pm_sec.items(), key=lambda x: (sum(x[1])/len(x[1])) if x[1] else 99):
+        if len(_pegs) >= 5:
+            _pm_sec_lines.append(f"  {_sec}: med PEG={sorted(_pegs)[len(_pegs)//2]:.1f} ({len(_pegs)} stocks)")
+    _pm_sector_block = "\n".join(_pm_sec_lines[:12])
+    return _pm_candidates, _pm_sector_block
+
+
+def _target_gap_pool(stocks: dict, n: int = 70) -> list:
+    """Select the candidate pool the AI researches for a fair-value-vs-price GAP — names
+    where AI-derived fair value (forward financials x a justified multiple, DCF cross-check,
+    any stated target) plausibly sits well above today's price. Deliberately spans BOTH ends
+    of the market: large-cap quality compounders trading below their forward trajectory
+    (META/AMZN/NOW profile) AND under-covered, cheap, beaten-down names with a stated
+    multi-year target the market hasn't re-rated (Nokia/IREN profile). Coverage is a
+    tie-breaker, not a gate.
+
+    Returns an ordered list[str] of tickers (best setups first). Uses only fields already on
+    the stocks dict — no FMP fetches here (the --ai-prepare bundling loop fetches once)."""
+    _skip_sectors = {"Financial Services", "Financials", "Real Estate"}
+
+    trajectory, restate = [], []   # two lenses, unioned below
+    for t, s in stocks.items():
+        sec = s.get("sector") or ""
+        if sec in _skip_sectors:
+            continue
+        ps = s.get("ps")
+        mc = s.get("mktCap") or 0
+        # Need a meaningful P/S (to derive revenue) and enough size for real disclosure.
+        if not (ps and ps > 0) or mc < 300e6:
+            continue
+
+        ac   = s.get("analystCount")
+        und  = bool(s.get("underCovered"))
+        p52  = s.get("priceVs52H")
+        rg5  = s.get("revGrowth5y")
+        rg   = s.get("revGrowth")
+        roic = s.get("roic")
+        gm   = s.get("grossMargin")
+        om   = s.get("operatingMargin")
+        pe   = s.get("pe")
+        peg  = s.get("peg")
+
+        # Small thin-coverage tie-breaker shared by both lenses (NOT a gate).
+        cov_tb = 0.0
+        if und:
+            cov_tb += 4
+        if ac is not None:
+            cov_tb += min(4.0, max(0.0, (8 - ac) / 2.0))
+        else:
+            cov_tb += 4
+
+        # Lens 1: trajectory — quality growth at a reasonable price (large caps win here).
+        tsc = 0.0
+        if   rg5 and rg5 > 0.25: tsc += 16
+        elif rg5 and rg5 > 0.15: tsc += 11
+        elif rg5 and rg5 > 0.08: tsc += 6
+        elif rg  and rg  > 0.15: tsc += 8
+        elif rg  and rg  > 0.08: tsc += 4
+        if   roic and roic > 0.20: tsc += 8
+        elif roic and roic > 0.12: tsc += 4
+        if   gm and gm > 0.60: tsc += 5
+        elif gm and gm > 0.40: tsc += 3
+        if   om and om > 0.20: tsc += 4
+        elif om and om > 0.10: tsc += 2
+        # Reasonable multiple vs growth = room for fair value to sit above price.
+        if   peg is not None and 0 < peg < 1.0: tsc += 8
+        elif peg is not None and 0 < peg < 1.8: tsc += 4
+        elif pe is not None and 0 < pe < 25 and (rg5 and rg5 > 0.15): tsc += 4
+        if tsc > 0:
+            trajectory.append((tsc + 0.5 * cov_tb, t))
+
+        # Lens 2: re-rate — under-covered, cheap, beaten-down (stated-target Nokia/IREN).
+        rsc = cov_tb * 2.0   # coverage matters more on this lens
+        if   ps < 1.0: rsc += 12
+        elif ps < 2.0: rsc += 8
+        elif ps < 4.0: rsc += 4
+        if p52 is not None:
+            if   p52 < 0.70: rsc += 10
+            elif p52 < 0.85: rsc += 6
+            elif p52 < 0.95: rsc += 2
+        if   rg5 and rg5 > 0.15: rsc += 8
+        elif rg5 and rg5 > 0.05: rsc += 4
+        elif rg  and rg  > 0.10: rsc += 4
+        restate.append((rsc, t))
+
+    trajectory.sort(key=lambda x: -x[0])
+    restate.sort(key=lambda x: -x[0])
+
+    # Build the pool spanning both lenses: ~half from trajectory (large-cap quality growth),
+    # fill the rest from re-rate (small-cap, stated target), then backfill any remainder.
+    out, seen = [], set()
+
+    def _take(lst, target_len):
+        for _sc, t in lst:
+            if len(out) >= target_len:
+                break
+            if t not in seen:
+                seen.add(t)
+                out.append(t)
+
+    half = max(1, n // 2)
+    _take(trajectory, half)   # ~half from the trajectory lens
+    _take(restate, n)         # fill up to n from the re-rate lens
+    _take(trajectory, n)      # backfill remainder from trajectory if re-rate ran short
+    return out[:n]
 
 
 # ─────────────────────────────────────────────
@@ -4850,7 +5190,7 @@ def _repair_truncated_json(text: str) -> dict:
     result = {}
 
     # Extract simple string fields (synopsis, sector_rotation, macro_context, disclaimer)
-    for field in ("synopsis", "sector_rotation", "macro_context", "disclaimer"):
+    for field in ("synopsis", "sector_rotation", "macro_context", "geopolitics", "disclaimer"):
         m = re.search(rf'"{field}"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
         if m:
             result[field] = m.group(1)
@@ -4955,6 +5295,18 @@ def build_market_brief(stocks: dict, macro: dict = None, agent_perf: dict = None
             )
         except Exception:
             lines.append("MACRO: (unavailable)")
+        # Cross-asset prices (commodities + FX) — context for the Strategist desk.
+        _ca = macro.get("cross_asset") or {}
+        if _ca:
+            _ca_parts = []
+            for _sym, _d in _ca.items():
+                if not isinstance(_d, dict) or _d.get("price") is None:
+                    continue
+                _chg = _d.get("chg_pct")
+                _ca_parts.append(f"{_d.get('name', _sym)}={_d['price']:g}"
+                                 + (f" ({_chg:+.1f}%)" if _chg is not None else ""))
+            if _ca_parts:
+                lines.append("CROSS-ASSET: " + "  ".join(_ca_parts))
     lines.append("")
 
     # ── Sector valuations ─────────────────────────────────────────────────────
@@ -5047,6 +5399,84 @@ def build_market_brief(stocks: dict, macro: dict = None, agent_perf: dict = None
             lines.append(f"  {t} ({co[:24]}): est {sign}{rev:.0%}")
         lines.append("")
 
+    # ── Large-cap value / cash return ─────────────────────────────────────────
+    # Established, owner-friendly names the growth screens never rank. Surfaces
+    # mature large-caps (e.g. telecom-infra, hardware) for the value-chain desks.
+    value_leaders = sorted(
+        [(t, s) for t, s in stocks.items()
+         if s.get("mktCap", 0) >= 1e10
+         and ((0 < (s.get("pe") or 0) <= 18) or ((s.get("fcfYield") or 0) >= 0.05))
+         and (((s.get("divYield") or 0) > 0) or ((s.get("fcfYield") or 0) > 0))],
+        key=lambda x: -((x[1].get("fcfYield") or 0)),
+    )[:10]
+    if value_leaders:
+        lines.append("LARGE-CAP VALUE / CASH RETURN ($10B+, cheap, pays owners):")
+        for t, s in value_leaders:
+            co   = s.get("companyName") or s.get("name") or t
+            sect = s.get("sector", "")
+            bits = [f"{t} ({co[:24]})", f"Sect:{sect[:12]}"]
+            pe = s.get("pe")
+            if pe:
+                try: bits.append(f"PE={float(pe):.0f}x")
+                except Exception: pass
+            fy = s.get("fcfYield")
+            if fy is not None:
+                bits.append(f"FCF={fy:.1%}")
+            dy = s.get("divYield")
+            if dy:
+                bits.append(f"Div={dy:.1%}")
+            lines.append("  " + "  ".join(bits))
+        lines.append("")
+
+    # ── Turnaround inflections ────────────────────────────────────────────────
+    # Beaten down BUT estimates turning up — the datable catalyst the desks may now act on.
+    turnarounds = sorted(
+        [(t, s) for t, s in stocks.items()
+         if s.get("mktCap", 0) >= 1e9 and s.get("adv", 0) >= 1e6
+         and (s.get("priceVs52H") is not None and s.get("priceVs52H") <= 0.8)
+         and ((s.get("estRevision30d") or 0) > 0)],
+        key=lambda x: -((x[1].get("estRevision30d") or 0)),
+    )[:10]
+    if turnarounds:
+        lines.append("TURNAROUND INFLECTIONS (down >20% from high, est revisions turning up):")
+        for t, s in turnarounds:
+            co   = s.get("companyName") or s.get("name") or t
+            sect = s.get("sector", "")
+            rev  = s.get("estRevision30d", 0)
+            pvs  = s.get("priceVs52H")
+            bits = [f"{t} ({co[:22]})", f"Sect:{sect[:12]}", f"est +{rev:.0%}"]
+            if pvs is not None:
+                bits.append(f"{(1 - pvs):.0%} off high")
+            lines.append("  " + "  ".join(bits))
+        lines.append("")
+
+    # ── Under-covered quality (retail edge) ───────────────────────────────────
+    # High-quality businesses with light analyst coverage = priced less efficiently.
+    # This is where a retail investor has a genuine edge over the institutions.
+    undercovered = sorted(
+        [(t, s) for t, s in stocks.items()
+         if 1e9 <= (s.get("mktCap", 0) or 0) <= 2e10
+         and (s.get("analystCount") is not None and s.get("analystCount") <= 8)
+         and (((s.get("roic") or 0) > 0) or ((s.get("fcfYield") or 0) > 0))
+         and ((s.get("piotroski") or 0) >= 6)],
+        key=lambda x: -((x[1].get("roic") or x[1].get("fcfYield") or 0)),
+    )[:10]
+    if undercovered:
+        lines.append("UNDER-COVERED QUALITY ($1-20B, ≤8 analysts, Piotroski≥6 — retail edge):")
+        for t, s in undercovered:
+            co   = s.get("companyName") or s.get("name") or t
+            sect = s.get("sector", "")
+            ac   = s.get("analystCount")
+            bits = [f"{t} ({co[:22]})", f"Sect:{sect[:12]}", f"{ac} analysts"]
+            roic = s.get("roic")
+            if roic:
+                bits.append(f"ROIC={roic*100:.0f}%")
+            fy = s.get("fcfYield")
+            if fy is not None:
+                bits.append(f"FCF={fy:.1%}")
+            lines.append("  " + "  ".join(bits))
+        lines.append("")
+
     # ── Insider buying clusters ───────────────────────────────────────────────
     insider_clusters = sorted(
         [(t, s) for t, s in stocks.items() if s.get("insiderBuys", 0) >= 2],
@@ -5101,7 +5531,75 @@ def build_market_brief(stocks: dict, macro: dict = None, agent_perf: dict = None
             lines.append("  " + "  ".join(parts))
         lines.append("")
 
+    # ── Maturing desk theses (appeared as WATCH/BUY ≥2 runs) ─────────────────
+    try:
+        _wh = _cache.get("_desk_watch_history") or {}
+        _today_iso = datetime.date.today().isoformat()
+        _mature = []
+        for _wh_tk, _wh_hist in _wh.items():
+            _recent = [e for e in _wh_hist
+                       if e.get("verdict") in ("BUY", "WATCH")
+                       and (datetime.date.fromisoformat(e["date"])
+                            >= datetime.date.today() - datetime.timedelta(days=90)
+                            if e.get("date") else False)]
+            if len(_recent) >= 2:
+                _verdicts = " → ".join(e.get("verdict", "?") for e in _recent[-3:])
+                _mature.append(f"{_wh_tk} ({_verdicts})")
+        if _mature:
+            lines.append("MATURING DESK THESES (appeared WATCH/BUY ≥2 of last 90 days — thesis building):")
+            for _m in _mature[:8]:
+                lines.append(f"  {_m}")
+            lines.append("")
+    except Exception:
+        pass
+
     return "\n".join(lines)
+
+
+def _format_desk_lessons(agent_perf: dict) -> str:
+    """Compact self-feedback string for the AI desks — their own realized track record
+    (per-source alpha/win-rate/90d-hit) plus conviction calibration (did HIGH beat MEDIUM?).
+    Only sources with n≥5 are shown. Returns '' when there is no usable history yet."""
+    if not agent_perf:
+        return ""
+    _label = {
+        "AI-DeskInnovation": "DeskInnovation", "AI-DeskContrarian": "DeskContrarian",
+        "AI-DeskScreener": "DeskScreener", "AI-DeskVerified": "Verified picks",
+    }
+    lines = []
+    for src, lbl in _label.items():
+        st = agent_perf.get(src)
+        if not isinstance(st, dict):
+            continue
+        n = st.get("n_picks", 0) or 0
+        if n < 5:
+            continue
+        bits = [f"{lbl}: n={n}"]
+        a = st.get("alpha")
+        if a is not None:
+            bits.append(f"alpha {a*100:+.1f}%")
+        wr = st.get("win_rate")
+        if wr is not None:
+            bits.append(f"win {wr*100:.0f}%")
+        h90 = st.get("hit_90d")
+        if h90 is not None:
+            bits.append(f"90d-hit {h90*100:.0f}%")
+        lines.append("  " + ", ".join(bits))
+    # Conviction calibration
+    cal = agent_perf.get("_calibration") or {}
+    cal_bits = []
+    for _cv in ("HIGH", "MEDIUM", "LOW"):
+        c = cal.get(_cv) or {}
+        if (c.get("n") or 0) >= 5 and c.get("alpha") is not None:
+            cal_bits.append(f"{_cv} alpha {c['alpha']*100:+.1f}% (n={c['n']})")
+    if not lines and not cal_bits:
+        return ""
+    out = ["YOUR DESK'S REALIZED TRACK RECORD (vs SPY, learn from it):"]
+    out += lines or ["  (insufficient per-desk history yet)"]
+    if cal_bits:
+        out.append("  Conviction calibration → " + "; ".join(cal_bits)
+                   + "  ← if HIGH isn't beating MEDIUM, be more selective with HIGH.")
+    return "\n".join(out)
 
 
 def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
@@ -5115,7 +5613,7 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
     if not ANTHROPIC_KEY:
         return {}
 
-    from concurrent.futures import ThreadPoolExecutor as _TPE
+    from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed as _as_completed
 
     # ── Model constants ───────────────────────────────────────────────────────
     _GEN_MODEL     = "claude-sonnet-4-6"
@@ -5221,71 +5719,11 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
         return resp_final
 
     def _metrics_block(t):
-        s = stocks.get(t, {})
-        def g(*keys):
-            for k in keys:
-                v = s.get(k)
-                if v not in (None, ""):
-                    return v
-            return None
-        rows = []
-        rows.append(f"Company: {g('companyName','name') or t}")
-        rows.append(f"Sector / Industry: {g('sector') or '—'} / {g('industry') or '—'}")
-        mc = g("mktCap")
-        if mc:
-            rows.append("Market cap: " + (f"${mc/1e9:.2f}B" if mc >= 1e9 else f"${mc/1e6:.0f}M"))
-        px = g("price")
-        if px:
-            rows.append(f"Price: ${px:.2f}")
-        pe = g("pe", "peRatio", "peTTM")
-        if pe:
-            try: rows.append(f"P/E (TTM): {float(pe):.1f}")
-            except Exception: pass
-        peg = g("peg", "pegRatio")
-        if peg is not None:
-            _basis = (" (trailing-growth basis)" if s.get("pegBasis") == "T"
-                      else " (forward-estimate basis)" if s.get("pegBasis") == "F" else "")
-            rows.append(f"PEG: {peg}{_basis}")
-        iv = g("iv", "dcf", "intrinsicValue", "dcfValue")
-        if iv:
-            try: rows.append(f"DCF intrinsic value: ${float(iv):.2f}")
-            except Exception: pass
-        mos = g("mos", "mosCustom", "marginOfSafety")
-        if mos is not None:
-            try: rows.append(f"Margin of safety vs DCF: {float(mos)*100:+.0f}%")
-            except Exception: pass
-        roic = g("roic")
-        if roic:
-            try: rows.append(f"ROIC: {float(roic)*100:.0f}%")
-            except Exception: pass
-        gm = g("grossMargin")
-        if gm:
-            try: rows.append(f"Gross margin: {float(gm)*100:.0f}%")
-            except Exception: pass
-        om = g("operatingMargin")
-        if om:
-            try: rows.append(f"Operating margin: {float(om)*100:.0f}%")
-            except Exception: pass
-        rg = g("revGrowth", "revenueGrowthYoy")
-        if rg:
-            try: rows.append(f"Revenue growth YoY: {float(rg)*100:.0f}%")
-            except Exception: pass
-        fy = g("fcfYield")
-        if fy:
-            try: rows.append(f"FCF yield: {float(fy)*100:.1f}%")
-            except Exception: pass
-        yh, yl = g("yearHigh"), g("yearLow")
-        if px and yh and yl and yh > yl:
-            try: rows.append(f"52-week position: {(px-yl)/(yh-yl)*100:.0f}% of range"
-                             f" (low ${yl:.0f} / high ${yh:.0f})")
-            except Exception: pass
-        ac = g("analystCount")
-        if ac is not None:
-            rows.append(f"Sell-side analysts covering: {ac}")
-        return "\n".join(rows)
+        return _build_metrics_block(t, stocks)
 
     # ── Generator system prompt ───────────────────────────────────────────────
     _today = datetime.date.today()
+    _desk_lessons = _format_desk_lessons(agent_perf)
     macro_line = ""
     if macro:
         try:
@@ -5311,10 +5749,17 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
         f"Today is {_today}. {macro_line}\n\n"
         "USER INVESTMENT PROFILE: Peter Lynch-style investor. Buys companies they know and "
         "understand (knowledge-edge investing). Core circle of competence: tech, software, AI, "
-        "semiconductors, innovation-driven businesses. Appreciates all sectors but tilts toward "
-        "companies with durable competitive moats, high gross margins, and visible growth runways. "
-        "Avoids: pure asset plays, turnaround stories without clear catalyst, businesses they "
-        "don't understand.\n\n"
+        "semiconductors, innovation-driven businesses — AND the broader tech value chain that "
+        "powers them: networking, optical, telecom & datacenter infrastructure, semiconductor "
+        "equipment, electrification/power, and hardware. Appreciates all sectors but tilts toward "
+        "companies with durable competitive moats and visible growth runways. "
+        "Avoids: pure asset plays and businesses they genuinely can't understand. Turnarounds ARE "
+        "acceptable when there is a concrete, datable catalyst — a new product cycle, a margin "
+        "inflection, accretive M&A, or a management change with evidence.\n\n"
+        "RETAIL EDGE: this investor's structural advantage is under-covered names that institutions "
+        "can't or won't size into. All else equal, prefer a high-quality business with light analyst "
+        "coverage over a mega-cap that is already efficiently priced and picked over by Wall Street. "
+        "The goal is the best 3-5yr risk-adjusted return, not the most famous logo.\n\n"
         "CRITICAL RULES — violations disqualify your entire output:\n"
         "1. Propose THESES only. Cite ZERO specific financial figures (no P/E, revenue, "
         "   growth rates, price targets, balance sheet numbers). A verification analyst "
@@ -5322,7 +5767,8 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
         "2. US-listed tickers and ADRs only. No private companies, no SPACs without history.\n"
         "3. Respond ONLY with valid JSON — no markdown fences, no prose before/after.\n"
         "4. 3-5 ideas only. Quality over quantity.\n\n"
-        f"Output JSON schema:\n{_GEN_IDEA_SCHEMA}"
+        + (f"{_desk_lessons}\n\n" if _desk_lessons else "")
+        + f"Output JSON schema:\n{_GEN_IDEA_SCHEMA}"
     )
 
     # ── Stage 1: 3 parallel generators ───────────────────────────────────────
@@ -5337,13 +5783,17 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
         "Respond with your 3-5 best investment theses as JSON."
     )
     _GEN_DESK_CONTRARIAN_USR = (
-        "You are DeskContrarian — find quality businesses that are currently out of favour. "
-        "Sector rotation headwinds, narrative overhang (one bad quarter, macro fear), or simply "
-        "neglected due to small size. The business quality must be solid — durable revenues, "
-        "pricing power, strong balance sheet — but the market prices in permanent impairment. "
-        "Lynch's 'boring is beautiful' or 'fallen angels from tech'.\n\n"
-        f"Market context:\n{brief[:3000]}\n\n"
-        "Respond with your 3-5 best contrarian investment theses as JSON."
+        "You are DeskContrarian — find out-of-favour quality, with a special mandate to hunt the "
+        "UNGLAMOROUS AI / TECH VALUE CHAIN: optical & IP networking, telecom and datacenter "
+        "infrastructure, semiconductor equipment, power & cooling, and the picks-and-shovels "
+        "hardware that the AI buildout depends on. The market often dismisses these as commodity "
+        "hardware or stale telecom, yet they sit on a structural tailwind — that mispricing is the "
+        "opportunity. Also welcome: quality names beaten down by sector rotation, narrative "
+        "overhang (one bad quarter, macro fear), or neglect from small size. Catalyzed turnarounds "
+        "qualify — a new product cycle, margin inflection, or accretive M&A. Lynch's 'boring is "
+        "beautiful' and 'fallen angels from tech'.\n\n"
+        f"Market context (use ALL of this data — note the value and turnaround slices):\n{brief}\n\n"
+        "Respond with your 3-5 best contrarian / value-chain investment theses as JSON."
     )
     _GEN_DESK_SCREENER_USR = (
         "You are DeskScreener — find the most compelling stories from the screener data in the "
@@ -5417,7 +5867,19 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
         -len(x.get("proposed_by", [])),
         0 if x.get("conviction") == "HIGH" else (1 if x.get("conviction") == "MEDIUM" else 2),
     ))
-    candidates = _resolved[:10]
+    # Sector-diversity guard: cap any one sector at SECTOR_CAP of the 10 slots so the verified
+    # set isn't 8 near-identical AI/semis clones; overflow fills remaining slots to reach 10.
+    SECTOR_CAP = 4
+    _by_sect: dict = {}
+    _primary, _overflow = [], []
+    for _c in _resolved:
+        _sect = stocks.get(_c.get("ticker", ""), {}).get("sector", "Unknown")
+        if _by_sect.get(_sect, 0) < SECTOR_CAP:
+            _primary.append(_c)
+            _by_sect[_sect] = _by_sect.get(_sect, 0) + 1
+        else:
+            _overflow.append(_c)
+    candidates = (_primary + _overflow)[:10]
     print(f"\n  📋 {len(candidates)} candidates after dedup (from {len(_order)} proposals)")
 
     if not candidates:
@@ -5430,30 +5892,68 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
         '"verdict":"BUY | WATCH | AVOID | KILL",'
         '"conviction":"HIGH | MEDIUM | LOW",'
         '"business":"2-4 sentences: what it does, how it makes money, competitive position.",'
+        '"moat":{"sources":"SPECIFIC moat sources present — pricing_power / switching_costs / '
+        'network_effects / cost_advantage / intangible_assets — cite evidence for each claimed source",'
+        '"strength":"WIDE (2+ credible sources) / NARROW (1 source) / NONE (story only) — one-sentence justification",'
+        '"durability":"realistic years this moat can defend above-average returns against competition",'
+        '"threats":"the single most credible threat to this moat in the next 3-5 years"},'
         '"thesis_check":"Did the generator thesis hold up? What did you confirm or refute?",'
         '"valuation":"Is it cheap, fair, or expensive? Reference specific multiples from tools.",'
+        '"margin_of_safety":"Price vs intrinsic value, e.g. \'+18% below DCF\' or \'-10%, overvalued\'. '
+        'Reference the DCF / multiples. Say \'none\' if it trades at/above fair value.",'
+        '"expected_return_3_5y":"Annualized return at TODAY\'S price over 3-5yr — base / bull / bear, '
+        'one short clause each with the key assumption (e.g. \'base ~12%/yr if rev compounds 15% '
+        'and multiple holds\').",'
         '"growth":"Revenue and earnings growth trajectory from tool data.",'
         '"balance_sheet":"Financial health — net debt, cash, any distress signals.",'
         '"catalysts":"Specific near-term events that could re-rate the stock.",'
         '"risks":"The 2-3 most credible reasons to pass.",'
         '"what_to_watch":"Concrete signals to track over next 4-12 weeks.",'
         '"kill_reason":"Populate only if verdict is KILL or AVOID.",'
+        '"entry_trigger":"WATCH only: the specific price OR catalyst that would convert this to BUY, '
+        'with the expected return it creates — e.g. \'$47 = 18x NTM FCF, creates ~14%/yr base-case IRR\'. '
+        'Leave blank for BUY / AVOID / KILL.",'
         '"time_horizon":"short (<1yr) | medium (1-3yr) | long (3+yr)"}'
     )
 
     _VERIFY_SYS = (
         f"You are a senior verification analyst on the Investment Desk. Today is {_today}. "
         f"{macro_line}\n\n"
-        "Your job: CONFIRM with a grounded dossier or KILL an investment idea. "
-        "You have live FMP financial data tools.\n\n"
+        "Your default posture is SKEPTICISM. Most ideas that reach you are plausible-sounding "
+        "stories; your job is to find the few that genuinely survive scrutiny — NOT to rationalize "
+        "the rest. A meaningful share of ideas SHOULD land at WATCH/AVOID/KILL. Do not grade on a "
+        "curve toward BUY: if you confirm nearly everything, you are failing this desk.\n\n"
+        "You have live FMP financial data tools.\n"
         "MANDATORY: Call get_financial_statements AND get_analyst_estimates before any verdict. "
         "Skipping these tools results in an automatic KILL.\n\n"
         "Every specific figure you cite must come from a tool result — never from training memory. "
         "Wrong numbers mislead a real investor.\n\n"
-        "Verdict guide: BUY = thesis confirmed + reasonable valuation; "
-        "WATCH = interesting but one concern unresolved; "
-        "AVOID = thesis weak or too expensive; "
-        "KILL = thesis factually wrong, unresolvable, or financials disqualify.\n\n"
+        "VALUATION IS HALF THE DECISION. Before your verdict you MUST state the margin of safety vs "
+        "intrinsic value and a 3-5yr expected return at today's price. A great business at a rich "
+        "price is a WATCH or AVOID — not a BUY. The investor holds for years; entry price drives "
+        "the return.\n\n"
+        "VERDICT RUBRIC (apply strictly):\n"
+        "  BUY   = thesis confirmed by the financials AND a real margin of safety OR a defensible "
+        "base-case return of roughly ≥12%/yr. Reserve for genuinely compelling risk/reward.\n"
+        "  WATCH = good business but valuation is full, or one material concern is unresolved.\n"
+        "  AVOID = thesis weak/decelerating, or expensive with no margin of safety.\n"
+        "  KILL  = thesis factually wrong, financials disqualify, or unresolvable.\n\n"
+        "CONVICTION: HIGH only when business quality, valuation, AND balance sheet all align; "
+        "otherwise MEDIUM or LOW. COVERAGE EDGE: a high-quality business with light analyst coverage "
+        "is priced less efficiently — a genuine retail edge; a heavily-covered mega-cap at a full "
+        "valuation deserves extra strictness.\n\n"
+        "MOAT EVALUATION — mandatory for every dossier. Think like Peter Lynch or Chris Hohn: "
+        "what SPECIFICALLY protects this business from competition? Rate each source with evidence:\n"
+        "  1. Pricing power: can they raise prices without losing customers? Check gross margin trend.\n"
+        "  2. Switching costs: what does it cost a customer to leave? Quantify if possible.\n"
+        "  3. Network effects: does each additional user make the product better for existing ones?\n"
+        "  4. Cost advantage: are they structurally cheaper to produce/deliver than peers? Evidence?\n"
+        "  5. Intangible assets: patents, brand, regulatory licenses competitors cannot replicate?\n"
+        "WIDE moat = 2+ credible, evidence-backed sources. NARROW = 1. NONE = story only, no evidence.\n"
+        "A NONE-moat business can still be a BUY at the right price — be honest either way.\n\n"
+        "ENTRY TRIGGER — mandatory for every WATCH verdict: state the specific price (or catalyst event) "
+        "that would convert this to BUY, and what expected return that price creates. "
+        "'I like the business but not the price' is only actionable with a concrete trigger.\n\n"
         f"Respond ONLY with valid JSON (no markdown):\n{_DOSSIER_SCHEMA}"
     )
 
@@ -5477,7 +5977,13 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
             f"BEAR CASE TO CHECK: {wki}\n\n"
             f"SCREENER SNAPSHOT:\n{_metrics_block(t)}\n\n"
             "MANDATORY FIRST STEPS: call get_financial_statements AND get_analyst_estimates "
-            "before reaching a verdict. Budget ≤5 FMP tool calls total.\n\n"
+            "before reaching a verdict. Budget ≤5 FMP tool calls total.\n"
+            "THEN, before your verdict, explicitly work out the margin of safety vs intrinsic value "
+            "and the 3-5yr expected return at today's price. A confirmed thesis at a rich price is a "
+            "WATCH/AVOID, not a BUY. Be willing to AVOID or KILL — a 100% confirm rate is a failure.\n\n"
+            "REQUIRED JSON FIELDS: your response MUST include the 'moat' object (sources, strength, "
+            "durability, threats — evidence-based, not story-only). For WATCH verdicts, also fill in "
+            "'entry_trigger' with a specific price and expected IRR. Omitting these fields is invalid.\n\n"
             f"Respond ONLY with valid JSON (no markdown):\n{_DOSSIER_SCHEMA}"
         )
         try:
@@ -5542,44 +6048,303 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
 
     print(f"\n  🔬 Investment Desk Stage 2 — verifying {len(candidates)} candidates...")
     dossiers_all: list = []
-    with _TPE(max_workers=4) as _pool:
-        for _d in _pool.map(_verify_one, list(enumerate(candidates))):
-            if _d:
-                dossiers_all.append(_d)
+    _verify_timeout = 360 * len(candidates) + 120
+    with _TPE(max_workers=2) as _pool:
+        _vfuts = {_pool.submit(_verify_one, _item): _item[1].get("ticker", str(_item[0]))
+                  for _item in enumerate(candidates)}
+        try:
+            for _vfut in _as_completed(_vfuts, timeout=_verify_timeout):
+                _vtk = _vfuts[_vfut]
+                try:
+                    _d = _vfut.result()
+                except Exception as _vfe:
+                    print(f"    ⚠️ Verify {_vtk} worker error: {str(_vfe)[:80]}")
+                    _d = None
+                if _d:
+                    dossiers_all.append(_d)
+        except Exception as _vpe:
+            print(f"  ⚠️ Verification pool error ({str(_vpe)[:80]}) — proceeding with {len(dossiers_all)} dossiers")
 
     # ── Build return shape (downstream-compatible) ────────────────────────────
     dossiers_buy    = [d for d in dossiers_all if d.get("verdict") in ("BUY", "WATCH")]
     dossiers_killed = [d for d in dossiers_all if d.get("verdict") in ("AVOID", "KILL")]
 
-    picks = []
-    for d in sorted(dossiers_buy,
-                    key=lambda x: (0 if x.get("verdict") == "BUY" else 1,
-                                   0 if x.get("conviction") == "HIGH" else 1)):
-        verdict    = d.get("verdict", "WATCH")
-        conviction = d.get("conviction", "MEDIUM")
-        if verdict == "BUY" and conviction == "HIGH":
-            tier = "CORE"
-        elif verdict == "BUY":
-            tier = "SATELLITE"
-        else:
-            tier = "WATCH"
-        t = d.get("ticker", "")
+    # ── Stage 2.5: Chief Investment Officer ranking pass (one Opus call) ───────
+    # Independent second perspective: ranks every verified idea for 3-5yr risk-adjusted
+    # return, names the best 3-5, and demotes any the desk over-rated. On ANY failure we
+    # fall back to the verdict/conviction sort — no regression, no crash.
+    def _run_cio(buys):
+        if not buys:
+            return {}
+        _digest = []
+        for d in buys:
+            t = d.get("ticker", "")
+            s = stocks.get(t, {})
+            ac = s.get("analystCount")
+            mc = s.get("mktCap")
+            _digest.append(
+                f"{t} ({(d.get('company') or t)[:28]}) "
+                f"[{d.get('verdict','')}/{d.get('conviction','')}] "
+                f"sector={s.get('sector','?')} "
+                + (f"mktcap=${mc/1e9:.0f}B " if mc else "")
+                + (f"coverage={ac} analysts" if ac is not None else "coverage=?")
+                + f"\n   thesis_check: {(d.get('thesis_check') or '')[:200]}"
+                + f"\n   valuation: {(d.get('valuation') or '')[:160]}"
+                + f"\n   margin_of_safety: {(d.get('margin_of_safety') or '')[:120]}"
+                + f"\n   expected_return: {(d.get('expected_return_3_5y') or '')[:160]}"
+                + f"\n   risks: {(d.get('risks') or '')[:160]}"
+            )
+        _cio_schema = (
+            '{"cio_view":"2-3 sentences: how you read the opportunity set and your top conviction",'
+            '"ranking":[{"ticker":"X","rank":1,"cio_conviction":"HIGH | MEDIUM | LOW",'
+            '"one_line":"why this rank — the single sharpest point",'
+            '"flag":"empty, or OVERRATED if the desk over-rated it and you would demote to WATCH"}],'
+            '"best_ideas":["3-5 tickers you would deploy capital into first"]}'
+        )
+        _cio_sys = (
+            f"You are the Chief Investment Officer of a patient, mid-to-long-term (3-5yr) retail "
+            f"equity desk. Today is {_today}. {macro_line}\n\n"
+            "A verification desk has already confirmed each idea against live financials. Your job: "
+            "RANK them for risk-adjusted return over 3-5 years and name the few you would deploy "
+            "capital into FIRST. Think like an owner — durable business quality bought at a sensible "
+            "price (margin of safety / expected return) beats a hot story at a full price. A retail "
+            "investor's structural edge is under-covered quality: give a genuine tilt to high-quality, "
+            "lightly-covered names over efficiently-priced mega-caps, all else equal. Be "
+            "discriminating — if the desk over-rated something, flag it OVERRATED. Every ranked "
+            "ticker must come from the supplied list.\n\n"
+            + (f"{_desk_lessons}\n\n" if _desk_lessons else "")
+            + f"Respond ONLY with valid JSON (no markdown):\n{_cio_schema}"
+        )
+        _cio_usr = (
+            "Verified ideas to rank (all already passed verification):\n\n"
+            + "\n\n".join(_digest)
+            + f"\n\nRank ALL {len(buys)} for 3-5yr risk-adjusted return and pick your best 3-5.\n"
+            f"Respond ONLY with valid JSON:\n{_cio_schema}"
+        )
+        try:
+            resp = _post(_cio_sys, _cio_usr, max_tok=8000, timeout_s=180, model=_VERIFY_OPUS)
+            if resp.status_code != 200:
+                print(f"    ⚠️ CIO pass error {resp.status_code} — using verdict/conviction sort")
+                return {}
+            text = next((b.get("text", "") for b in resp.json().get("content", [])
+                         if b.get("type") == "text"), "").strip()
+            parsed = _parse_response(text)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception as exc:
+            print(f"    ⚠️ CIO pass failed: {str(exc)[:80]} — using verdict/conviction sort")
+            return {}
+
+    print(f"\n  🎖️  Investment Desk Stage 2.5 — CIO ranking {len(dossiers_buy)} verified ideas...")
+    _cio = _run_cio(dossiers_buy)
+    _cio_rank, _cio_conv, _cio_oneline = {}, {}, {}
+    _cio_best = set((x or "").upper() for x in _cio.get("best_ideas", []) if isinstance(x, str))
+    _cio_flagged: set = set()
+    for _r in (_cio.get("ranking") or []):
+        if not isinstance(_r, dict):
+            continue
+        _rt = (_r.get("ticker") or "").upper()
+        if not _rt:
+            continue
+        if isinstance(_r.get("rank"), (int, float)):
+            _cio_rank[_rt] = _r["rank"]
+        if _r.get("cio_conviction"):
+            _cio_conv[_rt] = _r["cio_conviction"]
+        if _r.get("one_line"):
+            _cio_oneline[_rt] = _r["one_line"]
+        if str(_r.get("flag", "")).upper().startswith("OVERRATED"):
+            _cio_flagged.add(_rt)
+
+    # Apply CIO calibration: conviction overwrite, OVERRATED → demote BUY to WATCH, best-idea flag
+    for d in dossiers_buy:
+        _dt = (d.get("ticker") or "").upper()
+        if _dt in _cio_conv:
+            d["conviction"] = _cio_conv[_dt]
+        if _dt in _cio_flagged and d.get("verdict") == "BUY":
+            d["verdict"] = "WATCH"
+        if _dt in _cio_oneline:
+            d["cio_one_line"] = _cio_oneline[_dt]
+        d["best_idea"] = _dt in _cio_best
+
+    def _buy_order(d):
+        _dt = (d.get("ticker") or "").upper()
+        if _dt in _cio_rank:
+            return (0, _cio_rank[_dt])
+        # fallback for any unranked dossier: original verdict/conviction priority
+        return (1, (0 if d.get("verdict") == "BUY" else 1) * 10
+                   + (0 if d.get("conviction") == "HIGH" else 1))
+    dossiers_buy.sort(key=_buy_order)
+    if _cio:
+        print(f"    🏆 CIO best ideas: {', '.join(sorted(_cio_best)) or '—'}"
+              + (f" | {len(_cio_flagged)} demoted" if _cio_flagged else ""))
+
+    # ── Stage 3: Deep Research Desk — bull/bear debate + judge on the top ideas ──
+    # Each top idea (CIO best ideas; fallback top 5 by rank) faces a dedicated short-seller
+    # (tools incl. earnings transcript) and an independent judge who writes the final call +
+    # a full investment memo. Resilient: any failure keeps the CIO-ranked dossier unchanged.
+    _DEBATE_N = 5
+    if _cio_best:
+        _debate_targets = [d for d in dossiers_buy
+                           if (d.get("ticker") or "").upper() in _cio_best][:_DEBATE_N]
+    else:
+        _debate_targets = dossiers_buy[:_DEBATE_N]
+
+    _BEAR_SCHEMA = (
+        '{"bear_case":"3-5 sentences: the strongest credible case to AVOID this now",'
+        '"red_flags":"the 2-3 most concrete warning signs from financials/transcript/filings",'
+        '"capital_allocation_grade":"A-F plus one clause — buybacks net of SBC/dilution, insider '
+        'alignment, debt-funded returns",'
+        '"competitor_analysis":"name the top 2-3 direct competitors. For each: market share trend, '
+        'relative gross/EBIT margins, reinvestment runway, moat durability vs this company. '
+        'Is this company gaining or losing competitive ground? Does the claimed moat hold up head-to-head?",'
+        '"what_would_break_it":"the single most likely event that breaks the bull thesis + rough odds"}'
+    )
+    _JUDGE_SCHEMA = (
+        '{"final_verdict":"BUY | WATCH | AVOID","final_conviction":"HIGH | MEDIUM | LOW",'
+        '"judge_summary":"2-3 sentences reconciling bull and bear into a clear recommendation",'
+        '"what_would_change_our_mind":"the specific evidence that would flip this verdict",'
+        '"deep_memo":"4-6 paragraph plain-English investment memo for a patient retail owner: the '
+        'business and moat; why now; valuation and expected return; the bear case and your rebuttal; '
+        'position sizing and what to watch. Use only figures already established by the desk."}'
+    )
+
+    def _debate_one(d):
+        t = (d.get("ticker") or "").upper()
+        try:
+            _bear_sys = (
+                f"You are a sharp, fair short-seller on the Investment Desk. Today is {_today}. "
+                f"{macro_line}\n\n"
+                "A tool-verified bull dossier is given. Build the STRONGEST credible bear case. Use "
+                "your tools — read the latest earnings transcript for guidance and management tone, "
+                "check filings and insider activity. Grade capital allocation honestly: are buybacks "
+                "real (net of SBC and dilution) or cosmetic; is management aligned; are returns "
+                "debt-funded. You are NOT a permabear — if the bear case is weak, say so plainly.\n\n"
+                "COMPETITOR INTELLIGENCE (mandatory): name the top 2-3 direct competitors and compare "
+                "them head-to-head on market share trend, gross/EBIT margins, and moat durability. "
+                "A 'wide moat' claim that doesn't survive a competitor comparison is NOT a wide moat. "
+                "Use your financial tools to check competitor revenue growth and margins if available.\n\n"
+                "Every figure you cite must come from a tool result.\n\n"
+                f"Respond ONLY with valid JSON (no markdown):\n{_BEAR_SCHEMA}"
+            )
+            _bear_usr = (
+                f"Stress-test this idea: {t} ({d.get('company', t)})\n\n"
+                f"BULL THESIS: {d.get('thesis','')}\n"
+                f"BULL VERDICT: {d.get('verdict','')}/{d.get('conviction','')}\n"
+                f"VALUATION: {d.get('valuation','')}\n"
+                f"EXPECTED RETURN: {d.get('expected_return_3_5y','')}\n\n"
+                f"SCREENER SNAPSHOT:\n{_metrics_block(t)}\n\n"
+                "Read the latest earnings transcript and check filings/insiders. Budget ≤5 tool calls.\n\n"
+                f"Respond ONLY with valid JSON:\n{_BEAR_SCHEMA}"
+            )
+            _br = _post_with_tools(_bear_sys, _bear_usr, max_tok=4000, timeout_s=300,
+                                   model=_VERIFY_OPUS, max_rounds=5)
+            bear = {}
+            if _br is not None and _br.status_code == 200:
+                _bt = " ".join(b.get("text", "") for b in _br.json().get("content", [])
+                               if b.get("type") == "text").strip()
+                bear = _parse_response(_bt) or {}
+
+            _judge_sys = (
+                f"You are the head of research — an independent judge. Today is {_today}. Weigh a "
+                "tool-verified bull dossier against the bear case and deliver the final call for a "
+                "patient retail owner. Be decisive but honest; if the bear case lands, downgrade. "
+                "Write the memo a thoughtful investor would actually want to read.\n\n"
+                "Your deep_memo must cover: (1) the business and MOAT — why it wins vs its specific "
+                "rivals (reference the competitor comparison); (2) why now; (3) valuation and expected "
+                "return; (4) the bear case and your honest rebuttal; (5) what to watch and when to exit.\n\n"
+                f"Respond ONLY with valid JSON (no markdown):\n{_JUDGE_SCHEMA}"
+            )
+            _judge_usr = (
+                f"TICKER: {t} ({d.get('company', t)})\n\n"
+                f"=== BULL DOSSIER ===\nverdict {d.get('verdict')}/{d.get('conviction')}\n"
+                f"business: {d.get('business','')}\nthesis_check: {d.get('thesis_check','')}\n"
+                f"valuation: {d.get('valuation','')}\nmargin_of_safety: {d.get('margin_of_safety','')}\n"
+                f"expected_return: {d.get('expected_return_3_5y','')}\nrisks: {d.get('risks','')}\n\n"
+                f"=== BEAR CASE ===\n{json.dumps(bear, default=str)[:1500]}\n\n"
+                "Reconcile into your final verdict + a full investment memo.\n"
+                f"Respond ONLY with valid JSON:\n{_JUDGE_SCHEMA}"
+            )
+            _jr = _post(_judge_sys, _judge_usr, max_tok=4000, timeout_s=180, model=_VERIFY_OPUS)
+            judge = {}
+            if _jr is not None and _jr.status_code == 200:
+                _jt = next((b.get("text", "") for b in _jr.json().get("content", [])
+                            if b.get("type") == "text"), "").strip()
+                judge = _parse_response(_jt) or {}
+
+            if bear:
+                d["bear_case"]                = bear.get("bear_case", "")
+                d["red_flags"]                = bear.get("red_flags", "")
+                d["capital_allocation_grade"] = bear.get("capital_allocation_grade", "")
+                d["competitor_analysis"]      = bear.get("competitor_analysis", "")
+            if judge:
+                if judge.get("final_verdict"):
+                    d["verdict"] = judge["final_verdict"]
+                if judge.get("final_conviction"):
+                    d["conviction"] = judge["final_conviction"]
+                d["judge_summary"]              = judge.get("judge_summary", "")
+                d["what_would_change_our_mind"] = judge.get("what_would_change_our_mind", "")
+                d["deep_memo"]                  = judge.get("deep_memo", "")
+            d["debated"] = bool(bear or judge)
+            print(f"    🥊 Debated {t}: {d.get('verdict')}/{d.get('conviction')}"
+                  + (f" — cap-alloc {str(bear.get('capital_allocation_grade',''))[:1]}"
+                     if bear.get("capital_allocation_grade") else ""))
+            return d
+        except Exception as exc:
+            print(f"    ⚠️ Debate {t} failed: {str(exc)[:80]} — keeping CIO dossier")
+            return d
+
+    if _debate_targets:
+        print(f"\n  🥊 Investment Desk Stage 3 — Deep Research debate on {len(_debate_targets)} top ideas...")
+        with _TPE(max_workers=2) as _dpool:
+            _dfuts = {_dpool.submit(_debate_one, _d): (_d.get("ticker") or "?")
+                      for _d in _debate_targets}
+            try:
+                for _df in _as_completed(_dfuts, timeout=360 * len(_debate_targets) + 120):
+                    try:
+                        _df.result()
+                    except Exception as _dfe:
+                        print(f"    ⚠️ Debate worker error: {str(_dfe)[:80]}")
+            except Exception as _dpe:
+                print(f"  ⚠️ Debate pool error ({str(_dpe)[:80]}) — proceeding")
+
+        # A debate can downgrade a BUY/WATCH to AVOID — re-split so it lands in 'killed'
+        _re_killed = [d for d in dossiers_buy if d.get("verdict") in ("AVOID", "KILL")]
+        if _re_killed:
+            dossiers_killed += _re_killed
+            dossiers_buy = [d for d in dossiers_buy if d.get("verdict") in ("BUY", "WATCH")]
+            print(f"    ⚖️  Debate downgraded {len(_re_killed)} idea(s) to AVOID")
+
+    # ── Stage 3.5: data-reliability fact-check (pure code, no AI) ──────────────
+    # Conservative consistency check — flags a contradiction between the analyst's prose
+    # and the screener's own computed margin-of-safety. Advisory only; never rewrites.
+    def _factcheck_dossier(d):
+        t = (d.get("ticker") or "").upper()
         s = stocks.get(t, {})
-        picks.append({
-            "ticker":            t,
-            "company":           d.get("company", t),
-            "position_tier":     tier,
-            "conviction":        conviction,
-            "story":             d.get("thesis_check") or d.get("thesis", ""),
-            "rationale":         d.get("thesis", ""),
-            "catalysts":         d.get("catalysts", ""),
-            "risks":             d.get("risks", ""),
-            "time_horizon":      d.get("time_horizon", ""),
-            "endorsed_by":       ", ".join(d.get("proposed_by", [])),
-            "business_synopsis": d.get("business", ""),
-            "sector":            s.get("sector", ""),
-            "price":             s.get("price"),
-        })
+        mos = s.get("mos")
+        flags = []
+        _txt = (str(d.get("margin_of_safety", "")) + " "
+                + str(d.get("valuation", "")) + " "
+                + str(d.get("deep_memo", ""))).lower()
+        if mos is not None:
+            try:
+                mos = float(mos)
+                if mos < -0.05 and any(w in _txt for w in (
+                        "undervalued", "below dcf", "below intrinsic",
+                        "trades at a discount", "discount to intrinsic", "cheap relative")):
+                    flags.append(f"prose implies undervalued but screener margin-of-safety is {mos*100:.0f}%")
+                if mos > 0.10 and any(w in _txt for w in (
+                        "overvalued", "expensive", "rich valuation", "above intrinsic")):
+                    flags.append(f"prose implies overvalued but screener margin-of-safety is +{mos*100:.0f}%")
+            except Exception:
+                pass
+        if flags:
+            d["data_flags"] = flags
+        return d
+
+    for d in dossiers_buy:
+        _factcheck_dossier(d)
+    _n_flagged = sum(1 for d in dossiers_buy if d.get("data_flags"))
+    if _n_flagged:
+        print(f"    ⚠️  Data fact-check: {_n_flagged} dossier(s) flagged for review")
 
     # _specialist_picks: per-desk ideas feed Agent Reports tab + logging unchanged
     _specialist_picks = {
@@ -5588,44 +6353,20 @@ def run_investment_desk(stocks: dict, brief: str, macro: dict = None,
         if ideas
     }
 
-    # _memos: dossiers in memo-compatible format (Best Ideas panel)
-    _memos = []
-    for d in dossiers_buy:
-        t = d.get("ticker", "")
-        _tier = next((p["position_tier"] for p in picks if p["ticker"] == t), "WATCH")
-        _memos.append({
-            "ticker":        t,
-            "company":       d.get("company", ""),
-            "verdict":       (d.get("verdict", "WATCH")
-                              + " — " + (d.get("thesis_check") or "")[:80]),
-            "conviction":    d.get("conviction", "MEDIUM"),
-            "business":      d.get("business", ""),
-            "bull_case":     d.get("thesis", ""),
-            "bear_case":     d.get("risks", ""),
-            "valuation":     d.get("valuation", ""),
-            "catalysts":     d.get("catalysts", ""),
-            "what_to_watch": d.get("what_to_watch", ""),
-            "time_horizon":  d.get("time_horizon", ""),
-            "endorsed_by":   ", ".join(d.get("proposed_by", [])),
-            "position_tier": _tier,
-        })
+    # Assemble picks[]/_memos[]/return dict via the shared helper (single source of truth
+    # also used by --ai-from-file, so the subscription path renders identically).
+    _result = _assemble_ai_result(
+        dossiers_buy, dossiers_killed, dossiers_all, _specialist_picks, _cio,
+        (_market_views[0] if _market_views else ""), brief, stocks,
+        _cache.get("_desk_watch_history") or {})
 
     n_tools  = _tool_calls_made[0]
     n_agents = _tool_agents_used[0]
-    print(f"\n  ✅ Investment Desk complete — {len(picks)} picks"
+    print(f"\n  ✅ Investment Desk complete — {len(_result['picks'])} picks"
           f" ({len(dossiers_killed)} killed)"
           f" | {n_tools} FMP tool calls ({n_agents} agents used tools)")
 
-    return {
-        "pipeline":          _AI_PIPELINE,
-        "synopsis":          _market_views[0] if _market_views else "",
-        "brief":             brief,
-        "picks":             picks,
-        "dossiers":          dossiers_all,
-        "killed":            dossiers_killed,
-        "_specialist_picks": _specialist_picks,
-        "_memos":            _memos,
-    }
+    return _result
 
 
 def call_claude_analysis(picks_data: dict, stocks: dict, macro: dict = None,
@@ -8179,6 +8920,158 @@ def log_ai_picks(ai_result: dict, stocks: dict, mall_result: dict = None):
     print(f"  📝 AI picks logged: {n_judge} judge{echo_note}{mall_note} + {n_spec} specialist → {AI_PICKS_LOG}")
 
 
+def build_target_gap_tab(wb, ai_result: dict, stocks: dict):
+    """🎯 Target Gap — the biggest gaps between a company's AI-derived fair value and its
+    current price. Fair value is triangulated (forward financials x a justified multiple,
+    DCF cross-check, any stated target); hard numbers come from FMP. Spans large-cap
+    trajectory plays + under-covered re-rate names. Ranked by fair-value upside. Returns the
+    rendered rows (for optional logging)."""
+    rows = ai_result.get("_target_gap", []) or []
+    print(f"\n📊 Building Tab: Target Gap ({len(rows)} names)...")
+    ws = wb.create_sheet("1e. Target Gap")
+    ws.sheet_view.showGridLines = False
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    title = ws.cell(row=1, column=1,
+                    value=f"🎯 Target Gap — fair value the market hasn't caught up to  ({datetime.date.today()})")
+    title.font = Font(bold=True, size=14, color="FFFFFF", name="Arial")
+    title.fill = PatternFill("solid", fgColor="1B5E20")
+    title.alignment = Alignment(horizontal="left", vertical="center")
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=11)
+    ws.row_dimensions[1].height = 24
+
+    subtitle = ws.cell(row=2, column=1,
+                       value="AI-derived fair value vs current price — large-cap compounders trading below their "
+                             "forward trajectory and under-covered names with an unpriced stated target. Fair value "
+                             "triangulated from forward financials, DCF, and any stated target; 'Why the gap exists' "
+                             "is your research starting point. Not price targets.")
+    subtitle.font = Font(italic=True, size=9, color="546E7A", name="Arial")
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=11)
+    ws.row_dimensions[2].height = 26
+    ws.row_dimensions[2].alignment = Alignment(wrap_text=True)
+
+    headers = ["Rank", "Ticker", "Company", "Sector", "Current", "Fair (base)",
+               "Bear / Bull", "Range x", "Upside", "Conv-adj", "Conv.", "Driver", "Why the gap exists"]
+    widths  = [6, 8, 22, 15, 11, 11, 16, 9, 9, 10, 8, 12, 46]
+    from openpyxl.utils import get_column_letter
+    for _ci, _w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(_ci)].width = _w
+
+    hr = 4
+    for _ci, _h in enumerate(headers, start=1):
+        c = ws.cell(row=hr, column=_ci, value=_h)
+        c.font = Font(bold=True, size=10, color="FFFFFF", name="Arial")
+        c.fill = PatternFill("solid", fgColor="2E7D32")
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    ws.row_dimensions[hr].height = 18
+
+    if not rows:
+        ws.cell(row=hr + 1, column=1,
+                value="No target gaps surfaced this run.").font = Font(italic=True, color="888888")
+        return rows
+
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    def _money(v):
+        v = _num(v)
+        if v is None:
+            return "—"
+        return f"${v:,.0f}" if abs(v) >= 100 else f"${v:,.2f}"
+
+    def _fair_money(v):
+        v = _num(v)
+        if v is None:
+            return "—"
+        return f"${v:,.0f}" if abs(v) >= 20 else f"${v:,.1f}"
+
+    def _fair_of(d):
+        return _num(d.get("fair_value_base")) if d.get("fair_value_base") is not None \
+            else _num(d.get("implied_price_at_target"))
+
+    def _up_of(d):
+        u = _num(d.get("upside_pct"))
+        if u is None:
+            u = _num(d.get("implied_upside_pct"))
+        if u is None:
+            fb, cp = _fair_of(d), _num(d.get("current_price"))
+            if fb is not None and cp and cp > 0:
+                u = (fb / cp - 1) * 100
+        return u
+
+    def _conv_factor(c):
+        c = (c or "").upper()
+        if "LOW" in c:  return 0.4
+        if "HIGH" in c: return 1.0
+        return 0.85
+
+    def _adj_up(d):
+        u = _up_of(d)
+        return (u * _conv_factor(d.get("conviction"))) if u is not None else None
+
+    def _spread_of(d):
+        b, u = _num(d.get("fair_value_bear")), _num(d.get("fair_value_bull"))
+        return (u / b) if (b and u and b > 0) else None
+
+    def _driver(d):
+        return str(d.get("value_driver") or "earnings").lower().replace("-", "_")
+
+    _FLAGGED = {"optionality", "asset_nav", "nav", "balance_sheet"}
+    earn = [d for d in rows if _driver(d) not in _FLAGGED]
+    flag = [d for d in rows if _driver(d) in _FLAGGED]
+    earn.sort(key=lambda d: (_adj_up(d) if _adj_up(d) is not None else -1e9), reverse=True)
+    ordered = earn + flag   # flagged (wrong-lens) names listed last
+
+    r = hr + 1
+    for _i, d in enumerate(ordered, start=1):
+        up = _up_of(d)
+        adj = _adj_up(d)
+        sp = _spread_of(d)
+        bear = _num(d.get("fair_value_bear"))
+        bull = _num(d.get("fair_value_bull"))
+        is_flag = _driver(d) in _FLAGGED
+        range_disp = ("—" if (bear is None and bull is None)
+                      else f"{_fair_money(bear)} / {_fair_money(bull)}")
+        vals = [
+            _i,
+            (d.get("ticker") or "").upper(),
+            (d.get("company") or "")[:28],
+            (d.get("sector") or "")[:16],
+            _money(d.get("current_price")),
+            ("n/a" if is_flag else _fair_money(_fair_of(d))),
+            range_disp,
+            (f"{sp:.1f}x" if sp is not None else "—"),
+            ("n/a" if is_flag else (f"+{up:.0f}%" if up is not None else "—")),
+            ("n/a" if is_flag else (f"+{adj:.0f}%" if adj is not None else "—")),
+            d.get("conviction", ""),
+            (_driver(d).replace("_", "-")),
+            (d.get("why_gap_exists") or d.get("why_not_yet") or "")[:300],
+        ]
+        for _ci, _v in enumerate(vals, start=1):
+            c = ws.cell(row=r, column=_ci, value=_v)
+            c.font = Font(size=9, name="Arial")
+            c.alignment = Alignment(vertical="top",
+                                    wrap_text=(_ci in (3, 13)),
+                                    horizontal=("center" if _ci in (1, 8, 9, 10, 11) else "left"))
+            # Highlight strong conviction-adjusted setups
+            if _ci == 10 and adj is not None and adj >= 20 and not is_flag:
+                c.font = Font(size=9, bold=True, color="1B5E20", name="Arial")
+            # Flag wide ranges (low confidence) in amber
+            if _ci == 8 and sp is not None and sp >= 2.0:
+                c.font = Font(size=9, bold=True, color="B26A00", name="Arial")
+            # Grey out flagged (wrong-lens) names
+            if is_flag and _ci in (6, 9, 10):
+                c.font = Font(size=9, italic=True, color="999999", name="Arial")
+        ws.row_dimensions[r].height = 30
+        r += 1
+
+    print(f"  ✅ Target Gap tab: {len(earn)} earnings-driven + {len(flag)} flagged (wrong-lens)")
+    return rows
+
+
 def build_agent_reports_tab(wb, ai_result: dict, stocks: dict):
     """Build a tab showing each specialist agent's individual picks and reasoning."""
     print("\n📊 Building Tab: Agent Reports...")
@@ -10129,6 +11022,7 @@ def compute_agent_performance(spy_prices: dict = None, spy_today: float = None) 
 
     # --- aggregate by agent -----------------------------------------------
     _per: dict = {}   # source → lists of per-pick stats
+    _calib: dict = {"HIGH": [], "MEDIUM": [], "LOW": []}   # conviction → alpha list (AI picks)
 
     for r in rows:
         src = r.get("source", "unknown")
@@ -10150,6 +11044,12 @@ def compute_agent_performance(spy_prices: dict = None, spy_today: float = None) 
 
         spy_r = _spy_ret_for_date(date_str)
         alpha_r = (ret - spy_r) if ret is not None and spy_r is not None else ret
+
+        # Conviction calibration (AI desks only) — did HIGH actually beat MEDIUM?
+        if alpha_r is not None and str(src).startswith("AI-"):
+            _cv = str(r.get("conviction", "")).upper()
+            if _cv in _calib:
+                _calib[_cv].append(alpha_r)
 
         # B2 checkpoint rets (lazy fetch via fetch_price_on_date cache)
         ret_30d  = _checkpoint_ret_b1(t, entry, date_str, 30,  days)
@@ -10229,6 +11129,11 @@ def compute_agent_performance(spy_prices: dict = None, spy_today: float = None) 
             "med_hold_days": (_stats.median(dl) if dl else None),
             "prompt_versions": ag["pv_set"],
         }
+    # Conviction calibration summary (AI picks) — avg alpha + n per tier
+    out["_calibration"] = {
+        _cv: {"n": len(_a), "alpha": (sum(_a) / len(_a) if _a else None)}
+        for _cv, _a in _calib.items()
+    }
     return out
 
 
@@ -13200,6 +14105,437 @@ def build_insider_tab(wb, stocks, insider_data):
 # HTML DASHBOARD
 # ─────────────────────────────────────────────
 
+# ── Strategist render (module-level so it is unit-testable offline) ──
+def _render_strategist_section(ai):
+    """🧭 Strategist tab — the big-picture top-down view: an opinionated house call
+    (defensive <-> risk-on) with odds, geopolitical scenario trees (winners/losers +
+    probabilities + 3-6mo consequences), best bets, and a sector-rotation read. Fed by the
+    Strategist + Sector-Rotation desk stages. Geopolitical claims are web-sourced (labeled);
+    hard prices come from FMP. Research, not advice."""
+    geo = (ai or {}).get("geopolitics") or {}
+    sr  = (ai or {}).get("sector_rotation") or {}
+    hv  = geo.get("house_view") or {}
+    situations = geo.get("situations") or []
+
+    def _esc(x):
+        return (str(x or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+    def _aslist(x):
+        if isinstance(x, list):
+            return [i for i in x if i not in (None, "")]
+        if x in (None, ""):
+            return []
+        return [x]
+
+    def _pct(s):
+        m = re.search(r"(\d{1,3}(?:\.\d+)?)", str(s or ""))
+        try:
+            return max(0.0, min(100.0, float(m.group(1)))) if m else None
+        except Exception:
+            return None
+
+    _intro = (
+        '<p style="color:#9fa8da;font-size:.78rem;line-height:1.6;margin:4px 0 14px">'
+        'Top-down house view: the live geopolitical landscape mapped to <b>winners &amp; losers with odds</b>, '
+        'a sector-rotation read, and an opinionated <b>defensive &harr; risk-on</b> call. Geopolitical '
+        'scenarios are AI-reasoned from <b>web sources (verify independently)</b>; commodity/FX/valuation '
+        'numbers are FMP. Probabilities are judgement, not precision. <b>Not investment advice.</b></p>'
+    )
+    if not (hv or situations or sr):
+        return ('<section id="strategist">'
+                '<div class="section-title">🧭 Strategist</div>' + _intro +
+                '<p style="color:#666;padding:12px">No strategist view this run. '
+                'Run <code>/desk-run</code> to populate the geopolitical scenarios + house call.</p></section>')
+
+    # ── House-call banner ──────────────────────────────────────────────────
+    stance = _esc(hv.get("stance") or "").upper()
+    _stance_color = {"DEFENSIVE": "#c62828", "RISK-ON": "#2e7d32",
+                     "RISK ON": "#2e7d32", "BALANCED": "#546e7a"}.get(stance, "#546e7a")
+    one_liner = _esc(hv.get("one_liner") or "")
+    conv = _esc(hv.get("conviction") or "")
+    swing = _aslist(hv.get("key_swing_factors"))
+    swing_html = ("".join(f'<span class="tg-chip">{_esc(s)}</span>' for s in swing)) if swing else ""
+    house_banner = ""
+    if stance or one_liner:
+        house_banner = (
+            f'<div style="background:linear-gradient(90deg,{_stance_color}22,#0d111700);'
+            f'border-left:4px solid {_stance_color};border-radius:6px;padding:12px 16px;margin-bottom:14px">'
+            f'<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">'
+            f'<span style="font-size:1.15rem;font-weight:800;color:{_stance_color}">{stance or "VIEW"}</span>'
+            + (f'<span style="color:#cfd8dc;font-size:.9rem">{one_liner}</span>' if one_liner else "")
+            + (f'<span style="margin-left:auto;color:#90a4ae;font-size:.72rem">conviction: <b>{conv}</b></span>' if conv else "")
+            + '</div>'
+            + (f'<div style="margin-top:8px"><span style="color:#78909c;font-size:.68rem;'
+               f'text-transform:uppercase;letter-spacing:.05em">What would change the call &nbsp;</span>'
+               f'<span class="tg-chips">{swing_html}</span></div>' if swing_html else "")
+            + '</div>'
+        )
+
+    # ── Best bets table ────────────────────────────────────────────────────
+    best = hv.get("best_bets") or []
+    bets_html = ""
+    if isinstance(best, list) and best:
+        rows = []
+        for b in best:
+            if not isinstance(b, dict):
+                continue
+            idea = _esc(b.get("idea") or b.get("ticker") or "")
+            direction = _esc(b.get("direction") or "long")
+            dir_col = {"long": "#2e7d32", "short": "#c62828", "avoid": "#b26a00"}.get(direction.lower(), "#546e7a")
+            odds = _esc(b.get("odds") or "")
+            hz = _esc(b.get("time_horizon") or b.get("horizon") or "")
+            thesis = _esc(b.get("thesis") or "")
+            risk = _esc(b.get("risk") or "")
+            rows.append(
+                '<div class="xcard tg-card" onclick="toggleExpand(this)" style="padding:8px 12px">'
+                f'<div class="tg-head"><b style="color:#fff">{idea}</b> '
+                f'<span class="tg-chip" style="background:{dir_col}33;color:{dir_col}">{direction}</span>'
+                + (f'<span class="tg-chip g">odds {odds}</span>' if odds else "")
+                + (f'<span class="tg-chip" style="opacity:.8">{hz}</span>' if hz else "")
+                + '</div>'
+                + (f'<div class="tg-chips" style="margin-top:4px"><span style="color:#b0bec5;font-size:.8rem">{thesis}</span></div>' if thesis else "")
+                + (f'<div class="xbody" style="display:none"><div class="tg-why">⚠️ <b>Risk:</b> {risk}</div></div>' if risk else "")
+                + '</div>'
+            )
+        if rows:
+            bets_html = ('<div style="font-size:.74rem;font-weight:700;color:#cfd8dc;margin:6px 0 6px">'
+                         '🎯 Best bets right now</div>' + "".join(rows))
+
+    # ── Geopolitical scenario cards ────────────────────────────────────────
+    sit_cards = []
+    for s in situations:
+        if not isinstance(s, dict):
+            continue
+        name = _esc(s.get("name") or "")
+        status = _esc(s.get("status") or "")
+        _stat_col = {"escalating": "#c62828", "de-escalating": "#2e7d32",
+                     "stable": "#546e7a"}.get(status.lower(), "#546e7a")
+        scen_html = []
+        for sc in (s.get("scenarios") or []):
+            if not isinstance(sc, dict):
+                continue
+            lbl = _esc(sc.get("label") or "")
+            odds = _esc(sc.get("odds") or "")
+            p = _pct(odds)
+            summ = _esc(sc.get("summary") or "")
+            winners = _aslist(sc.get("winners"))
+            losers = _aslist(sc.get("losers"))
+            win_html = "".join(f'<span class="tg-chip g">{_esc(w)}</span>' for w in winners)
+            lose_html = "".join(f'<span class="tg-chip" style="background:#4e1f1f;color:#ef9a9a">{_esc(l)}</span>' for l in losers)
+            bar = (f'<div style="background:#263238;border-radius:3px;height:6px;width:120px;display:inline-block;'
+                   f'vertical-align:middle;overflow:hidden"><div style="background:#5c6bc0;height:6px;'
+                   f'width:{p:.0f}%"></div></div>' if p is not None else "")
+            scen_html.append(
+                f'<div style="margin:6px 0;padding:6px 0;border-top:1px solid #1c2230">'
+                f'<b style="color:#cfd8dc;text-transform:capitalize">{lbl}</b> '
+                f'<span class="tg-chip">odds {odds}</span> {bar}'
+                + (f'<div style="color:#b0bec5;font-size:.78rem;margin:4px 0">{summ}</div>' if summ else "")
+                + (f'<div class="tg-chips">{win_html}{lose_html}</div>' if (win_html or lose_html) else "")
+                + '</div>'
+            )
+        cons = _esc(s.get("consequences_3_6mo") or s.get("consequences") or "")
+        watch = _esc(s.get("watch") or "")
+        src = _esc(s.get("sources") or "")
+        sit_cards.append(
+            '<div class="xcard tg-card" onclick="toggleExpand(this)">'
+            f'<div class="tg-head"><b style="color:#fff;font-size:1rem">{name}</b> '
+            + (f'<span class="tg-chip" style="background:{_stat_col}33;color:{_stat_col}">{status}</span>' if status else "")
+            + '</div>'
+            + "".join(scen_html)
+            + '<div class="xbody" style="display:none">'
+            + (f'<div class="tg-why">📅 <b>3-6mo consequences:</b> {cons}</div>' if cons else "")
+            + (f'<div class="tg-why">👀 <b>Watch:</b> {watch}</div>' if watch else "")
+            + (f'<div class="tg-why" style="color:#607d8b;font-size:.7rem">Sources: {src}</div>' if src else "")
+            + '</div></div>'
+        )
+    sit_html = ('<div style="font-size:.74rem;font-weight:700;color:#cfd8dc;margin:14px 0 6px">'
+                '🌍 Geopolitical scenarios &middot; <span style="color:#78909c;font-weight:400">'
+                'click a card for consequences &amp; sources</span></div>' + "".join(sit_cards)) if sit_cards else ""
+
+    # ── Sector-rotation panel ──────────────────────────────────────────────
+    sector_html = ""
+    if isinstance(sr, dict) and sr:
+        regime_read = _esc(sr.get("regime_read") or "")
+        _sec_rows = []
+        for sec in (sr.get("sectors") or []):
+            if not isinstance(sec, dict):
+                continue
+            nm = _esc(sec.get("sector") or "")
+            val = _esc(sec.get("valuation") or "")
+            val_col = {"cheap": "#2e7d32", "rich": "#c62828", "fair": "#546e7a"}.get(val.lower(), "#546e7a")
+            verdict = _esc(sec.get("verdict") or "")
+            why = _esc(sec.get("why") or "")
+            trend = _esc(sec.get("trend") or "")
+            odds = _esc(sec.get("odds_attractive") or "")
+            _sec_rows.append(
+                '<div class="xcard tg-card" onclick="toggleExpand(this)" style="padding:7px 12px">'
+                f'<div class="tg-head"><b style="color:#fff">{nm}</b> '
+                f'<span class="tg-chip" style="background:{val_col}33;color:{val_col}">{val or "?"}</span>'
+                + (f'<span class="tg-chip">{verdict}</span>' if verdict else "")
+                + (f'<span class="tg-chip g">attractive {odds}</span>' if odds else "")
+                + (f'<span style="margin-left:auto;color:#90a4ae;font-size:.72rem">{trend}</span>' if trend else "")
+                + '</div>'
+                + (f'<div class="xbody" style="display:none"><div class="tg-why">{why}</div></div>' if why else "")
+                + '</div>'
+            )
+        tops = _aslist(sr.get("top_opportunities"))
+        tops_html = ("".join(f'<li style="margin:2px 0">{_esc(t)}</li>' for t in tops)) if tops else ""
+        risk_call = _esc(sr.get("risk_on_or_wait") or "")
+        sector_html = (
+            '<div style="font-size:.74rem;font-weight:700;color:#cfd8dc;margin:14px 0 6px">🗺 Sector rotation</div>'
+            + (f'<p style="color:#b0bec5;font-size:.8rem;margin:0 0 8px">{regime_read}</p>' if regime_read else "")
+            + "".join(_sec_rows)
+            + (f'<div style="margin-top:8px"><span style="color:#78909c;font-size:.68rem;text-transform:uppercase;'
+               f'letter-spacing:.05em">Top opportunities</span><ul style="color:#cfd8dc;font-size:.8rem;'
+               f'margin:4px 0 0;padding-left:18px">{tops_html}</ul></div>' if tops_html else "")
+            + (f'<div style="margin-top:10px;background:#13241a;border-left:3px solid #2e7d32;border-radius:4px;'
+               f'padding:8px 12px;color:#a5d6a7;font-size:.82rem"><b>Take risk or wait:</b> {risk_call}</div>' if risk_call else "")
+        )
+
+    return (
+        '<section id="strategist">'
+        '<div class="section-title">🧭 Strategist &mdash; geopolitics, sector rotation &amp; the house call</div>'
+        + _intro + house_banner + bets_html + sit_html + sector_html
+        + '</section>'
+    )
+
+
+# ── Target Gap render (module-level so it is unit-testable offline) ──
+def _render_target_gap_section(ai):
+    _tg = (ai or {}).get("_target_gap", []) or []
+    _intro = (
+        '<p style="color:#9fa8da;font-size:.78rem;line-height:1.6;margin:4px 0 14px">'
+        'The biggest gaps between a company&#39;s AI-derived <b>fair value</b> and its current price — '
+        'large-cap compounders trading below their forward trajectory <i>and</i> under-covered names '
+        'with a stated multi-year target the market hasn&#39;t re-rated to. Fair value is '
+        '<b>triangulated</b>: forward revenue/earnings at the company&#39;s own growth rate &times; a '
+        'justified multiple, cross-checked vs DCF, plus any stated management target. Hard numbers '
+        'come from FMP; qualitative context from AI knowledge + web (labeled). '
+        'Click a card for the full calculation. Research starting points — not price targets.</p>'
+    )
+    if not _tg:
+        return ('<section id="targetgap">'
+                '<div class="section-title">🎯 Target Gap</div>'
+                + _intro +
+                '<p style="color:#666;padding:12px">No target gaps surfaced this run. '
+                'Run <code>/desk-run</code> on subscription tokens to populate this tab.</p></section>')
+
+    def _esc(x):
+        return (str(x or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    def _money(v):
+        v = _num(v)
+        if v is None:
+            return None
+        return f"${v:,.0f}" if abs(v) >= 100 else f"${v:,.2f}"
+
+    def _fair_money(v):
+        # Coarse — a fuzzy estimate should not be shown to the cent. Whole $ above $20,
+        # one decimal below (so a $10.5 fair value still reads, but no false "$50.00").
+        v = _num(v)
+        if v is None:
+            return None
+        return f"${v:,.0f}" if abs(v) >= 20 else f"${v:,.1f}"
+
+    def _fair_of(d):
+        return _num(d.get("fair_value_base")) if d.get("fair_value_base") is not None \
+            else _num(d.get("implied_price_at_target"))
+
+    def _up_of(d):
+        u = _num(d.get("upside_pct"))
+        if u is None:
+            u = _num(d.get("implied_upside_pct"))
+        if u is None:
+            fb, cp = _fair_of(d), _num(d.get("current_price"))
+            if fb is not None and cp and cp > 0:
+                u = (fb / cp - 1) * 100
+        return u
+
+    def _conv_factor(c):
+        # Discount the upside by how little the model trusts its own fair value.
+        c = (c or "").upper()
+        if "LOW" in c:  return 0.4   # LOW estimates discounted 60% (the biggest raw gaps live here)
+        if "HIGH" in c: return 1.0
+        return 0.85                  # MEDIUM / default
+    def _adj_up(d):
+        u = _up_of(d)
+        return (u * _conv_factor(d.get("conviction"))) if u is not None else None
+    def _spread_of(d):
+        b, u = _num(d.get("fair_value_bear")), _num(d.get("fair_value_bull"))
+        return (u / b) if (b and u and b > 0) else None
+    def _driver(d):
+        return str(d.get("value_driver") or "earnings").lower().replace("-", "_")
+
+    _FLAGGED = {"optionality", "asset_nav", "nav", "balance_sheet"}
+    earn_recs = [d for d in _tg if _driver(d) not in _FLAGGED]
+    flag_recs = [d for d in _tg if _driver(d) in _FLAGGED]
+    # Rank earnings-driven names by CONVICTION-ADJUSTED upside, not raw upside.
+    earn_recs.sort(key=lambda d: (_adj_up(d) if _adj_up(d) is not None else -1e9), reverse=True)
+
+    def _detail_html(d):
+        vm = d.get("valuation_methods")
+        methods_html = ""
+        if isinstance(vm, list) and vm:
+            rows = []
+            for m in vm:
+                if not isinstance(m, dict):
+                    continue
+                meth = _esc(m.get("method") or "")
+                val_s = _fair_money(m.get("value")) or "—"
+                assum = _esc(m.get("assumption") or "")
+                rows.append(
+                    f'<div style="margin:3px 0;font-size:.74rem">'
+                    f'<b style="color:#cfd8dc">{meth}</b> &rarr; <b style="color:#7CFC9B">{val_s}</b>'
+                    + (f'<span style="color:#90a4ae"> &middot; {assum}</span>' if assum else "")
+                    + '</div>'
+                )
+            if rows:
+                methods_html = ('<div class="tg-why">🧮 <b>Valuation methods (triangulation):</b>'
+                                + "".join(rows) + '</div>')
+        calc_method = _esc(d.get("calculation_method") or "")    # old-schema fallback
+        growth = _esc(d.get("growth_assumptions") or "")
+        why    = _esc(d.get("why_gap_exists") or d.get("why_not_yet") or "")
+        risks  = _esc(d.get("risks") or "")
+        cat    = _esc(d.get("catalyst_timeline") or "")
+        dsrc   = _esc(d.get("data_sources") or "")
+        src    = _esc(d.get("target_source") or "")
+        quote  = _esc(d.get("target_quote") or "")
+        return (
+            methods_html
+            + (f'<div class="tg-why">🧮 <b>Calculation:</b> {calc_method}</div>' if (not methods_html and calc_method) else "")
+            + (f'<div class="tg-why">📈 <b>Growth assumptions:</b> {growth}</div>' if growth else "")
+            + (f'<div class="tg-why">🔍 <b>Why the gap exists:</b> {why}</div>' if why else "")
+            + (f'<div class="tg-why">⚠️ <b>Risks:</b> {risks}</div>' if risks else "")
+            + (f'<div class="tg-why">⏱ <b>Catalyst timeline:</b> {cat}</div>' if cat else "")
+            + (f'<div class="tg-q">📌 <b>Stated target</b> &mdash; {src}:<br><i>{quote}</i></div>' if quote else "")
+            + (f'<div class="tg-why" style="color:#607d8b;font-size:.7rem">Sources: {dsrc}</div>' if dsrc else "")
+        )
+
+    def _earn_card(d, idx):
+        tk   = _esc((d.get("ticker") or "").upper())
+        comp = _esc(d.get("company") or "")
+        sec  = _esc(d.get("sector") or "")
+        conv = _esc(d.get("conviction") or "")
+        cur_price = _num(d.get("current_price"))
+        fair_base = _fair_of(d)
+        up        = _up_of(d)
+        adj       = _adj_up(d)
+        sp        = _spread_of(d)
+        cur_s     = _money(cur_price)
+        fair_s    = _fair_money(fair_base)
+        up_disp   = (f"+{up:.0f}%" if (up is not None and up >= 0) else (f"{up:.0f}%" if up is not None else ""))
+        up_cls    = "g" if (up is not None and up >= 50) else ("a" if (up is not None and up > 0) else "")
+        adj_disp  = (f"+{adj:.0f}%" if (adj is not None and adj >= 0) else (f"{adj:.0f}%" if adj is not None else ""))
+        adj_cls   = "g" if (adj is not None and adj >= 25) else ("a" if (adj is not None and adj > 0) else "")
+        if fair_s and cur_s:
+            hero = (
+                f'<span style="color:#fff;font-size:1.04rem;font-weight:700">{tk}</span>'
+                '<span style="color:#cfd8dc"> is a </span>'
+                f'<span style="color:#7CFC9B;font-size:1.04rem;font-weight:700">~{fair_s}</span>'
+                '<span style="color:#cfd8dc"> stock trading at </span>'
+                f'<span style="color:#fff;font-size:1.04rem;font-weight:700">{cur_s}</span>'
+                + (f' <span class="tg-chip {up_cls}" style="font-weight:700">{up_disp}</span>' if up_disp else "")
+            )
+        else:
+            hero = ""
+        # Range-width chip — a wide bear/bull spread self-disqualifies (model uncertainty).
+        spread_chip = ""
+        if sp is not None:
+            wide = sp >= 2.0
+            spread_chip = (f'<span class="tg-chip" style="{ "background:#4e342e;color:#ffb74d" if wide else "" }">'
+                           f'Range width: <b>{sp:.1f}&times;</b>{ " &mdash; wide, low confidence" if wide else "" }</span>')
+        cov  = _esc(d.get("analyst_coverage") or "")
+        cov_thin = "thin" in cov.lower()
+        pricing = _esc(d.get("pricing_status") or "")
+        tv   = _num(d.get("target_value"))
+        unit = _esc(d.get("target_unit") or "")
+        tyr  = _esc(d.get("target_year") or "")
+        mult = _num(d.get("target_multiple"))
+        target_chip = ""
+        if tv is not None:
+            _td = f"{tv:g} {unit} ({tyr})".strip()
+            target_chip = (f'<span class="tg-chip">Stated target: <b>{_esc(_td)}</b></span>'
+                           + (f'<span class="tg-chip">Mult: <b>{mult:.1f}&times;</b></span>' if mult is not None else ""))
+        chips = (
+            (f'<span class="tg-chip {adj_cls}">Conviction-adj: <b>{adj_disp}</b></span>' if adj_disp else "")
+            + spread_chip
+            + (f'<span class="tg-chip">Conviction: <b>{conv}</b></span>' if conv else "")
+            + target_chip
+            + (f'<span class="tg-chip{ " g" if cov_thin else "" }" style="opacity:.8">Coverage: <b>{cov}</b></span>' if cov else "")
+            + (f'<span class="tg-chip" style="opacity:.8">Pricing: <b>{pricing}</b></span>' if pricing else "")
+        )
+        return (
+            '<div class="xcard tg-card" onclick="toggleExpand(this)">'
+            f'<div class="tg-head"><span class="tg-rank">#{idx}</span> '
+            f'<b style="color:#fff;font-size:1rem">{tk}</b> '
+            f'<span style="color:#9fa8da">{comp}</span> '
+            f'<span class="tg-sec">{sec}</span></div>'
+            + (f'<div class="tg-hero" style="margin:6px 0 4px;line-height:1.5">{hero}</div>' if hero else "")
+            + f'<div class="tg-chips">{chips}</div>'
+            + f'<div class="xbody" style="display:none">{_detail_html(d)}</div>'
+            + '</div>'
+        )
+
+    def _flag_card(d):
+        tk   = _esc((d.get("ticker") or "").upper())
+        comp = _esc(d.get("company") or "")
+        sec  = _esc(d.get("sector") or "")
+        conv = _esc(d.get("conviction") or "")
+        drv  = _driver(d).replace("_", "-")
+        cur_s = _money(_num(d.get("current_price")))
+        # No upside ranking — the multiple-based number is noise for these.
+        note = ('<span class="tg-chip" style="background:#4e342e;color:#ffb74d">'
+                f'⚠ {drv}-driven &mdash; multiple-based fair value is the wrong lens</span>')
+        ref_range = ""
+        b, u = _fair_money(d.get("fair_value_bear")), _fair_money(d.get("fair_value_bull"))
+        if b or u:
+            ref_range = f'<span class="tg-chip" style="opacity:.7">Model range (reference only): <b>{b or "—"} &ndash; {u or "—"}</b></span>'
+        chips = (note
+                 + (f'<span class="tg-chip" style="opacity:.8">Now: <b>{cur_s}</b></span>' if cur_s else "")
+                 + ref_range
+                 + (f'<span class="tg-chip" style="opacity:.8">Conviction: <b>{conv}</b></span>' if conv else ""))
+        return (
+            '<div class="xcard tg-card" onclick="toggleExpand(this)">'
+            f'<div class="tg-head"><b style="color:#fff;font-size:1rem">{tk}</b> '
+            f'<span style="color:#9fa8da">{comp}</span> '
+            f'<span class="tg-sec">{sec}</span></div>'
+            + f'<div class="tg-chips">{chips}</div>'
+            + f'<div class="xbody" style="display:none">{_detail_html(d)}</div>'
+            + '</div>'
+        )
+
+    earn_cards = [_earn_card(d, _i) for _i, d in enumerate(earn_recs, start=1)]
+    flag_html = ""
+    if flag_recs:
+        flag_html = (
+            '<div style="color:#ffb74d;font-size:.74rem;font-weight:700;margin:16px 0 6px">'
+            '⚠ Wrong lens &mdash; optionality / asset-NAV driven</div>'
+            '<div style="color:#90a4ae;font-size:.72rem;margin-bottom:8px">These names are driven by '
+            'capital-structure optionality (converts, warrants, caps) or asset/NAV value, not a forward '
+            'earnings multiple. The triangulation engine is structurally blind to that, so its fair value '
+            'is <b>noise here</b> &mdash; surfaced for research, not ranked by upside.</div>'
+            + "".join(_flag_card(d) for d in flag_recs)
+        )
+    return (
+        '<section id="targetgap">'
+        '<div class="section-title">🎯 Target Gap &mdash; fair value the market hasn&#39;t caught up to</div>'
+        + _intro
+        + f'<div style="color:#546e7a;font-size:.72rem;margin-bottom:10px">{len(earn_recs)} earnings-driven names &middot; '
+          'ranked by <b>conviction-adjusted</b> upside (LOW-conviction discounted 60%) &middot; '
+          'a wide bear/bull <b>range width</b> flags a low-confidence estimate &middot; '
+          'optionality/asset-NAV names routed out below. Click a card for the math.</div>'
+        + "".join(earn_cards)
+        + flag_html
+        + '</section>'
+    )
+
+
 def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       slow_growers, cyclicals, asset_plays, quality_compounders,
                       sector_rows=None, etf_rows=None, ai=None, macro=None,
@@ -13211,7 +14547,6 @@ def build_html_report(stocks, iv_rows, stalwarts, fast_growers, turnarounds,
                       mall=None,           # 🛍️ Mall Manager picks (Lynch consumer-observable)
                       research=None,       # 📋 Deep-Research Analyst memos (Opus, top picks)
                       off_the_radar=None,  # 🛰️ Off-the-Radar Compounders (pre-discovery setups)
-                      spinoff_events=None,  # 🔔 Front-page spin-off alert events
                       fcf_compounders=None,             # 💸 FCF Compounders — pure cash flow lens
                       index_valuations=None,            # 📊 SPY/QQQ/IWM valuation pulse
                       composite_value=None,             # 💎 GARP — Quality at a Reasonable Price
@@ -13418,6 +14753,19 @@ tr.alt td { background: #161622; }
 .mm-card .mm-meta span { color: #9e9e9e; }
 .mm-card .mm-meta b { color: #e0e0e0; }
 .mm-card .mm-attr { margin-top: 6px; line-height: 1.9; }
+.tg-card { border-left: 3px solid #2e7d32; }
+.tg-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tg-rank { color: #2e7d32; font-weight: 700; font-size: .8rem; }
+.tg-sec { color: #607d8b; font-size: .68rem; background: #ffffff0d; padding: 1px 6px; border-radius: 8px; }
+.tg-chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.tg-chip { font-size: .68rem; color: #b0bec5; background: #ffffff0a; border: 1px solid #ffffff12;
+           padding: 2px 8px; border-radius: 10px; }
+.tg-chip b { color: #e0e0e0; }
+.tg-chip.g { border-color: #2e7d3266; } .tg-chip.g b { color: #81c784; }
+.tg-chip.a b { color: #ffb74d; }
+.tg-q { margin-top: 10px; font-size: .76rem; color: #cfd8dc; line-height: 1.6;
+        background: #0d111733; border-left: 2px solid #2e7d32; padding: 6px 10px; border-radius: 4px; }
+.tg-why { margin-top: 8px; font-size: .75rem; color: #b0bec5; line-height: 1.6; }
 """
 
     # ── JS (tab switch + table sort) ──────────────────────────────────────
@@ -14098,6 +15446,8 @@ function showMacroDetail(el, id) {
     # (GARP, Contrarian, Earnings Momentum, Swing Setups) + AI hub + utility views.
     tabs = [
         ("ai",       "🤖 AI Analysis"),
+        ("strategist","🧭 Strategist"),
+        ("targetgap","🎯 Target Gap"),
         ("qual",     "💎 Quality"),
         ("value",    "📊 Value"),
         ("garp",     "💎 GARP"),
@@ -14607,6 +15957,34 @@ function showMacroDetail(el, id) {
             f'</div>'
         ) if _macro_ctx_text else ""
 
+        # ── Cross-asset strip (commodities + FX, from FMP) ─────────────────
+        _ca = mc.get("cross_asset") or {}
+        _cross_asset_html = ""
+        if _ca:
+            _ca_tiles = []
+            for _sym, _d in _ca.items():
+                if not isinstance(_d, dict) or _d.get("price") is None:
+                    continue
+                _chg = _d.get("chg_pct")
+                _chg_col = ("#66bb6a" if (_chg is not None and _chg >= 0)
+                            else ("#ef5350" if _chg is not None else "#90a4ae"))
+                _chg_s = (f"{_chg:+.1f}%" if _chg is not None else "—")
+                _px = _d["price"]
+                _px_s = f"{_px:,.2f}" if _px < 1000 else f"{_px:,.0f}"
+                _ca_tiles.append(
+                    f'<div class="macro-tile">'
+                    f'<div class="lbl">{_d.get("name", _sym)}</div>'
+                    f'<div class="val">{_px_s}</div>'
+                    f'<div class="sig" style="background:transparent;color:{_chg_col};padding:0">{_chg_s}</div>'
+                    f'</div>'
+                )
+            if _ca_tiles:
+                _cross_asset_html = (
+                    '<h2 style="margin-bottom:8px;margin-top:14px;font-size:.75rem">CROSS-ASSET '
+                    '<span style="font-size:.65rem;font-weight:400;color:#666">— commodities &amp; FX (FMP, daily)</span></h2>'
+                    '<div class="macro-grid">' + "".join(_ca_tiles) + '</div>'
+                )
+
         return f"""
 <section id="macro">
   <div class="section-title">🌍 Macro Dashboard — FRED data as of {mc.get('as_of','?')}</div>
@@ -14617,6 +15995,7 @@ function showMacroDetail(el, id) {
     <span style="font-size:.65rem;font-weight:400;color:#666">— click any tile to see history &amp; context</span>
   </h2>
   <div class="macro-grid">{tiles_html}</div>
+  {_cross_asset_html}
   {_regime_bar}
   {detail_panels}
   <p class="interp">{interp}</p>
@@ -15274,19 +16653,47 @@ function showMacroDetail(el, id) {
                         f'padding:1px 6px;border-radius:3px;font-weight:700">{_esc(_verdict)[:30]}</span>'
                         f'<span class="badge" style="background:{_ccol}22;color:{_ccol};font-size:.6rem;'
                         f'padding:1px 6px;border-radius:3px;font-weight:700">{_conv}</span>'
+                        + (_bi_chip("⭐ CIO BEST IDEA", "#ffd54f") if _mo.get("best_idea") else "")
+                        + (_bi_chip("🥊 DEBATED", "#ce93d8") if _mo.get("debated") else "")
+                        + (_bi_chip(f"⟳ ×{_mo['repeat_count']}", "#80deea")
+                           if (_mo.get("repeat_count") or 0) >= 2 else "")
+                        + (_bi_chip(f"⚠ {len(_mo.get('data_flags') or [])} DATA FLAG", "#ef5350")
+                           if _mo.get("data_flags") else "")
                         + (f'<span style="font-size:.6rem;color:#546e7a">{_tier}</span>' if _tier else "")
                         + _vchips
                         + f'<span class="xarrow">▼</span>'
                         f'</div>'
+                        + (f'<p style="margin:6px 0 0;font-size:.7rem;color:#ffe082;line-height:1.5">'
+                           f'<b style="color:#ffd54f">CIO take:</b> {_esc(_mo.get("cio_one_line"))}</p>'
+                           if _mo.get("cio_one_line") else "")
                         + (f'<p style="margin:6px 0 0;font-size:.66rem;color:#546e7a">Endorsed by: {_esc(_endorsed)}</p>'
                            if _endorsed else "")
                         + f'<div class="xbody" style="display:none">'
                         + (f'<div class="sparkline-wrap" style="margin-top:8px"><div style="width:100%">{_rspark}</div></div>'
                            if _rspark else "")
+                        + (f'<div style="margin:10px 0 4px;padding:8px 10px;background:#10131a;'
+                           f'border:1px solid #ce93d833;border-radius:6px">'
+                           f'<div style="font-size:.64rem;font-weight:700;color:#ce93d8;'
+                           f'text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">'
+                           f'🥊 Deep Research Memo (bull/bear debated)</div>'
+                           f'<div style="font-size:.76rem;line-height:1.65;color:#cfd8dc;white-space:pre-line">'
+                           f'{_esc(_mo.get("deep_memo"))}</div></div>'
+                           if _mo.get("deep_memo") else "")
+                        + (f'<p style="margin:8px 0 0;font-size:.7rem;color:#ef9a9a;line-height:1.5">'
+                           f'<b style="color:#ef5350">⚠ Data check:</b> '
+                           f'{_esc("; ".join(_mo.get("data_flags") or []))}</p>'
+                           if _mo.get("data_flags") else "")
                         + _sect("Business", "business")
+                        + _sect("MOAT", "moat_summary", "#81d4fa")
                         + _sect("Bull case", "bull_case", "#a5d6a7")
                         + _sect("Bear case", "bear_case", "#ef9a9a")
+                        + _sect("Competitors", "competitor_analysis", "#b0bec5")
+                        + _sect("Capital allocation", "capital_allocation_grade", "#b39ddb")
                         + _sect("Valuation", "valuation", "#ffe082")
+                        + _sect("Margin of safety", "margin_of_safety", "#ffe082")
+                        + _sect("Entry trigger", "entry_trigger", "#ffcc02")
+                        + _sect("Expected return (3–5y)", "expected_return", "#a5d6a7")
+                        + _sect("What would change our mind", "what_would_change_our_mind", "#80cbc4")
                         + _sect("Catalysts", "catalysts")
                         + _sect("What to watch (4–12 wks)", "what_to_watch", "#80cbc4")
                         + _sect("Time horizon", "time_horizon", "#b0bec5")
@@ -15341,6 +16748,7 @@ function showMacroDetail(el, id) {
                            if _lspark else "")
                         + _lsect("Thesis", "story")
                         + _lsect("Valuation", "valuation_view", "#ffe082")
+                        + _lsect("Entry trigger", "entry_trigger", "#ffcc02")
                         + _lsect("Catalyst", "catalyst")
                         + _lsect("What to watch", "what_to_watch", "#80cbc4")
                         + _lsect("Risks", "risks", "#ef9a9a")
@@ -15366,9 +16774,13 @@ function showMacroDetail(el, id) {
                     '</div>'
                     '<p style="font-size:.72rem;color:#546e7a;margin-bottom:8px;line-height:1.5">'
                     'Investment Desk verified dossiers — every figure fetched from live FMP data this week, '
-                    'confirmed by an Opus (top 3) or Sonnet verification analyst. '
-                    'Proposals below dossiers carry the generator thesis only. '
+                    'confirmed by an Opus (top 3) or Sonnet verification analyst, then ranked by the CIO for '
+                    '3–5yr risk-adjusted return. Proposals below dossiers carry the generator thesis only. '
                     '<b style="color:#78909c">MoS</b> = margin of safety vs DCF. Click any card to expand.</p>'
+                    + (f'<p style="font-size:.74rem;color:#ffe082;margin-bottom:8px;line-height:1.5;'
+                       f'border-left:3px solid #ffd54f;padding-left:8px">'
+                       f'<b style="color:#ffd54f">CIO view:</b> {_esc((ai or {}).get("cio", {}).get("cio_view", ""))}</p>'
+                       if (ai or {}).get("cio", {}).get("cio_view") else "")
                     + f'<div class="mm-grid">{"".join(_rcards + _lcards)}</div>'
                     + '</div>'
                 )
@@ -15381,6 +16793,101 @@ function showMacroDetail(el, id) {
                                          open_by_default=True, accent="#7986cb")
                             if research_section_html.strip()
                             and not research_section_html.strip().startswith("<!--") else "")
+
+        # ── 📊 DESK REPORT CARD — realized track record vs SPY ───────────────
+        _desk_rc_html = ""
+        try:
+            _DESK_SRCS = [
+                ("AI-DeskInnovation", "DeskInnovation"),
+                ("AI-DeskContrarian", "DeskContrarian"),
+                ("AI-DeskScreener",   "DeskScreener"),
+                ("AI-DeskVerified",   "Verified picks"),
+            ]
+            _rc_rows = []
+            for _src_k, _src_lbl in _DESK_SRCS:
+                _st = (agent_perf or {}).get(_src_k)
+                if not isinstance(_st, dict):
+                    continue
+                _rn   = _st.get("n_picks", 0) or 0
+                if _rn < 3:
+                    continue
+                _ral  = _st.get("alpha")
+                _rwr  = _st.get("win_rate")
+                _rh90 = _st.get("hit_90d")
+                _rbt  = _st.get("best_ticker", "—")
+                _rbr  = _st.get("best_ret")
+                _rwt  = _st.get("worst_ticker", "—")
+                _rwr2 = _st.get("worst_ret")
+                _racol = "#66bb6a" if (_ral or 0) > 0 else "#ef9a9a"
+                def _rpct(v):
+                    return f"{v*100:+.1f}%" if v is not None else "—"
+                _rc_rows.append(
+                    f'<tr style="border-top:1px solid #1e2a35">'
+                    f'<td style="color:#90caf9;font-weight:700;padding:4px 6px">{_src_lbl}</td>'
+                    f'<td style="text-align:center;padding:4px 6px">{_rn}</td>'
+                    f'<td style="color:{_racol};font-weight:700;padding:4px 6px">{_rpct(_ral)}</td>'
+                    f'<td style="padding:4px 6px">{_rpct(_rwr)}</td>'
+                    f'<td style="padding:4px 6px">{_rpct(_rh90) if _rh90 is not None else "—"}</td>'
+                    f'<td style="color:#a5d6a7;font-size:.7rem;padding:4px 6px">'
+                    f'{_rbt} {_rpct(_rbr) if _rbr is not None else ""}</td>'
+                    f'<td style="color:#ef9a9a;font-size:.7rem;padding:4px 6px">'
+                    f'{_rwt} {_rpct(_rwr2) if _rwr2 is not None else ""}</td>'
+                    f'</tr>'
+                )
+            if _rc_rows:
+                _rcal = (agent_perf or {}).get("_calibration") or {}
+                _rcal_bits = []
+                for _rcv in ("HIGH", "MEDIUM", "LOW"):
+                    _rc_c = _rcal.get(_rcv) or {}
+                    if (_rc_c.get("n") or 0) >= 5 and _rc_c.get("alpha") is not None:
+                        _rccol = "#66bb6a" if _rc_c["alpha"] > 0 else "#ef9a9a"
+                        _rcal_bits.append(
+                            f'<span style="color:{_rccol}">'
+                            f'{_rcv}: {_rc_c["alpha"]*100:+.1f}% (n={_rc_c["n"]})</span>'
+                        )
+                _rcal_html = ""
+                if _rcal_bits:
+                    _is_miscal = (
+                        (_rcal.get("HIGH", {}).get("alpha") or 0) <
+                        (_rcal.get("MEDIUM", {}).get("alpha") or 0)
+                    )
+                    _rcal_html = (
+                        f'<p style="font-size:.67rem;color:#78909c;margin-top:8px;line-height:1.5">'
+                        f'Conviction calibration: {" &nbsp;|&nbsp; ".join(_rcal_bits)}'
+                        + (" &nbsp;<b style='color:#ef9a9a'>— HIGH not earning its premium, "
+                           "be more selective</b>" if _is_miscal else "")
+                        + '</p>'
+                    )
+                _desk_rc_html = (
+                    '<div style="background:#0d1117;border:1px solid #546e7a44;'
+                    'border-radius:8px;padding:12px 14px">'
+                    '<p style="font-size:.67rem;color:#546e7a;margin-bottom:10px;line-height:1.5">'
+                    'Realized desk performance vs SPY since inception. Sources with &lt;3 picks excluded. '
+                    'Alpha = average pick return minus SPY return over the same holding period.</p>'
+                    '<table style="width:100%;border-collapse:collapse;font-size:.73rem">'
+                    '<thead><tr style="color:#546e7a;font-size:.64rem">'
+                    '<th style="text-align:left;padding-bottom:5px;padding-left:6px">Source</th>'
+                    '<th style="padding-bottom:5px">Picks</th>'
+                    '<th style="padding-bottom:5px">Alpha</th>'
+                    '<th style="padding-bottom:5px">Win%</th>'
+                    '<th style="padding-bottom:5px">90d hit</th>'
+                    '<th style="text-align:left;padding-bottom:5px">Best</th>'
+                    '<th style="text-align:left;padding-bottom:5px">Worst</th>'
+                    '</tr></thead>'
+                    f'<tbody>{"".join(_rc_rows)}</tbody>'
+                    '</table>'
+                    + _rcal_html
+                    + '</div>'
+                )
+        except Exception as _rce:
+            _desk_rc_html = f"<!-- report_card error: {str(_rce)[:80]} -->"
+
+        wrapped_report_card = (_collapsible("📊 Desk Report Card",
+                                            "— realized alpha vs SPY per source",
+                                            _desk_rc_html.strip(),
+                                            open_by_default=False, accent="#546e7a")
+                               if _desk_rc_html.strip()
+                               and not _desk_rc_html.strip().startswith("<!--") else "")
 
         # ── 🔭 WATCHLIST — what's undervalued + what to follow over coming weeks/months ──
         watchlist_html = ""
@@ -15923,6 +17430,7 @@ function openSpec(id){{
 <section id="ai" class="active">
   <div class="section-title">🤖 AI Analysis — {n_agents} Specialists</div>
   {wrapped_research}
+  {wrapped_report_card}
   {watchlist_wrapped}
   {_nav_grid}
   {"".join(spec_collapsibles)}
@@ -16442,7 +17950,7 @@ function openSpec(id){{
             _lb_rows = []
             _lb_src_order = (
                 [s for s in _AGENT_ORDER if s in agent_perf] +
-                [s for s in agent_perf if s not in _AGENT_ORDER]
+                [s for s in agent_perf if s not in _AGENT_ORDER and not s.startswith("_")]
             )
             for _src in _lb_src_order:
                 _st = agent_perf[_src]
@@ -16793,45 +18301,6 @@ Sharpe on alpha series. Click any column header to sort.</p>
             fast_growers, ten_baggers, off_the_radar)
 
     # ── 🔔 SPIN-OFF ALERT BANNER (Greenblatt edge — only renders when events present) ─
-    def _spinoff_banner(events: list) -> str:
-        if not events:
-            return ""  # discreet absence — no UI clutter when nothing to show
-        chips = []
-        for e in events[:8]:  # cap displayed events
-            t = e.get("ticker", "")
-            s = stocks.get(t, {})
-            price = s.get("price")
-            mc = s.get("mktCapB")
-            company = (e.get("company") or s.get("name") or "")[:28]
-            meta_parts = []
-            if price: meta_parts.append(f"${price:.2f}")
-            if mc:    meta_parts.append(f"${mc:.1f}B")
-            meta_str = (" · " + " · ".join(meta_parts)) if meta_parts else ""
-            link = e.get("link", "")
-            link_open = f'<a href="{link}" target="_blank" style="text-decoration:none;color:inherit">' if link else ''
-            link_close = '</a>' if link else ''
-            chips.append(
-                f'{link_open}<div style="display:inline-block;background:#1a237e;'
-                f'border:1px solid #ffc107;border-radius:4px;padding:5px 10px;'
-                f'margin:3px 4px;font-size:.72rem">'
-                f'<b style="color:#ffc107">{t}</b> '
-                f'<span style="color:#fff">{company}</span> '
-                f'<span style="color:#b0bec5;font-size:.65rem">— {e.get("date","")}</span>'
-                f'<span style="color:#b0bec5">{meta_str}</span>'
-                f'</div>{link_close}')
-        return (
-            '<div style="background:#0d1117;border-bottom:2px solid #ffc107;'
-            'padding:10px 16px">'
-            '<div style="font-size:.65rem;font-weight:700;color:#ffc107;'
-            'text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">'
-            f'🔔 Spin-Off Watch · {len(events)} recent corporate separation'
-            f'{"s" if len(events) != 1 else ""} (last 90d) · '
-            'Greenblatt edge: forced selling = often mispriced'
-            '</div>'
-            + "".join(chips) +
-            '</div>')
-
-    _spinoff_html = _spinoff_banner(spinoff_events or [])
 
     # ── T1.2: Strategy Scorecard (built here so both _ai_section and _perf_section can use it) ──
     def _build_strategy_scorecard_html(perf: dict) -> str:
@@ -16925,6 +18394,12 @@ Sharpe on alpha series. Click any column header to sort.</p>
 </details>"""
     strategy_scorecard_html = _build_strategy_scorecard_html(strategy_perf or {})
 
+    # ── 🎯 HIDDEN TARGET GAP SECTION ──────────────────────────────────────
+    target_gap_html = _render_target_gap_section(ai)
+
+    # ── 🧭 STRATEGIST SECTION (geopolitics + sector rotation + house call) ──
+    strategist_html = _render_strategist_section(ai)
+
     # ── ASSEMBLE ──────────────────────────────────────────────────────────
     body = f"""
 <div class="header">
@@ -16934,9 +18409,10 @@ Sharpe on alpha series. Click any column header to sort.</p>
   </div>
   <small style="color:#9fa8da">Investment Desk</small>
 </div>
-{_spinoff_html}
 <nav class="nav">{nav_html}</nav>
 {_ai_section()}
+{strategist_html}
+{target_gap_html}
 {_macro_section()}
 {_strategy_table(quality_master, _MASTER_COLS, "qual", "💎 Quality — Compounders &amp; Cash Machines",
     "The wonderful-businesses bucket: union of Hold-Forever, Quality Compounders, FCF Compounders and "
@@ -17587,6 +19063,15 @@ def main():
                         help="Skip small-cap supplemental enrichment (faster dev/AI verification runs)")
     parser.add_argument("--neutral-judge", action="store_true",
                         help="Strip all macro context from the judge — picks purely on fundamentals and specialist consensus")
+    parser.add_argument("--ai-prepare", metavar="FILE",
+                        help="Subscription mode: run data-prep, write the AI handoff (brief + candidate "
+                             "menu with bundled FMP data + PM pool) to FILE, then exit before any Anthropic call")
+    parser.add_argument("--ai-from-file", metavar="FILE",
+                        help="Subscription mode: load ai_result + pm_decisions from FILE (produced by Claude "
+                             "Code) instead of calling Anthropic, then render + commit/deploy as normal")
+    parser.add_argument("--fetch", metavar="TICKERS",
+                        help="Print the FMP verification bundle (JSON) for comma-separated tickers and exit. "
+                             "Used by the AI stage for names outside the prepared candidate menu")
     args = parser.parse_args()
     # Smoke-test convenience: --debug without --force-fresh-ai auto-enables --ai-dry-run
     if args.debug and not args.force_fresh_ai:
@@ -17603,6 +19088,22 @@ def main():
         backtest_replay(from_d)
         return
 
+    # Subscription mode: --fetch — print FMP verification bundle(s) and exit (no Anthropic call).
+    # stdout must be pure JSON for the AI consumer, so all cache/fmp_get chatter is captured
+    # to a buffer (redirected to stderr) and only the JSON is written to stdout.
+    if args.fetch:
+        import io as _io, contextlib as _ctx
+        _ftk = [t.strip().upper() for t in args.fetch.replace(" ", ",").split(",") if t.strip()]
+        _buf = _io.StringIO()
+        with _ctx.redirect_stdout(_buf):
+            load_cache()   # enable fmp_get's response caching (silently)
+            _bundle = {t: _fmp_verification_bundle(t) for t in _ftk}
+        if _buf.getvalue():
+            sys.stderr.write(_buf.getvalue())
+        sys.stdout.write(json.dumps(_bundle, default=str, indent=2) + "\n")
+        sys.stdout.flush()
+        return
+
     DEBUG = args.debug
     _run_start = time.time()
 
@@ -17617,6 +19118,7 @@ def main():
                 ctypes.windll.kernel32.CloseHandle(_h)
                 print(f"\n  ❌ Another screener instance is already running (PID {_lpid}).")
                 print("     Exiting to prevent FMP API rate-limit exhaustion.\n")
+                sys.stdout.flush()
                 sys.exit(0)
         except Exception:
             pass  # Stale lock — proceed
@@ -17678,11 +19180,13 @@ def main():
     # Fetch macro indicators early (fast, cached, free via FRED)
     phase_start("macro", "Fetching macro indicators (FRED)")
     macro_data = fetch_macro_indicators()
+    # Cross-asset prices (oil/gold/metals/FX) — hard numbers for the Strategist desk's
+    # geopolitical winners/losers analysis. Carried on the macro dict for brief + render.
+    macro_data["cross_asset"] = (fetch_cross_asset() or {}).get("assets", {})
     # Set global macro regime — consumed by tab scoring functions for adaptive weighting
     global _MACRO_REGIME
     _MACRO_REGIME = _macro_regime(macro_data)
     market_intel = fetch_market_intelligence()   # FMP news for Social Arb / Disruptive / Insider agents
-    spinoff_events = fetch_recent_spinoffs(days_back=90)  # 🔔 front-page spin-off alert
     going_concern_tickers = fetch_going_concern_flags()   # 🔍 Tier 3.7: audit risk scan
 
     # Phase 1: Universe from screener (already has price, mktCap, sector)
@@ -19284,7 +20788,176 @@ def main():
         emom_rows=earnings_momentum,
     )
 
-    if _ai_from_cache:
+    # Holds PM decisions injected via --ai-from-file; None means "run the PM normally".
+    _file_pm_decisions = None
+
+    if getattr(args, "ai_prepare", None):
+        # ── Subscription mode: write the AI handoff and exit before any Anthropic call ──
+        _hp_today = datetime.date.today()
+        _hp_macro_line = ""
+        if macro_data:
+            _hp_macro_line = (f"Macro backdrop: 10Y={macro_data.get('dgs10','?')}%, "
+                              f"VIX={macro_data.get('vix','?')}, "
+                              f"yield curve={macro_data.get('yield_curve','?')}.")
+        _hp_lessons = _format_desk_lessons(agent_perf)
+        # Candidate menu = union of master-screen names + insider-buy clusters (deduped, ≤80)
+        _hp_order, _hp_seen = [], set()
+        for _hp_rows in (quality_compounders, iv_rows, fast_growers, composite_value,
+                         contrarian, earnings_momentum, turnarounds, off_the_radar):
+            for _hp_r in (_hp_rows or [])[:14]:
+                _hp_ct = (_hp_r.get("Ticker") or "").upper()
+                if _hp_ct and _hp_ct not in _hp_seen and _hp_ct in stocks:
+                    _hp_seen.add(_hp_ct); _hp_order.append(_hp_ct)
+        for _hp_ct, _hp_sv in stocks.items():
+            if len(_hp_order) >= 80:
+                break
+            if (_hp_sv.get("insiderBuys") or 0) >= 2 and _hp_ct not in _hp_seen:
+                _hp_seen.add(_hp_ct); _hp_order.append(_hp_ct)
+        _hp_order = _hp_order[:80]
+        # ── Target-Gap pool: large-cap trajectory + under-covered re-rate names to research
+        # for a fair-value-vs-price gap. Union into the bundle so each gets ONE metrics_block
+        # + fmp bundle (single source). ──
+        _tg_pool = _target_gap_pool(stocks, 70)
+        for _tg_ct in _tg_pool:
+            if _tg_ct not in _hp_seen:
+                _hp_seen.add(_tg_ct); _hp_order.append(_tg_ct)
+        print(f"\n  📦 --ai-prepare: bundling FMP verification data for {len(_hp_order)} candidates "
+              f"({len(_tg_pool)} in the target-gap pool)...")
+        _hp_candidates = {}
+        for _hp_i, _hp_ct in enumerate(_hp_order):
+            _hp_sv = stocks.get(_hp_ct, {})
+            _hp_ps = _hp_sv.get("ps")
+            _hp_mc = _hp_sv.get("mktCap") or 0
+            _hp_cand = {
+                "metrics_block": _build_metrics_block(_hp_ct, stocks),
+                "fmp":           _fmp_verification_bundle(_hp_ct),
+            }
+            # Precomputed target-gap context (cheap, derivable) for the pool names — the
+            # clean FMP numbers the AI needs to triangulate a fair value vs the current price.
+            if _hp_ct in _tg_pool:
+                _hp_cand["tg"] = {
+                    "current_price":       _hp_sv.get("price"),
+                    "current_revenue_est": round(_hp_mc / _hp_ps) if (_hp_ps and _hp_ps > 0) else None,
+                    "ps":            _hp_ps,
+                    "pe":            _hp_sv.get("pe"),
+                    "peg":           _hp_sv.get("peg"),
+                    "dcf_iv":        _hp_sv.get("iv"),
+                    "margin_of_safety": _hp_sv.get("marginOfSafety"),
+                    "roic":          _hp_sv.get("roic"),
+                    "gross_margin":  _hp_sv.get("grossMargin"),
+                    "op_margin":     _hp_sv.get("operatingMargin"),
+                    "rev_growth":    _hp_sv.get("revGrowth"),
+                    "rev_growth_5y": _hp_sv.get("revGrowth5y"),
+                    "fcf_yield":     _hp_sv.get("fcfYield"),
+                    "analyst_count": _hp_sv.get("analystCount"),
+                    "under_covered": bool(_hp_sv.get("underCovered")),
+                    "price_vs_52h":  _hp_sv.get("priceVs52H"),
+                    "mkt_cap_b":     _hp_sv.get("mktCapB"),
+                    "sector":        _hp_sv.get("sector", ""),
+                }
+            _hp_candidates[_hp_ct] = _hp_cand
+            if (_hp_i + 1) % 10 == 0:
+                print(f"    ... {_hp_i + 1}/{len(_hp_order)} bundled")
+        _hp_pm_pool, _hp_pm_sector = build_pm_context(picks_data, stocks)
+        _hp_handoff = {
+            "date":         _today_str,
+            "today":        _hp_today.isoformat(),
+            "macro_line":   _hp_macro_line,
+            "cross_asset":  (macro_data or {}).get("cross_asset", {}),   # oil/gold/FX hard numbers
+            "strategist":   True,    # run the Strategist (geopolitics) + Sector Rotation desk stages
+            "brief":        _brief,
+            "desk_lessons": _hp_lessons,
+            "candidates":   _hp_candidates,
+            "target_gap_pool": _tg_pool,   # tickers in `candidates` to scan for stated targets
+            "pm_pool":      _hp_pm_pool,
+            "pm_sector":    _hp_pm_sector,
+            "portfolio":    load_portfolio(),
+        }
+        with open(args.ai_prepare, "w", encoding="utf-8") as _hp_f:
+            json.dump(_hp_handoff, _hp_f, default=str, indent=1)
+        save_cache()   # persist any fmp_get response caching done during bundling
+        print(f"\n  ✅ AI handoff written: {args.ai_prepare}"
+              f" — {len(_hp_candidates)} candidates ({len(_tg_pool)} target-gap),"
+              f" brief {len(_brief)} chars,"
+              f" {len(_hp_pm_pool.splitlines())} PM-pool names. No Anthropic tokens used.")
+        return
+
+    elif getattr(args, "ai_from_file", None):
+        # ── Subscription mode: inject Claude Code's AI output, skip all Anthropic calls ──
+        # The file carries the RAW desk output (dossiers + cio + specialists + synopsis +
+        # pm_decisions); picks[]/_memos[] are built here by the same helper the paid path
+        # uses, so there is one source of truth for the render shape and minimal drift.
+        print(f"\n  📂 --ai-from-file: loading AI result from {args.ai_from_file} (no Anthropic call)")
+        with open(args.ai_from_file, "r", encoding="utf-8") as _ff:
+            _ff_data = json.load(_ff)
+        if _ff_data.get("ai_result"):
+            # Back-compat: a fully-assembled ai_result was supplied directly.
+            ai_result = _ff_data["ai_result"]
+            ai_result.setdefault("pipeline", _AI_PIPELINE)
+            ai_result.setdefault("brief", _brief)
+            for _k in ("synopsis", "picks", "dossiers", "killed", "cio",
+                       "_specialist_picks", "_memos"):
+                ai_result.setdefault(_k, [] if _k.endswith("s") or _k == "_memos"
+                                     else ({} if _k in ("_specialist_picks",) else ""))
+        else:
+            _ff_buy    = _ff_data.get("dossiers_buy") or []
+            _ff_killed = _ff_data.get("dossiers_killed") or []
+            ai_result = _assemble_ai_result(
+                _ff_buy, _ff_killed, (_ff_buy + _ff_killed),
+                _ff_data.get("specialist_picks") or {},
+                _ff_data.get("cio") or "",
+                _ff_data.get("synopsis") or "",
+                _brief, stocks,
+                _cache.get("_desk_watch_history") or {})
+        # 🎯 Hidden Target Gap — stated multi-year revenue targets vs current pricing.
+        ai_result["_target_gap"] = _ff_data.get("target_gap") or []
+        # 🧭 Strategist desk — geopolitical scenarios + house call + sector rotation + macro
+        # outlook. These fill the (previously dormant) hooks in the Macro tab + the new
+        # Strategist tab. All optional — render guards on presence.
+        _geo = _ff_data.get("geopolitics") or {}
+        ai_result["geopolitics"]     = _geo
+        ai_result["sector_rotation"] = _ff_data.get("sector_rotation") or _ff_data.get("sectors") or {}
+        # Macro-tab hooks: prefer top-level keys, else pull from the geopolitics object.
+        ai_result["market_outlook"]  = _ff_data.get("market_outlook")  or _geo.get("market_outlook")  or {}
+        ai_result["macro_dashboard"] = _ff_data.get("macro_dashboard") or _geo.get("macro_dashboard") or {}
+        ai_result["macro_context"]   = (_ff_data.get("macro_context") or _geo.get("macro_context")
+                                        or ai_result.get("macro_context", ""))
+        mall_result = {}
+        research_result = {"memos": ai_result.get("_memos", [])}
+        _file_pm_decisions = _ff_data.get("pm_decisions") or {}
+        if ai_result.get("picks"):
+            _cache[_AI_CACHE_KEY] = {
+                "date":            _today_str,
+                "result":          ai_result,
+                "mall_result":     mall_result,
+                "research_result": research_result,
+                "pipeline":        ai_result.get("pipeline", _AI_PIPELINE),
+            }
+            save_cache()
+            # ── Desk watch history — persist WATCH/BUY per ticker across subscription runs ──
+            try:
+                _wh_date = datetime.date.today().isoformat()
+                _wh = _cache.setdefault("_desk_watch_history", {})
+                for _wh_d in (ai_result.get("dossiers") or []):
+                    _wh_tk = (_wh_d.get("ticker") or "").upper()
+                    if not _wh_tk:
+                        continue
+                    _wh.setdefault(_wh_tk, [])
+                    _wh[_wh_tk].append({
+                        "date":       _wh_date,
+                        "verdict":    _wh_d.get("verdict", ""),
+                        "conviction": _wh_d.get("conviction", ""),
+                    })
+                    _wh[_wh_tk] = _wh[_wh_tk][-12:]
+                save_cache()
+            except Exception as _whe:
+                print(f"  ⚠️ Watch history update failed: {str(_whe)[:80]}")
+        print(f"  ✅ Loaded {len(ai_result.get('picks', []))} picks,"
+              f" {len(ai_result.get('dossiers', []))} dossiers,"
+              f" {len(ai_result.get('_memos', []))} memos"
+              + (f", PM decisions present" if _file_pm_decisions else "") + " from file")
+
+    elif _ai_from_cache:
         ai_result   = _migrate_legacy_ai_result(_cached_ai.get("result", {}))
         mall_result = _cached_ai.get("mall_result", {}) or {}
         # New pipeline: _memos on ai_result; old pipeline: research_result cache key
@@ -19322,6 +20995,24 @@ def main():
                     "pipeline":        _AI_PIPELINE,
                 }
                 save_cache()
+                # ── Desk watch history — persist WATCH/BUY per ticker across runs ──
+                try:
+                    _wh_date = datetime.date.today().isoformat()
+                    _wh = _cache.setdefault("_desk_watch_history", {})
+                    for _wh_d in (ai_result.get("dossiers") or []):
+                        _wh_tk = (_wh_d.get("ticker") or "").upper()
+                        if not _wh_tk:
+                            continue
+                        _wh.setdefault(_wh_tk, [])
+                        _wh[_wh_tk].append({
+                            "date":       _wh_date,
+                            "verdict":    _wh_d.get("verdict", ""),
+                            "conviction": _wh_d.get("conviction", ""),
+                        })
+                        _wh[_wh_tk] = _wh[_wh_tk][-12:]
+                    save_cache()
+                except Exception as _whe:
+                    print(f"  ⚠️ Watch history update failed: {str(_whe)[:80]}")
 
     # Auto-log AI picks every run (no flag needed)
     if ai_result:
@@ -19335,6 +21026,9 @@ def main():
 
     # Tab 1d: Agent Reports (individual specialist picks)
     build_agent_reports_tab(wb, ai_result, stocks)
+
+    # Tab 1e: 🎯 Hidden Target Gap (stated revenue targets the market hasn't priced)
+    build_target_gap_tab(wb, ai_result, stocks)
 
     # Fetch 5Y sparklines for all AI picks (judge + all specialists, deduplicated)
     _sparkline_tickers = set()
@@ -19371,62 +21065,8 @@ def main():
     print("\n  💼 Running AI Portfolio Manager...")
     portfolio = load_portfolio()
 
-    # Build PM candidate pool from picks_data (strategy screen rows)
-    _pm_meta = {}
-    _pm_strat_short = {
-        "IV Discount (Buffett/DCF)": "IV Discount",
-        "Quality Compounders (Buffett)": "Quality Compounder",
-        "Stalwarts (Lynch)": "Stalwart",
-        "Fast Growers (Lynch)": "Fast Grower",
-        "Turnarounds (Lynch)": "Turnaround",
-        "Slow Growers / Income (Lynch)": "Slow Grower",
-        "Cyclicals (Lynch)": "Cyclical",
-        "Asset Plays (Lynch)": "Asset Play",
-        "Lynch 10-Baggers": "10-Bagger",
-    }
-    for _tab_name, _rows in picks_data.items():
-        _short = _pm_strat_short.get(_tab_name, _tab_name)
-        for _ri, _row in enumerate(_rows[:15]):
-            _t = _row.get("Ticker", "?")
-            _sc = _row.get("Score", 0) or 0
-            if _t not in _pm_meta:
-                _pm_meta[_t] = {"strategies": [], "best_rank": _ri+1, "max_score": _sc, "row": _row}
-            _pm_meta[_t]["strategies"].append(_short)
-            if _sc > _pm_meta[_t]["max_score"]: _pm_meta[_t]["max_score"] = _sc
-            if _ri+1 < _pm_meta[_t]["best_rank"]: _pm_meta[_t]["best_rank"] = _ri+1
-
-    # Build compact candidates block for PM (top 40 by meta-score)
-    _pm_top = sorted(_pm_meta.values(),
-                     key=lambda x: -(len(x["strategies"])*25 + x["max_score"]*0.4))[:40]
-
-    def _pm_fmt(m):
-        r2 = m["row"]; t2 = r2.get("Ticker","?"); s2 = stocks.get(t2,{})
-        strats2 = "+".join(m["strategies"])
-        parts2 = [f"{t2}({r2.get('Company','')[:18]}) [{strats2}]"]
-        roic2 = s2.get("roic"); fcf2 = s2.get("fcfYield")
-        peg2 = s2.get("fwdPEG") or s2.get("peg"); rg2 = s2.get("revGrowth")
-        if roic2: parts2.append(f"ROIC={roic2*100:.0f}%")
-        if fcf2:  parts2.append(f"FCF={fcf2:.1%}")
-        if peg2:  parts2.append(f"PEG={peg2:.2f}")
-        if rg2:   parts2.append(f"RG={rg2:+.0%}")
-        mos2 = s2.get("mos")
-        if mos2:  parts2.append(f"MoS={mos2:.0%}")
-        return "  " + " | ".join(parts2)
-
-    _pm_candidates = "\n".join(_pm_fmt(m) for m in _pm_top)
-
-    # Simple sector context for PM
-    _pm_sec_lines = []
-    _pm_sec = {}
-    for _sv in stocks.values():
-        _sec = _sv.get("sector","Unknown")
-        if _sec not in _pm_sec: _pm_sec[_sec] = []
-        _peg = _sv.get("peg")
-        if _peg and 0 < _peg < 15: _pm_sec[_sec].append(_peg)
-    for _sec, _pegs in sorted(_pm_sec.items(), key=lambda x: (sum(x[1])/len(x[1])) if x[1] else 99):
-        if len(_pegs) >= 5:
-            _pm_sec_lines.append(f"  {_sec}: med PEG={sorted(_pegs)[len(_pegs)//2]:.1f} ({len(_pegs)} stocks)")
-    _pm_sector_block = "\n".join(_pm_sec_lines[:12])
+    # Build PM candidate pool + sector context from strategy screens (shared helper)
+    _pm_candidates, _pm_sector_block = build_pm_context(picks_data, stocks)
 
     # ── Auto-exit holdings in sectors excluded from quality portfolio ────
     _EXCLUDED_PTF_SECTORS = {"Basic Materials", "Real Estate"}
@@ -19472,7 +21112,10 @@ def main():
             _dossiier_lines.append(f"  {_dt} [{_dv}/{_dc}] — {_dth}")
         _pm_candidates = "\n".join(_dossiier_lines) + "\n\n=== SCREENER POOL (supplementary) ===\n" + _pm_candidates
 
-    if getattr(args, "ai_dry_run", False):
+    if _file_pm_decisions is not None:
+        print("\n  📂 Using Portfolio Manager decisions from --ai-from-file (no Anthropic call)")
+        pm_decisions = _file_pm_decisions
+    elif getattr(args, "ai_dry_run", False):
         print("\n  🧪 --ai-dry-run: skipping Portfolio Manager API call")
         pm_decisions = {}
     else:
@@ -19502,9 +21145,9 @@ def main():
                        macro=macro_data, ten_baggers=ten_baggers,
                        off_the_radar=off_the_radar)
 
-    # Save
-    phase_start("save", "Saving Excel + HTML dashboard")
-    wb.save(output_file)
+    # Save — HTML-only output (the Excel workbook is built in memory for its row
+    # computation but no longer written to disk; the owner uses the HTML dashboard only).
+    phase_start("save", "Saving HTML dashboard")
 
     # Generate HTML dashboard (same data, no extra fetching)
     html_content = build_html_report(
@@ -19521,7 +21164,6 @@ def main():
         mall=mall_result,        # 🛍️ Mall Manager picks (Lynch consumer-observable)
         research=research_result,  # 📋 Deep-Research Analyst memos (Opus, top consensus picks)
         off_the_radar=off_the_radar,  # 🛰️ Off-the-Radar Compounders (pre-discovery)
-        spinoff_events=spinoff_events,  # 🔔 Front-page spin-off alert
         fcf_compounders=fcf_compounders,                       # 💸 FCF Compounders — pure cash
         index_valuations=_index_val,  # 📊 SPY/QQQ/IWM valuation pulse for sector tab
         composite_value=composite_value,      # 💎 GARP — quality at a reasonable price
@@ -19550,7 +21192,7 @@ def main():
     n_picks = len(ai_result.get("picks", [])) if ai_result else 0
 
     print(f"\n{'=' * 65}")
-    print(f"  ✅ DONE! Saved to: {output_file}")
+    print(f"  ✅ DONE! HTML dashboard: {html_file}")
     print(f"  ⏱  Total run time: {_fmt_elapsed(total_elapsed)}")
     print(f"  📊 FMP API calls: {_fmp_call_count}")
     print(f"  📦 Cache: {CACHE_FILE} (valid {CACHE_DAYS} days)")
