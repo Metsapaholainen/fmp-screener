@@ -5648,6 +5648,11 @@ def _format_desk_lessons(agent_perf: dict) -> str:
     _label = {
         "AI-DeskInnovation": "DeskInnovation", "AI-DeskContrarian": "DeskContrarian",
         "AI-DeskScreener": "DeskScreener", "AI-DeskGlobal": "DeskGlobal",
+        "AI-GoldmanSC": "GoldmanSC", "AI-LynchBWYK": "LynchBWYK", "AI-SocialArb": "SocialArb",
+        "AI-Mayer100x": "Mayer100x", "AI-CathieWood": "CathieWood",
+        "AI-MagicFormula": "MagicFormula", "AI-Pabrai": "Pabrai", "AI-HowardMarks": "HowardMarks",
+        "AI-NickSleep": "NickSleep", "AI-Burry": "Burry", "AI-InsiderTrack": "InsiderTrack",
+        "AI-WallStBlind": "WallStBlind",
         "AI-DeskVerified": "Verified picks",
     }
     lines = []
@@ -14773,6 +14778,92 @@ def _render_portfolio_analysis_section(ai):
     )
 
 
+# ── Persona Desks full-report render (module-level, unit-testable offline) ──
+# 12 named research personas (Goldman Sachs small-cap, Peter Lynch, Chris Camillo,
+# Christopher Mayer, Cathie Wood, Joel Greenblatt, Mohnish Pabrai, Howard Marks, Nick Sleep,
+# Michael Burry, Insider/13F tracker, Wall Street Blindspot) — added 2026-07 per SKILL.md
+# Stage 1b. Each persona's compact picks[] render as cards in Agent Reports (via
+# specialist_picks, existing plumbing); this section renders the full long-form report text.
+_PERSONA_META = {
+    "GoldmanSC":    ("💼 Goldman Sachs Small-Cap", "1565C0"),
+    "LynchBWYK":    ("🛒 Lynch Buy What You Know", "880E4F"),
+    "SocialArb":    ("📱 Camillo Social Arbitrage", "AD1457"),
+    "Mayer100x":    ("💯 Mayer 100-Bagger", "BF360D"),
+    "CathieWood":   ("🚀 Wood Disruptive Innovation", "0D47A1"),
+    "MagicFormula": ("🔢 Greenblatt Magic Formula", "1565C0"),
+    "Pabrai":       ("🎲 Pabrai Asymmetric Bet", "33691E"),
+    "HowardMarks":  ("🔄 Marks Second-Level", "827717"),
+    "NickSleep":    ("🌀 Sleep Scale Economics Shared", "4527A0"),
+    "Burry":        ("🕳️ Burry Catalyst Deep Value", "3E2723"),
+    "InsiderTrack": ("👁️ Insider & 13F Tracker", "263238"),
+    "WallStBlind":  ("🛰️ Wall Street Blindspot", "00695C"),
+}
+
+
+def _render_persona_reports_section(ai):
+    """New tab: full long-form persona research reports. Compact picks from these desks
+    already render as cards in AI Analysis → Agent Reports (via specialist_picks, existing
+    plumbing); this section renders the FULL prose report per persona, collapsible via
+    native <details>, styled with that persona's _PERSONA_META accent color."""
+    reports = (ai or {}).get("persona_reports") or {}
+
+    def _esc(x):
+        return (str(x or "")
+                .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+    if not reports:
+        return (
+            '<section id="personas">'
+            '<div class="section-title">🎙️ Persona Desks — Full Reports</div>'
+            '<p style="color:#666;padding:12px">No persona reports this run. '
+            'Run <code>/desk-run</code> with Stage 1b enabled to populate this tab.</p>'
+            '</section>'
+        )
+
+    cards = []
+    for key, (label, color) in _PERSONA_META.items():
+        text = reports.get(key)
+        if not text:
+            continue
+        cards.append(
+            f'<details style="margin-bottom:12px">'
+            f'<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;'
+            f'gap:8px;padding:10px 14px;background:#{color}22;border-left:4px solid #{color};'
+            f'border-radius:6px;font-size:.85rem;font-weight:700;color:#fff">'
+            f'{label}'
+            f'<span style="margin-left:auto;font-size:.7rem;color:#cfd8dc;font-weight:400">'
+            f'▼ full report</span>'
+            f'</summary>'
+            f'<div style="margin-top:6px;padding:10px 14px;background:#0d1117;'
+            f'border:1px solid #{color}33;border-radius:6px;font-size:.78rem;line-height:1.7;'
+            f'color:#cfd8dc;white-space:pre-line">{_esc(text)}</div>'
+            f'</details>'
+        )
+
+    if not cards:
+        return (
+            '<section id="personas">'
+            '<div class="section-title">🎙️ Persona Desks — Full Reports</div>'
+            '<p style="color:#666;padding:12px">No persona reports this run.</p>'
+            '</section>'
+        )
+
+    return (
+        '<section id="personas">'
+        '<div class="section-title">🎙️ Persona Desks — Full Reports</div>'
+        '<p style="color:#9fa8da;font-size:.78rem;line-height:1.6;margin:4px 0 14px">'
+        'Full-length research reports from 12 named research personas (Goldman Sachs small-cap, '
+        'Peter Lynch, Chris Camillo, Christopher Mayer, Cathie Wood, Joel Greenblatt, Mohnish '
+        'Pabrai, Howard Marks, Nick Sleep, Michael Burry, Insider/13F tracker, Wall Street '
+        'Blindspot). Compact picks from these desks also appear as cards in '
+        '<b>AI Analysis → Agent Reports</b>; this tab has the full narrative. Numbers not sourced '
+        'from FMP are labeled inline in the text itself — '
+        '<b>research starting points, not investment advice.</b></p>'
+        + "".join(cards)
+        + '</section>'
+    )
+
+
 # ── Target Gap render (module-level so it is unit-testable offline) ──
 def _render_target_gap_section(ai):
     _tg = (ai or {}).get("_target_gap", []) or []
@@ -15843,23 +15934,74 @@ function showMacroDetail(el, id) {
                 "any exchange, sourced from web research + AI training knowledge. Can reach "
                 "BUY without FMP verification, but every such dossier is labeled 🌐 unverified "
                 "so you always know which picks rest on FMP fundamentals vs. AI/web research."),
-            # ── Historical agents (retired 2026-06) — kept for CSV display ─────
-            "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0", ""),
-            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F", ""),
-            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457", ""),
-            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D", ""),
-            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1", ""),
-            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0", ""),
-            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E", ""),
-            "HowardMarks":   ("🔄 Marks Second-Level", "827717", ""),
-            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0", ""),
-            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723", ""),
-            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238", ""),
-            "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C", ""),
+            # ── Persona Desks (added 2026-07) — 12 named research styles, self-contained ──
+            # (research + full report in one subagent pass, no separate verification stage;
+            # each also has a long-form persona_report in the 🎙️ Persona Desks tab)
+            "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0",
+                "Senior small-cap analyst persona: $100M-$2B market cap, 25%+ revenue growth "
+                "sustained 3+ quarters, thin analyst coverage (0-5), 15%+ insider ownership, "
+                "clear industry tailwinds. Full report covers unit economics, balance sheet, "
+                "moat, catalysts and the top red flag per name."),
+            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F",
+                "Peter Lynch 'buy what you know' fieldwork — maps everyday consumer/workplace "
+                "observations to public companies, classifies each into a Lynch category "
+                "(Fast Grower/Stalwart/Cyclical/Turnaround/Asset Play), and sanity-checks "
+                "valuation before recommending further research."),
+            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457",
+                "Chris Camillo-style social arbitrage — hunts TikTok/Reddit/X/YouTube/Google "
+                "Trends/App Store velocity signals for products going viral before Wall "
+                "Street quantifies it, then maps each trend to the public company that "
+                "captures the economic benefit."),
+            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D",
+                "Christopher Mayer's 100-Bagger framework — small starting market cap, long "
+                "growth runway, ROIC 15%+, 20%+ earnings growth, owner-operator ownership, "
+                "no heavy dilution, the 'twin engines' test. Can return zero picks if "
+                "nothing clears the bar."),
+            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1",
+                "Cathie Wood-style disruptive innovation — maps ideas to AI/robotics/energy "
+                "storage/blockchain/multiomics platforms, reasons about Wright's Law cost "
+                "curves and pure-play revenue exposure, scenario-models bull/base/bear over "
+                "5 years."),
+            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0",
+                "Joel Greenblatt's Magic Formula — ranks names by combined ROIC (>20%) and "
+                "earnings yield (>10%), excludes financials/utilities/REITs, sanity-checks "
+                "debt and earnings quality. Returns a top-10 ranked screen, not a curated "
+                "shortlist."),
+            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E",
+                "Mohnish Pabrai's low-risk/high-uncertainty framing — seeks 3:1+ upside/"
+                "downside asymmetry with explicit downside protection, sourced from "
+                "temporary distress, special situations, hated industries, or EM discounts. "
+                "Sizes positions by conviction and asymmetry."),
+            "HowardMarks":   ("🔄 Marks Second-Level", "827717",
+                "Howard Marks' second-level thinking — audits the market consensus on each "
+                "idea, asks what the crowd is missing, and flags oversold/overbought "
+                "extremes, narrative-vs-numbers gaps, and insider-behavior divergence."),
+            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0",
+                "Nick Sleep's Scale Economics Shared — finds businesses that pass falling "
+                "unit costs back to customers as they scale (the reinforcing flywheel), "
+                "backed by long-term-thinking management and defensible unit economics."),
+            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723",
+                "Michael Burry-style catalyst-driven deep value — hunts hidden balance-sheet "
+                "assets, sum-of-the-parts mispricing, activist/regulatory catalysts, and "
+                "balance-sheet transformations, with an explicit timeline per catalyst."),
+            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238",
+                "Tracks insider cluster buying (3+ insiders in 30 days) and 13F smart-money "
+                "positioning (noting the ~45-day filing lag), surfacing the highest-"
+                "conviction combined signals as of today."),
+            "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C",
+                "Hunts structural coverage gaps Wall Street routinely misses — foreign "
+                "listings, spinoffs, post-bankruptcy equity, orphaned small-caps, sin-stock "
+                "discounts, and IPO-aftermath names — organized as a prioritized research "
+                "workflow."),
         }
         # Investment Desk pipeline (2026-06): 3 generator desks replace 6 specialists.
         # DeskGlobal added 2026-07 — open-universe, no FMP candidate-pool restriction.
-        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener", "DeskGlobal"]
+        # 12 Persona Desks added 2026-07 — named research styles, self-contained (see SKILL.md
+        # Stage 1b); each also has a long-form report in _render_persona_reports_section.
+        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener", "DeskGlobal",
+                        "GoldmanSC", "LynchBWYK", "SocialArb", "Mayer100x", "CathieWood",
+                        "MagicFormula", "Pabrai", "HowardMarks", "NickSleep", "Burry",
+                        "InsiderTrack", "WallStBlind"]
 
         sections_html = []
         for ak in _AGENT_ORDER:
@@ -15883,11 +16025,15 @@ function showMacroDetail(el, id) {
                                or pp.get("brief_case", ""))
                 edge2 = pp.get("edge", "")
                 _lb = _lynch_badge(s2.get("lynchCategory"))
+                _dv_badge = ('<span style="font-size:.6rem;background:#ff8a6522;color:#ff8a65;'
+                             'border-radius:10px;padding:1px 6px;font-weight:700;margin-left:4px;'
+                             'white-space:nowrap">🌐 NOT FMP-VERIFIED</span>'
+                             if pp.get("data_verified") is False else "")
                 pick_cards_html.append(f"""
 <div class="agent-pick-card" style="border-left-color:#{color_hex}">
   <div style="display:flex;justify-content:space-between;align-items:center">
     <span class="ap-ticker">{tk}</span>
-    <span style="font-size:.65rem;background:{conv_color};color:#fff;border-radius:3px;padding:1px 5px">{conv2}</span>
+    <span style="font-size:.65rem;background:{conv_color};color:#fff;border-radius:3px;padding:1px 5px">{conv2}</span>{_dv_badge}
   </div>
   <div class="ap-co">{(pp.get("company") or s2.get("name",tk))[:32]}</div>
   {f'<div class="ap-syn">{edge2[:120]}</div>' if edge2 else ""}
@@ -15924,6 +16070,7 @@ function showMacroDetail(el, id) {
     # 12-tab layout (2026-07): AI hub + strategist + portfolio + systematic screens + utility.
     tabs = [
         ("ai",                "🤖 AI Analysis"),
+        ("personas",          "🎙️ Persona Desks"),
         ("strategist",        "🧭 Strategist"),
         ("portfolio_analysis","📊 Tracked Portfolio"),
         ("targetgap",         "🎯 Target Gap"),
@@ -16938,21 +17085,47 @@ function showMacroDetail(el, id) {
                 "Open-universe, no FMP candidate-pool restriction — any company, any exchange, "
                 "sourced from web research + AI training knowledge. Can reach BUY without FMP "
                 "verification, always labeled 🌐 unverified when it does."),
-            # Historical agents — kept for CSV display compatibility
-            "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0", ""),
-            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F", ""),
-            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457", ""),
-            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D", ""),
-            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1", ""),
-            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0", ""),
-            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E", ""),
-            "HowardMarks":   ("🔄 Marks Second-Level", "827717", ""),
-            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0", ""),
-            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723", ""),
-            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238", ""),
-            "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C", ""),
+            # ── Persona Desks (added 2026-07) — self-contained, own full report in 🎙️ tab ──
+            "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0",
+                "Small-cap hidden-gem scanner: $100M-$2B cap, 25%+ growth, thin coverage, "
+                "insider ownership, moat, catalysts, red flags."),
+            "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F",
+                "Everyday-observation → public-company mapping, classified into a Lynch "
+                "category with a valuation sanity check."),
+            "SocialArb":     ("📱 Camillo Social Arbitrage", "AD1457",
+                "Viral TikTok/Reddit/X/App-Store signals mapped to the public company "
+                "capturing the economic benefit."),
+            "Mayer100x":     ("💯 Mayer 100-Bagger", "BF360D",
+                "Small cap + high ROIC + owner-operator + long runway — the 100-bagger "
+                "checklist. May return zero picks."),
+            "CathieWood":    ("🚀 Wood Disruptive Innovation", "0D47A1",
+                "AI/robotics/energy-storage/blockchain/genomics platforms, Wright's-Law "
+                "reasoning, 5yr bull/base/bear scenarios."),
+            "MagicFormula":  ("🔢 Greenblatt Magic Formula", "1565C0",
+                "ROIC>20% + earnings yield>10% ranked screen, ex-financials/utilities/REITs. "
+                "Top 10, not a curated shortlist."),
+            "Pabrai":        ("🎲 Pabrai Asymmetric Bet", "33691E",
+                "3:1+ upside/downside bets with explicit downside protection — distress, "
+                "special situations, hated industries."),
+            "HowardMarks":   ("🔄 Marks Second-Level", "827717",
+                "Consensus audit + second-level question — oversold/overbought extremes, "
+                "narrative-vs-numbers gaps."),
+            "NickSleep":     ("🌀 Sleep Scale Economics Shared", "4527A0",
+                "Businesses that share scale economics with customers via a reinforcing "
+                "flywheel and long-term management."),
+            "Burry":         ("🕳️ Burry Catalyst Deep Value", "3E2723",
+                "Hidden assets, sum-of-the-parts, activist/regulatory catalysts — each with "
+                "an explicit timeline."),
+            "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238",
+                "Insider cluster buying + 13F smart-money overlap, top 5 as of today."),
+            "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C",
+                "Coverage-gap hunting — foreign listings, spinoffs, orphaned small-caps, "
+                "sin-stock discounts — as a prioritized workflow."),
         }
-        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener", "DeskGlobal"]
+        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener", "DeskGlobal",
+                        "GoldmanSC", "LynchBWYK", "SocialArb", "Mayer100x", "CathieWood",
+                        "MagicFormula", "Pabrai", "HowardMarks", "NickSleep", "Burry",
+                        "InsiderTrack", "WallStBlind"]
 
         # ── Strategy Picks Summary table ──────────────────────────────────
         _strat_defs = [
@@ -17289,6 +17462,18 @@ function showMacroDetail(el, id) {
                 ("AI-DeskContrarian", "DeskContrarian"),
                 ("AI-DeskScreener",   "DeskScreener"),
                 ("AI-DeskGlobal",     "DeskGlobal"),
+                ("AI-GoldmanSC",      "GoldmanSC"),
+                ("AI-LynchBWYK",      "LynchBWYK"),
+                ("AI-SocialArb",      "SocialArb"),
+                ("AI-Mayer100x",      "Mayer100x"),
+                ("AI-CathieWood",     "CathieWood"),
+                ("AI-MagicFormula",   "MagicFormula"),
+                ("AI-Pabrai",         "Pabrai"),
+                ("AI-HowardMarks",    "HowardMarks"),
+                ("AI-NickSleep",      "NickSleep"),
+                ("AI-Burry",          "Burry"),
+                ("AI-InsiderTrack",   "InsiderTrack"),
+                ("AI-WallStBlind",    "WallStBlind"),
                 ("AI-DeskVerified",   "Verified picks"),
             ]
             _rc_rows = []
@@ -17512,6 +17697,10 @@ function showMacroDetail(el, id) {
                 mktcap_disp = f"${mc_b:.1f}B" if mc_b else ""
                 rationale3 = (pp.get("thesis") or pp.get("rationale", "") or brief)
                 _lb3 = _lynch_badge(s2.get("lynchCategory"))
+                _dv_badge3 = ('<span style="font-size:.6rem;background:#ff8a6522;color:#ff8a65;'
+                              'border-radius:10px;padding:1px 6px;font-weight:700;white-space:nowrap">'
+                              '🌐 NOT FMP-VERIFIED</span>'
+                              if pp.get("data_verified") is False else "")
                 _sp_syn   = (pp.get("business_synopsis") or pp.get("thesis") or "")
                 _sp_ind   = pp.get("industry", "") or s2.get("industry", "")
                 _sp_comp  = pp.get("key_competitors", "")
@@ -17566,6 +17755,7 @@ function showMacroDetail(el, id) {
     <span class="mm-ticker">{tk}</span>
     <span class="mm-co">{_sp_co}{(' · ' + _sp_sector) if _sp_sector else ''}</span>
     {_conv_badge(conv2)}
+    {_dv_badge3}
     {_lb3}
     {_divergence_badge(s2)}
     <span class="xarrow">▼</span>
@@ -18284,21 +18474,22 @@ function openSpec(id){{
             "AI-DeskScreener":   "📊 Desk Screener",
             "AI-DeskGlobal":     "🌐 Desk Global",
             "AI-DeskVerified":   "✅ Desk Verified",
+            # Persona Desks (un-retired 2026-07) — 12 named research styles, self-contained.
+            "AI-CathieWood":      "🚀 Wood Disruptive",
+            "AI-MagicFormula":    "🔢 Greenblatt Magic Form.",
+            "AI-HowardMarks":     "🔄 Marks 2nd-Lvl",
+            "AI-NickSleep":       "🌀 Sleep Scale Econ",
+            "AI-Burry":           "🕳️ Burry Deep Value",
+            "AI-InsiderTrack":    "👁️ Insider+13F",
+            "AI-GoldmanSC":       "💼 Goldman Sachs SC",
+            "AI-LynchBWYK":       "🛒 Lynch BWYK",
+            "AI-SocialArb":       "📱 Camillo Social Arb",
+            "AI-Mayer100x":       "💯 Mayer 100-Bagger",
+            "AI-Pabrai":          "🎲 Pabrai Asymmetric",
+            "AI-WallStBlind":     "🛰️ WallSt Blindspot",
             # Retired agents — labels kept so historical CSV entries display correctly.
             # The "(retired)" suffix is used by _AGENT_ORDER to filter them from the
             # active leaderboard while still rendering archived rows with their old emoji.
-            "AI-CathieWood":      "🚀 Disruptive (retired)",
-            "AI-MagicFormula":    "🔢 Magic Form. (retired)",
-            "AI-HowardMarks":     "🔄 Marks 2nd-Lvl (retired)",
-            "AI-NickSleep":       "🌀 Scale Econ (retired)",
-            "AI-Burry":           "🕳️ Deep Value (retired)",
-            "AI-InsiderTrack":    "👁️ Insider+13F (retired)",
-            "AI-GoldmanSC":       "💼 Goldman SC (retired)",
-            "AI-LynchBWYK":       "🛒 Lynch BWYK (retired)",
-            "AI-SocialArb":       "📱 Social Arb (retired)",
-            "AI-Mayer100x":       "💯 100-Bagger (retired)",
-            "AI-Pabrai":          "🎲 Pabrai (retired)",
-            "AI-WallStBlind":     "🛰️ WallSt Blind (retired)",
             "AI-BuffettQ":        "🏰 Buffett Q (retired)",
             "AI-Judge":           "⚖️ Master Manager (retired)",
             "AI-MallManager":     "🛍️ Mall Manager (retired)",
@@ -18892,6 +19083,9 @@ Sharpe on alpha series. Click any column header to sort.</p>
     # ── 📊 TRACKED PORTFOLIO SECTION (eToro macro-alignment analysis) ──────
     portfolio_analysis_html = _render_portfolio_analysis_section(ai)
 
+    # ── 🎙️ PERSONA DESKS SECTION (12 full-length persona reports) ──────────
+    persona_reports_html = _render_persona_reports_section(ai)
+
     # ── ASSEMBLE ──────────────────────────────────────────────────────────
     body = f"""
 <div class="header">
@@ -18903,6 +19097,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
 </div>
 <nav class="nav">{nav_html}</nav>
 {_ai_section()}
+{persona_reports_html}
 {strategist_html}
 {portfolio_analysis_html}
 {target_gap_html}
@@ -21417,6 +21612,11 @@ def main():
         ai_result["macro_dashboard"] = _ff_data.get("macro_dashboard") or _geo.get("macro_dashboard") or {}
         ai_result["macro_context"]   = (_ff_data.get("macro_context") or _geo.get("macro_context")
                                         or ai_result.get("macro_context", ""))
+        # 🎙️ Persona Desks — full-length reports from the 12 named research personas.
+        # Picks already flow through specialist_picks -> _assemble_ai_result generically;
+        # this is the separate long-form text, a pure pass-through (same pattern as the
+        # portfolio_analysis / geopolitics blocks around it).
+        ai_result["persona_reports"] = _ff_data.get("persona_reports") or {}
         # 📊 Tracked Portfolio — eToro macro-alignment analysis.
         _pa = _ff_data.get("portfolio_analysis") or {}
         ai_result["portfolio_analysis"] = _pa
