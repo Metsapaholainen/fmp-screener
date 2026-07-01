@@ -2157,6 +2157,7 @@ def _assemble_ai_result(dossiers_buy: list, dossiers_killed: list, dossiers_all:
             "entry_trigger":     d.get("entry_trigger", ""),
             "competitor_analysis": d.get("competitor_analysis", ""),
             "moat_summary":      _moat_summary_from(d),
+            "data_verified":     d.get("data_verified", True),
         })
 
     _memos = []
@@ -2190,6 +2191,7 @@ def _assemble_ai_result(dossiers_buy: list, dossiers_killed: list, dossiers_all:
             "entry_trigger":     d.get("entry_trigger", ""),
             "competitor_analysis": d.get("competitor_analysis", ""),
             "moat_summary":  _moat_summary_from(d),
+            "data_verified": d.get("data_verified", True),
             "repeat_count": len([
                 e for e in (watch_history.get(t) or [])
                 if e.get("verdict") in ("BUY", "WATCH")
@@ -5645,7 +5647,8 @@ def _format_desk_lessons(agent_perf: dict) -> str:
         return ""
     _label = {
         "AI-DeskInnovation": "DeskInnovation", "AI-DeskContrarian": "DeskContrarian",
-        "AI-DeskScreener": "DeskScreener", "AI-DeskVerified": "Verified picks",
+        "AI-DeskScreener": "DeskScreener", "AI-DeskGlobal": "DeskGlobal",
+        "AI-DeskVerified": "Verified picks",
     }
     lines = []
     for src, lbl in _label.items():
@@ -15835,6 +15838,11 @@ function showMacroDetail(el, id) {
                 "Screener-grounded picks where multiple independent signals converge: "
                 "GARP + insider buying + estimate revisions, or Contrarian + strong "
                 "earnings momentum. Quant screens confirm a qualitative thesis."),
+            "DeskGlobal":     ("🌐 Desk Global", "B71C1C",
+                "Open-universe ideas with NO FMP candidate-pool restriction — any company, "
+                "any exchange, sourced from web research + AI training knowledge. Can reach "
+                "BUY without FMP verification, but every such dossier is labeled 🌐 unverified "
+                "so you always know which picks rest on FMP fundamentals vs. AI/web research."),
             # ── Historical agents (retired 2026-06) — kept for CSV display ─────
             "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0", ""),
             "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F", ""),
@@ -15850,7 +15858,8 @@ function showMacroDetail(el, id) {
             "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C", ""),
         }
         # Investment Desk pipeline (2026-06): 3 generator desks replace 6 specialists.
-        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener"]
+        # DeskGlobal added 2026-07 — open-universe, no FMP candidate-pool restriction.
+        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener", "DeskGlobal"]
 
         sections_html = []
         for ak in _AGENT_ORDER:
@@ -16925,6 +16934,10 @@ function showMacroDetail(el, id) {
             "DeskScreener":   ("📊 Desk Screener", "1B5E20",
                 "Screener-grounded picks where multiple signals converge: GARP + insiders + "
                 "estimate revisions, or Contrarian + earnings momentum."),
+            "DeskGlobal":     ("🌐 Desk Global", "B71C1C",
+                "Open-universe, no FMP candidate-pool restriction — any company, any exchange, "
+                "sourced from web research + AI training knowledge. Can reach BUY without FMP "
+                "verification, always labeled 🌐 unverified when it does."),
             # Historical agents — kept for CSV display compatibility
             "GoldmanSC":     ("💼 Goldman Sachs Small-Cap", "1565C0", ""),
             "LynchBWYK":     ("🛒 Lynch Buy What You Know", "880E4F", ""),
@@ -16939,7 +16952,7 @@ function showMacroDetail(el, id) {
             "InsiderTrack":  ("👁️ Insider & 13F Tracker", "263238", ""),
             "WallStBlind":   ("🛰️ Wall Street Blindspot", "00695C", ""),
         }
-        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener"]
+        _AGENT_ORDER = ["DeskInnovation", "DeskContrarian", "DeskScreener", "DeskGlobal"]
 
         # ── Strategy Picks Summary table ──────────────────────────────────
         _strat_defs = [
@@ -17125,6 +17138,8 @@ function showMacroDetail(el, id) {
                         f'padding:1px 6px;border-radius:3px;font-weight:700">{_conv}</span>'
                         + (_bi_chip("⭐ CIO BEST IDEA", "#ffd54f") if _mo.get("best_idea") else "")
                         + (_bi_chip("🥊 DEBATED", "#ce93d8") if _mo.get("debated") else "")
+                        + (_bi_chip("🌐 NOT FMP-VERIFIED", "#ff8a65")
+                           if _mo.get("data_verified") is False else "")
                         + (_bi_chip(f"⟳ ×{_mo['repeat_count']}", "#80deea")
                            if (_mo.get("repeat_count") or 0) >= 2 else "")
                         + (_bi_chip(f"⚠ {len(_mo.get('data_flags') or [])} DATA FLAG", "#ef5350")
@@ -17208,6 +17223,8 @@ function showMacroDetail(el, id) {
                         f'<span class="badge" style="background:{_lccol}22;color:{_lccol};font-size:.6rem;'
                         f'padding:1px 6px;border-radius:3px;font-weight:700">{_lconv}</span>'
                         + (f'<span style="font-size:.6rem;color:#546e7a">{_ltier}</span>' if _ltier else "")
+                        + (_bi_chip("🌐 NOT FMP-VERIFIED", "#ff8a65")
+                           if _pk.get("data_verified") is False else "")
                         + _lchips
                         + f'<span class="xarrow">▼</span>'
                         f'</div>'
@@ -17271,6 +17288,7 @@ function showMacroDetail(el, id) {
                 ("AI-DeskInnovation", "DeskInnovation"),
                 ("AI-DeskContrarian", "DeskContrarian"),
                 ("AI-DeskScreener",   "DeskScreener"),
+                ("AI-DeskGlobal",     "DeskGlobal"),
                 ("AI-DeskVerified",   "Verified picks"),
             ]
             _rc_rows = []
@@ -18264,6 +18282,7 @@ function openSpec(id){{
             "AI-DeskInnovation": "💡 Desk Innovation",
             "AI-DeskContrarian": "🔄 Desk Contrarian",
             "AI-DeskScreener":   "📊 Desk Screener",
+            "AI-DeskGlobal":     "🌐 Desk Global",
             "AI-DeskVerified":   "✅ Desk Verified",
             # Retired agents — labels kept so historical CSV entries display correctly.
             # The "(retired)" suffix is used by _AGENT_ORDER to filter them from the
