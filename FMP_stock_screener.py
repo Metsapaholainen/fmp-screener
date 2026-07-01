@@ -145,8 +145,11 @@ CACHE_DAYS = 6   # weekly cadence: 6 (not 7) so the scheduled Sunday run always 
 COVERAGE_MIN = 0.70          # re-fetch missing / warn if a key covers <70% of requested
 _COVERAGE_WARNINGS = []      # keys that ended a run below threshold — surfaced via ntfy
 LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".fmp_screener.lock")
-PICKS_LOG    = "fmp_picks_log.csv"
-AI_PICKS_LOG = "fmp_ai_picks_log.csv"
+PICKS_LOG              = "fmp_picks_log.csv"
+AI_PICKS_LOG           = "fmp_ai_picks_log.csv"
+STRATEGIST_CALLS_LOG   = "strategist_calls.csv"
+ETORO_USER             = "triangulacapital"
+ETORO_WATCHLIST_FILE   = "etoro_watchlist.json"
 SECTOR_OVERRIDES_FILE    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sector_overrides.json")
 ESTIMATES_SNAPSHOT_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "estimates_snapshots.json")
 
@@ -1170,6 +1173,84 @@ def fetch_cross_asset() -> dict:
     else:
         print("  ⚠️ Cross-asset prices unavailable (plan limit?) — Strategist will reason without them")
     return out
+
+
+def fetch_etoro_portfolio(username: str = ETORO_USER) -> dict:
+    """Try to fetch a public eToro trader's portfolio holdings.
+
+    eToro pages are Cloudflare-protected and JS-rendered, so plain requests usually returns 403.
+    We try anyway with a browser UA; if blocked we fall back to ETORO_WATCHLIST_FILE. The SKILL.md
+    Stage 1c (Claude Code WebFetch) will attempt a live fetch and may update the watchlist file.
+
+    Returns {"user", "url", "tickers": [...], "fetch_ok": bool, "as_of": "YYYY-MM-DD"}.
+    """
+    url = f"https://www.etoro.com/people/{username}/portfolio"
+    today_str = datetime.date.today().isoformat()
+
+    # Try to read the persistent fallback first — even if live fetch works we keep this fresh.
+    fallback_tickers: list = []
+    fallback_date: str = ""
+    try:
+        if os.path.exists(ETORO_WATCHLIST_FILE):
+            with open(ETORO_WATCHLIST_FILE, "r", encoding="utf-8") as _wf:
+                _wdata = json.load(_wf)
+            fallback_tickers = [t.upper() for t in (_wdata.get("tickers") or []) if t]
+            fallback_date = _wdata.get("as_of", "")
+    except Exception:
+        pass
+
+    # Attempt live fetch with a browser UA.
+    live_tickers: list = []
+    fetch_ok = False
+    try:
+        _hdrs = {
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/125.0.0.0 Safari/537.36"),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        r = requests.get(url, headers=_hdrs, timeout=15)
+        if r.status_code == 200 and len(r.text) > 5000:
+            # Try to extract ticker symbols from the page HTML.
+            # eToro embeds portfolio data as JSON in a window.__INITIAL_STATE__ or similar.
+            import re as _re
+            # Look for common eToro JSON patterns (instrument symbols).
+            _found = set()
+            for m in _re.finditer(r'"InstrumentDisplayName"\s*:\s*"([A-Z]{1,5})"', r.text):
+                _found.add(m.group(1))
+            # Broader fallback: any 1-5 uppercase letter sequences in JSON-looking contexts.
+            if not _found:
+                for m in _re.finditer(r'"symbol"\s*:\s*"([A-Z]{1,5})"', r.text):
+                    if len(m.group(1)) >= 2:
+                        _found.add(m.group(1))
+            if _found:
+                live_tickers = sorted(_found)
+                fetch_ok = True
+                print(f"  ✅ eToro portfolio fetched: {len(live_tickers)} tickers for {username}")
+                # Persist to watchlist file for next run's fallback.
+                try:
+                    with open(ETORO_WATCHLIST_FILE, "w", encoding="utf-8") as _wfw:
+                        json.dump({"user": username, "as_of": today_str,
+                                   "tickers": live_tickers}, _wfw, indent=2)
+                except Exception:
+                    pass
+            else:
+                print(f"  ⚠️ eToro page loaded but no tickers parsed — will use fallback")
+        else:
+            print(f"  ⚠️ eToro fetch blocked (HTTP {r.status_code}) — using watchlist fallback")
+    except Exception as _e:
+        print(f"  ⚠️ eToro fetch error ({_e.__class__.__name__}) — using watchlist fallback")
+
+    tickers = live_tickers if fetch_ok else fallback_tickers
+    as_of = today_str if fetch_ok else (fallback_date or "")
+    return {
+        "user": username,
+        "url": url,
+        "tickers": tickers,
+        "fetch_ok": fetch_ok,
+        "as_of": as_of,
+    }
 
 
 def _save_estimate_snapshot(estimates_data: dict) -> None:
@@ -8769,6 +8850,86 @@ def log_claude_chat_picks(chat_results: dict, stocks: dict):
     print(f"  📝 Claude Chat picks logged: {len(rows)} entries → {AI_PICKS_LOG}")
 
 
+def _log_strategist_call(geo: dict, spy_stock: dict) -> None:
+    """Append today's Strategist house-call to strategist_calls.csv.
+
+    Fills in spy_close_4wk_later + correct on rows that are now 4+ weeks old.
+    Columns: date, stance, conviction, one_liner, spy_close_at_call,
+             spy_close_4wk_later, return_pct_4wk, correct
+    """
+    hv = (geo or {}).get("house_view") or {}
+    stance = (hv.get("stance") or "").upper()
+    if not stance:
+        return
+    today_str = datetime.date.today().isoformat()
+    spy_price = spy_stock.get("price") if isinstance(spy_stock, dict) else None
+
+    fieldnames = ["date", "stance", "conviction", "one_liner",
+                  "spy_close_at_call", "spy_close_4wk_later", "return_pct_4wk", "correct"]
+    rows: list = []
+    try:
+        if os.path.exists(STRATEGIST_CALLS_LOG):
+            with open(STRATEGIST_CALLS_LOG, "r", encoding="utf-8", newline="") as _sf:
+                rows = list(csv.DictReader(_sf))
+    except Exception:
+        rows = []
+
+    # Fill in 4-week-later columns for old rows where we now have the data.
+    if spy_price is not None:
+        for row in rows:
+            if row.get("spy_close_4wk_later"):
+                continue
+            try:
+                call_date = datetime.date.fromisoformat(row["date"])
+                if (datetime.date.today() - call_date).days >= 28:
+                    call_price = float(row.get("spy_close_at_call") or 0)
+                    if call_price > 0:
+                        ret = round((spy_price / call_price - 1) * 100, 2)
+                        row["spy_close_4wk_later"] = round(spy_price, 2)
+                        row["return_pct_4wk"] = ret
+                        _st = row.get("stance", "").upper()
+                        if _st == "RISK-ON":
+                            row["correct"] = "YES" if ret >= 2 else ("NO" if ret <= -2 else "NEUTRAL")
+                        elif _st == "DEFENSIVE":
+                            row["correct"] = "YES" if ret <= -2 else ("NO" if ret >= 2 else "NEUTRAL")
+                        else:
+                            row["correct"] = "N/A"
+            except Exception:
+                continue
+
+    # Skip if today already logged.
+    if any(r.get("date") == today_str for r in rows):
+        try:
+            with open(STRATEGIST_CALLS_LOG, "w", encoding="utf-8", newline="") as _sf:
+                w = csv.DictWriter(_sf, fieldnames=fieldnames)
+                w.writeheader()
+                w.writerows(rows[-52:])
+        except Exception:
+            pass
+        return
+
+    new_row = {
+        "date": today_str,
+        "stance": stance,
+        "conviction": hv.get("conviction", ""),
+        "one_liner": (hv.get("one_liner") or "")[:120],
+        "spy_close_at_call": round(spy_price, 2) if spy_price else "",
+        "spy_close_4wk_later": "",
+        "return_pct_4wk": "",
+        "correct": "",
+    }
+    rows.append(new_row)
+    rows = rows[-52:]  # Keep at most 1 year
+    try:
+        with open(STRATEGIST_CALLS_LOG, "w", encoding="utf-8", newline="") as _sf:
+            w = csv.DictWriter(_sf, fieldnames=fieldnames)
+            w.writeheader()
+            w.writerows(rows)
+        print(f"  📋 Strategist call logged ({stance}) → {STRATEGIST_CALLS_LOG}")
+    except Exception as _e:
+        print(f"  ⚠️ Could not log strategist call: {_e}")
+
+
 def log_ai_picks(ai_result: dict, stocks: dict, mall_result: dict = None):
     """Auto-log AI picks to fmp_ai_picks_log.csv for performance tracking.
     Logs judge picks (source=AI-Judge) AND specialist picks (source=AI-Bull/Value/Contrarian).
@@ -14201,6 +14362,43 @@ def _render_strategist_section(ai):
             bets_html = ('<div style="font-size:.74rem;font-weight:700;color:#cfd8dc;margin:6px 0 6px">'
                          '🎯 Best bets right now</div>' + "".join(rows))
 
+    # ── B2: Compute probability-weighted macro sector tilt from scenario data ──
+    _sector_tilt: dict = {}   # sector_name_lower → float score
+    for _sit in situations:
+        for _sc in (_sit.get("scenarios") or []):
+            _odds_f = (_pct(_sc.get("odds")) or 0) / 100.0
+            if _odds_f <= 0:
+                continue
+            for _entry in _aslist(_sc.get("winners")):
+                _key = (_entry.get("category") if isinstance(_entry, dict) else _entry) or ""
+                _key = _key.lower()
+                _sector_tilt[_key] = _sector_tilt.get(_key, 0) + _odds_f
+            for _entry in _aslist(_sc.get("losers")):
+                _key = (_entry.get("category") if isinstance(_entry, dict) else _entry) or ""
+                _key = _key.lower()
+                _sector_tilt[_key] = _sector_tilt.get(_key, 0) - _odds_f
+    # Normalize so max abs value ≤ 1.
+    _tilt_max = max((abs(v) for v in _sector_tilt.values()), default=1) or 1
+    _sector_tilt = {k: round(v / _tilt_max, 3) for k, v in _sector_tilt.items()}
+
+    def _tilt_bar(sector_name: str) -> str:
+        """Return a small HTML tilt bar for a sector, or empty string if no signal."""
+        _best = 0.0
+        _nm_lower = (sector_name or "").lower()
+        for k, v in _sector_tilt.items():
+            if k in _nm_lower or _nm_lower in k:
+                if abs(v) > abs(_best):
+                    _best = v
+        if abs(_best) < 0.1:
+            return ""
+        _pct_w = int(abs(_best) * 100)
+        _col = "#2e7d32" if _best > 0 else "#c62828"
+        _label = f"+{_best:.2f} macro tailwind" if _best > 0 else f"{_best:.2f} macro headwind"
+        return (f'<div style="margin-top:4px;display:flex;align-items:center;gap:6px">'
+                f'<div style="background:#263238;border-radius:3px;height:5px;width:80px;overflow:hidden">'
+                f'<div style="background:{_col};height:5px;width:{_pct_w}%"></div></div>'
+                f'<span style="color:{_col};font-size:.68rem">{_label}</span></div>')
+
     # ── Geopolitical scenario cards ────────────────────────────────────────
     sit_cards = []
     for s in situations:
@@ -14218,10 +14416,37 @@ def _render_strategist_section(ai):
             odds = _esc(sc.get("odds") or "")
             p = _pct(odds)
             summ = _esc(sc.get("summary") or "")
-            winners = _aslist(sc.get("winners"))
-            losers = _aslist(sc.get("losers"))
-            win_html = "".join(f'<span class="tg-chip g">{_esc(w)}</span>' for w in winners)
-            lose_html = "".join(f'<span class="tg-chip" style="background:#4e1f1f;color:#ef9a9a">{_esc(l)}</span>' for l in losers)
+            # B1: winners/losers may be plain strings OR dicts with category + example_tickers
+            win_parts = []
+            for w in _aslist(sc.get("winners")):
+                if isinstance(w, dict):
+                    cat = _esc(w.get("category") or "")
+                    tks = [_esc(t) for t in (w.get("example_tickers") or [])]
+                    chip = f'<span class="tg-chip g">{cat}</span>'
+                    if tks:
+                        chip += "".join(
+                            f'<span class="tg-chip" style="background:#1a2e1a;color:#a5d6a7;'
+                            f'font-size:.65rem" title="web-aided, verify via FMP">{t}</span>'
+                            for t in tks)
+                else:
+                    chip = f'<span class="tg-chip g">{_esc(w)}</span>'
+                win_parts.append(chip)
+            lose_parts = []
+            for l in _aslist(sc.get("losers")):
+                if isinstance(l, dict):
+                    cat = _esc(l.get("category") or "")
+                    tks = [_esc(t) for t in (l.get("example_tickers") or [])]
+                    chip = f'<span class="tg-chip" style="background:#4e1f1f;color:#ef9a9a">{cat}</span>'
+                    if tks:
+                        chip += "".join(
+                            f'<span class="tg-chip" style="background:#3b1515;color:#ef9a9a;'
+                            f'font-size:.65rem" title="web-aided, verify via FMP">{t}</span>'
+                            for t in tks)
+                else:
+                    chip = f'<span class="tg-chip" style="background:#4e1f1f;color:#ef9a9a">{_esc(l)}</span>'
+                lose_parts.append(chip)
+            win_html = "".join(win_parts)
+            lose_html = "".join(lose_parts)
             bar = (f'<div style="background:#263238;border-radius:3px;height:6px;width:120px;display:inline-block;'
                    f'vertical-align:middle;overflow:hidden"><div style="background:#5c6bc0;height:6px;'
                    f'width:{p:.0f}%"></div></div>' if p is not None else "")
@@ -14267,6 +14492,28 @@ def _render_strategist_section(ai):
             why = _esc(sec.get("why") or "")
             trend = _esc(sec.get("trend") or "")
             odds = _esc(sec.get("odds_attractive") or "")
+            # B4: representative screener names
+            top_names = sec.get("top_names") or []
+            names_html = ""
+            if isinstance(top_names, list) and top_names:
+                name_chips = []
+                for tn in top_names:
+                    if isinstance(tn, dict):
+                        tk = _esc(tn.get("ticker") or "")
+                        peg = tn.get("peg")
+                        _why = _esc(tn.get("why") or "")
+                        _lbl = f'{tk}' + (f' · PEG {peg:.1f}' if peg else "")
+                        name_chips.append(
+                            f'<span class="tg-chip" style="background:#1a232e;color:#90caf9;cursor:default" '
+                            f'title="{_why}">{_lbl}</span>')
+                    elif tn:
+                        name_chips.append(f'<span class="tg-chip" style="background:#1a232e;color:#90caf9">{_esc(tn)}</span>')
+                if name_chips:
+                    names_html = (f'<div style="margin-top:4px">'
+                                  f'<span style="color:#546e7a;font-size:.65rem">names: </span>'
+                                  + "".join(name_chips) + '</div>')
+            # B2: macro tilt bar for this sector
+            tilt_bar_html = _tilt_bar(sec.get("sector") or "")
             _sec_rows.append(
                 '<div class="xcard tg-card" onclick="toggleExpand(this)" style="padding:7px 12px">'
                 f'<div class="tg-head"><b style="color:#fff">{nm}</b> '
@@ -14275,6 +14522,8 @@ def _render_strategist_section(ai):
                 + (f'<span class="tg-chip g">attractive {odds}</span>' if odds else "")
                 + (f'<span style="margin-left:auto;color:#90a4ae;font-size:.72rem">{trend}</span>' if trend else "")
                 + '</div>'
+                + tilt_bar_html
+                + names_html
                 + (f'<div class="xbody" style="display:none"><div class="tg-why">{why}</div></div>' if why else "")
                 + '</div>'
             )
@@ -14292,10 +14541,231 @@ def _render_strategist_section(ai):
                f'padding:8px 12px;color:#a5d6a7;font-size:.82rem"><b>Take risk or wait:</b> {risk_call}</div>' if risk_call else "")
         )
 
+    # ── B3: Track record panel ─────────────────────────────────────────────
+    track_html = ""
+    try:
+        if os.path.exists(STRATEGIST_CALLS_LOG):
+            with open(STRATEGIST_CALLS_LOG, "r", encoding="utf-8", newline="") as _tf:
+                _calls = list(csv.DictReader(_tf))[-12:]
+            if _calls:
+                _rows_html = []
+                for _c in reversed(_calls):
+                    _st = (_c.get("stance") or "").upper()
+                    _st_col = {"RISK-ON": "#2e7d32", "DEFENSIVE": "#c62828"}.get(_st, "#546e7a")
+                    _ret = _c.get("return_pct_4wk", "")
+                    _ok = _c.get("correct", "")
+                    _ok_badge = {"YES": '<span style="color:#4caf50">✅</span>',
+                                 "NO": '<span style="color:#f44336">❌</span>',
+                                 "N/A": '<span style="color:#90a4ae">—</span>',
+                                 "NEUTRAL": '<span style="color:#ffa726">≈</span>'}.get(_ok, "")
+                    _rows_html.append(
+                        f'<tr>'
+                        f'<td style="color:#90a4ae;font-size:.72rem;padding:3px 8px">{_c.get("date","")}</td>'
+                        f'<td><span class="tg-chip" style="background:{_st_col}33;color:{_st_col};'
+                        f'font-size:.68rem">{_st}</span></td>'
+                        f'<td style="color:#cfd8dc;font-size:.72rem;padding:3px 8px">'
+                        f'{"+" if _ret and float(_ret or 0)>0 else ""}{_ret}{"%" if _ret else "pending"}</td>'
+                        f'<td style="padding:3px 8px">{_ok_badge}</td>'
+                        f'</tr>'
+                    )
+                track_html = (
+                    '<details style="margin-top:14px"><summary style="cursor:pointer;color:#78909c;'
+                    'font-size:.74rem;font-weight:700;user-select:none">📊 House-call track record</summary>'
+                    '<table style="width:100%;border-collapse:collapse;margin-top:6px">'
+                    '<thead><tr>'
+                    '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:2px 8px">Date</th>'
+                    '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:2px 8px">Stance</th>'
+                    '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:2px 8px">SPY 4wk</th>'
+                    '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:2px 8px">Correct</th>'
+                    '</tr></thead><tbody>'
+                    + "".join(_rows_html)
+                    + '</tbody></table></details>'
+                )
+    except Exception:
+        pass
+
     return (
         '<section id="strategist">'
         '<div class="section-title">🧭 Strategist &mdash; geopolitics, sector rotation &amp; the house call</div>'
-        + _intro + house_banner + bets_html + sit_html + sector_html
+        + _intro + house_banner + bets_html + sit_html + sector_html + track_html
+        + '</section>'
+    )
+
+
+def _render_portfolio_analysis_section(ai):
+    """📊 Tracked Portfolio tab — macro-alignment analysis of a tracked eToro trader's holdings.
+
+    Reads ai['portfolio_analysis'] (populated by desk Stage 1c via SKILL.md). Renders:
+    - Header with data freshness badge + link to eToro page
+    - Hot picks panel (HOT-aligned holdings)
+    - Full holdings table with macro_alignment badges
+    - Graceful empty / first-run state
+    """
+    pa = (ai or {}).get("portfolio_analysis") or {}
+    user    = pa.get("user") or ETORO_USER
+    url     = pa.get("url") or f"https://www.etoro.com/people/{user}/portfolio"
+    as_of   = pa.get("as_of") or ""
+    fetch_ok = bool(pa.get("fetch_ok"))
+    holdings = pa.get("holdings") or []
+    hot_picks = pa.get("top_hot_picks") or []
+    reconsider = pa.get("names_to_reconsider") or []
+    summary = pa.get("summary") or ""
+
+    def _esc(x):
+        return str(x or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    _intro = (
+        '<p style="color:#9fa8da;font-size:.78rem;line-height:1.6;margin:4px 0 14px">'
+        f'Holdings from <a href="{url}" target="_blank" style="color:#7986cb">'
+        f'@{_esc(user)} on eToro</a> cross-referenced against FMP fundamentals + the current '
+        'Strategist macro view. <b>HOT</b> = aligns with the house call; '
+        '<b>RECONSIDER</b> = runs counter to it. '
+        'Numbers are FMP; alignment rationale is AI-reasoned. '
+        '<b>Research starting point, not investment advice.</b></p>'
+    )
+
+    # Freshness badge
+    _fresh_col = "#2e7d32" if fetch_ok else "#b26a00"
+    _fresh_lbl = f"live data {as_of}" if fetch_ok else f"cached {as_of}" if as_of else "no data yet"
+    _fresh_badge = (f'<span class="tg-chip" style="background:{_fresh_col}22;color:{_fresh_col};'
+                    f'font-size:.68rem">{_fresh_lbl}</span>')
+
+    header = (
+        f'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+        f'<span style="font-size:1rem;font-weight:700;color:#cfd8dc">@{_esc(user)}</span>'
+        f'{_fresh_badge}'
+        f'<a href="{url}" target="_blank" style="color:#546e7a;font-size:.7rem;margin-left:auto">'
+        f'view on eToro ↗</a></div>'
+    )
+
+    # Empty / first-run state
+    if not holdings:
+        empty_msg = (
+            f'<div style="background:#1a1f2e;border:1px solid #263238;border-radius:6px;'
+            f'padding:16px;margin-top:8px">'
+            f'<p style="color:#78909c;margin:0 0 8px">No portfolio data yet. '
+            f'The desk Stage 1c will attempt to fetch live holdings from eToro on the next '
+            f'<code>/desk-run</code>. If eToro blocks automated access, manually paste the '
+            f'ticker list into <code>etoro_watchlist.json</code>:</p>'
+            f'<pre style="color:#90a4ae;font-size:.72rem;background:#111827;padding:10px;'
+            f'border-radius:4px;overflow-x:auto">{{"user":"{_esc(user)}","as_of":"YYYY-MM-DD",'
+            f'"tickers":["NVDA","MSFT","AMZN",...]}}</pre>'
+            f'<a href="{url}" target="_blank" style="color:#7986cb;font-size:.78rem">'
+            f'Visit portfolio page ↗</a></div>'
+        )
+        return (f'<section id="portfolio_analysis">'
+                f'<div class="section-title">📊 Tracked Portfolio &mdash; @{_esc(user)}</div>'
+                + _intro + header + empty_msg + '</section>')
+
+    # Summary banner
+    summary_html = (f'<p style="color:#b0bec5;font-size:.82rem;margin:0 0 10px">{_esc(summary)}</p>'
+                    if summary else "")
+
+    # Hot picks panel
+    hot_html = ""
+    hot_cards = [h for h in holdings if isinstance(h, dict)
+                 and h.get("ticker", "").upper() in [t.upper() for t in hot_picks]]
+    if hot_cards:
+        cards_markup = []
+        for h in hot_cards:
+            tk = _esc(h.get("ticker") or "")
+            co = _esc(h.get("company") or "")
+            peg = h.get("peg")
+            fcf = h.get("fcf_yield")
+            reason = _esc(h.get("alignment_reason") or "")
+            verdict = _esc(h.get("house_call_verdict") or "")
+            cards_markup.append(
+                f'<div class="xcard tg-card" style="padding:10px 14px">'
+                f'<div class="tg-head"><b style="color:#fff;font-size:1rem">{tk}</b> '
+                f'<span style="color:#90a4ae;font-size:.8rem">{co}</span> '
+                f'<span class="tg-chip" style="background:#1a3a1a;color:#a5d6a7;font-weight:700">🔥 HOT</span>'
+                + (f'<span class="tg-chip g">PEG {peg:.1f}</span>' if peg else "")
+                + (f'<span class="tg-chip g">FCF {fcf:.1f}%</span>' if fcf else "")
+                + '</div>'
+                + (f'<div style="color:#b0bec5;font-size:.8rem;margin-top:4px">{reason}</div>' if reason else "")
+                + (f'<div style="color:#81c784;font-size:.75rem;margin-top:4px">{verdict}</div>' if verdict else "")
+                + '</div>'
+            )
+        hot_html = ('<div style="font-size:.74rem;font-weight:700;color:#cfd8dc;margin:10px 0 6px">'
+                    '🔥 Hot picks from this portfolio</div>' + "".join(cards_markup))
+
+    # Full holdings table
+    _align_order = {"HOT": 0, "NEUTRAL": 1, "RECONSIDER": 2}
+    sorted_h = sorted(holdings, key=lambda x: _align_order.get(
+        (x.get("macro_alignment") or "").upper(), 9))
+
+    def _align_badge(aln):
+        aln = (aln or "").upper()
+        _map = {
+            "HOT": ('<span class="tg-chip" style="background:#1a3a1a;color:#a5d6a7;font-weight:700">'
+                    '🔥 HOT</span>'),
+            "NEUTRAL": ('<span class="tg-chip" style="background:#1a2030;color:#78909c">'
+                        '➡️ NEUTRAL</span>'),
+            "RECONSIDER": ('<span class="tg-chip" style="background:#3b1515;color:#ef9a9a;font-weight:700">'
+                           '⚠️ RECONSIDER</span>'),
+        }
+        return _map.get(aln, f'<span class="tg-chip">{_esc(aln)}</span>')
+
+    tbl_rows = []
+    for h in sorted_h:
+        if not isinstance(h, dict):
+            continue
+        tk   = _esc(h.get("ticker") or "")
+        co   = _esc(h.get("company") or "")
+        sec  = _esc(h.get("sector") or "")
+        aln  = (h.get("macro_alignment") or "").upper()
+        reason = _esc(h.get("alignment_reason") or "")
+        peg  = h.get("peg")
+        fcf  = h.get("fcf_yield")
+        tbl_rows.append(
+            f'<tr onclick="this.nextElementSibling&&(this.nextElementSibling.style.display'
+            f'===\'none\'?this.nextElementSibling.style.display=\'table-row\':this.nextElementSibling.style.display=\'none\')" '
+            f'style="cursor:pointer;border-bottom:1px solid #1c2230">'
+            f'<td style="padding:6px 8px;color:#fff;font-weight:600">{tk}</td>'
+            f'<td style="padding:6px 8px;color:#b0bec5;font-size:.8rem">{co}</td>'
+            f'<td style="padding:6px 8px;font-size:.78rem;color:#78909c">{sec}</td>'
+            f'<td style="padding:6px 8px">{_align_badge(aln)}</td>'
+            f'<td style="padding:6px 8px;color:#90a4ae;font-size:.72rem">'
+            + (f'PEG {peg:.1f}' if peg else "—")
+            + '</td>'
+            f'<td style="padding:6px 8px;color:#90a4ae;font-size:.72rem">'
+            + (f'FCF {fcf:.1f}%' if fcf else "—")
+            + '</td></tr>'
+            + (f'<tr style="display:none;background:#111827">'
+               f'<td colspan="6" style="padding:6px 12px;color:#b0bec5;font-size:.78rem">{reason}</td></tr>'
+               if reason else "")
+        )
+
+    reconsider_html = ""
+    if reconsider:
+        reconsider_html = (
+            '<div style="margin-top:10px;background:#1f1010;border-left:3px solid #c62828;'
+            'border-radius:4px;padding:8px 12px;color:#ef9a9a;font-size:.8rem">'
+            '<b>⚠️ Names to reconsider given current macro:</b> '
+            + ", ".join(_esc(t) for t in reconsider) + '</div>'
+        )
+
+    table_html = (
+        '<div style="font-size:.74rem;font-weight:700;color:#cfd8dc;margin:14px 0 6px">'
+        f'📋 All holdings ({len(sorted_h)}) &mdash; click a row for alignment rationale</div>'
+        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+        '<thead><tr>'
+        '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:4px 8px">Ticker</th>'
+        '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:4px 8px">Company</th>'
+        '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:4px 8px">Sector</th>'
+        '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:4px 8px">Macro fit</th>'
+        '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:4px 8px">PEG</th>'
+        '<th style="color:#546e7a;font-size:.68rem;text-align:left;padding:4px 8px">FCF yld</th>'
+        '</tr></thead><tbody>'
+        + "".join(tbl_rows)
+        + '</tbody></table></div>'
+        + reconsider_html
+    )
+
+    return (
+        f'<section id="portfolio_analysis">'
+        f'<div class="section-title">📊 Tracked Portfolio &mdash; @{_esc(user)}</div>'
+        + _intro + header + summary_html + hot_html + table_html
         + '</section>'
     )
 
@@ -15442,12 +15912,12 @@ function showMacroDetail(el, id) {
 </section>"""
 
     # ── NAV TABS ──────────────────────────────────────────────────────────
-    # 11-tab layout (2026-06): three master screens + four systematic screens
-    # (GARP, Contrarian, Earnings Momentum, Swing Setups) + AI hub + utility views.
+    # 12-tab layout (2026-07): AI hub + strategist + portfolio + systematic screens + utility.
     tabs = [
-        ("ai",       "🤖 AI Analysis"),
-        ("strategist","🧭 Strategist"),
-        ("targetgap","🎯 Target Gap"),
+        ("ai",                "🤖 AI Analysis"),
+        ("strategist",        "🧭 Strategist"),
+        ("portfolio_analysis","📊 Tracked Portfolio"),
+        ("targetgap",         "🎯 Target Gap"),
         ("qual",     "💎 Quality"),
         ("value",    "📊 Value"),
         ("garp",     "💎 GARP"),
@@ -18400,6 +18870,9 @@ Sharpe on alpha series. Click any column header to sort.</p>
     # ── 🧭 STRATEGIST SECTION (geopolitics + sector rotation + house call) ──
     strategist_html = _render_strategist_section(ai)
 
+    # ── 📊 TRACKED PORTFOLIO SECTION (eToro macro-alignment analysis) ──────
+    portfolio_analysis_html = _render_portfolio_analysis_section(ai)
+
     # ── ASSEMBLE ──────────────────────────────────────────────────────────
     body = f"""
 <div class="header">
@@ -18412,6 +18885,7 @@ Sharpe on alpha series. Click any column header to sort.</p>
 <nav class="nav">{nav_html}</nav>
 {_ai_section()}
 {strategist_html}
+{portfolio_analysis_html}
 {target_gap_html}
 {_macro_section()}
 {_strategy_table(quality_master, _MASTER_COLS, "qual", "💎 Quality — Compounders &amp; Cash Machines",
@@ -20859,12 +21333,14 @@ def main():
             if (_hp_i + 1) % 10 == 0:
                 print(f"    ... {_hp_i + 1}/{len(_hp_order)} bundled")
         _hp_pm_pool, _hp_pm_sector = build_pm_context(picks_data, stocks)
+        _etoro = fetch_etoro_portfolio(ETORO_USER)
         _hp_handoff = {
             "date":         _today_str,
             "today":        _hp_today.isoformat(),
             "macro_line":   _hp_macro_line,
             "cross_asset":  (macro_data or {}).get("cross_asset", {}),   # oil/gold/FX hard numbers
             "strategist":   True,    # run the Strategist (geopolitics) + Sector Rotation desk stages
+            "tracked_portfolio": _etoro,  # eToro holdings for Stage 1c macro-alignment analysis
             "brief":        _brief,
             "desk_lessons": _hp_lessons,
             "candidates":   _hp_candidates,
@@ -20922,6 +21398,18 @@ def main():
         ai_result["macro_dashboard"] = _ff_data.get("macro_dashboard") or _geo.get("macro_dashboard") or {}
         ai_result["macro_context"]   = (_ff_data.get("macro_context") or _geo.get("macro_context")
                                         or ai_result.get("macro_context", ""))
+        # 📊 Tracked Portfolio — eToro macro-alignment analysis.
+        _pa = _ff_data.get("portfolio_analysis") or {}
+        ai_result["portfolio_analysis"] = _pa
+        # If the desk stage successfully fetched live holdings, persist them as fallback.
+        if _pa.get("fetch_ok") and _pa.get("tickers"):
+            try:
+                with open(ETORO_WATCHLIST_FILE, "w", encoding="utf-8") as _pwf:
+                    json.dump({"user": _pa.get("user", ETORO_USER),
+                               "as_of": _pa.get("as_of", _today_str),
+                               "tickers": _pa["tickers"]}, _pwf, indent=2)
+            except Exception:
+                pass
         mall_result = {}
         research_result = {"memos": ai_result.get("_memos", [])}
         _file_pm_decisions = _ff_data.get("pm_decisions") or {}
@@ -21017,6 +21505,8 @@ def main():
     # Auto-log AI picks every run (no flag needed)
     if ai_result:
         log_ai_picks(ai_result, stocks, mall_result=mall_result)
+        # Log Strategist house call for track record (fills in 4wk SPY return on old rows too).
+        _log_strategist_call(ai_result.get("geopolitics") or {}, stocks.get("SPY") or {})
 
     # Claude Chat weekly analysis disabled (removed 2026-05-14)
     chat_results = {}
