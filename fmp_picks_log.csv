@@ -2981,3 +2981,68 @@ date,strategy,ticker,entry_price,company
 2026-07-01,Contrarian,INSP,46.53,"Inspire Medical Systems, Inc."
 2026-07-01,IV Discount,YELP,25.4,Yelp Inc.
 2026-07-01,Turnarounds,TIC,8.09,"TIC Solutions, Inc."
+2026-07-02,IV Discount,YELP,26.25,Yelp Inc.
+2026-07-02,IV Discount,HRB,39.34,"H&R Block, Inc."
+2026-07-02,IV Discount,DLO,14.67,Dlocal Limited
+2026-07-02,IV Discount,TRV,334.62,"The Travelers Companies, Inc."
+2026-07-02,IV Discount,MMS,53.83,"Maximus, Inc."
+2026-07-02,Quality Compounders,ADBE,210.98,Adobe Inc.
+2026-07-02,Quality Compounders,QLYS,143.44,"Qualys, Inc."
+2026-07-02,Quality Compounders,DLO,14.67,Dlocal Limited
+2026-07-02,Quality Compounders,EXEL,53.96,"Exelixis, Inc."
+2026-07-02,Quality Compounders,DAVE,383.13,Dave Inc.
+2026-07-02,Stalwarts,DECK,100.33,Deckers Outdoor Corporation
+2026-07-02,Stalwarts,PTC,119.78,PTC Inc.
+2026-07-02,Stalwarts,ACN,131.13,Accenture plc
+2026-07-02,Stalwarts,ADBE,210.98,Adobe Inc.
+2026-07-02,Stalwarts,PAYC,133.96,"Paycom Software, Inc."
+2026-07-02,Fast Growers,DAVE,383.13,Dave Inc.
+2026-07-02,Fast Growers,DLO,14.67,Dlocal Limited
+2026-07-02,Fast Growers,ISSC,17.83,"Innovative Aerosystems, Inc."
+2026-07-02,Fast Growers,XZO,17.99,"Exzeo Group, Inc."
+2026-07-02,Fast Growers,PLMR,133.69,"Palomar Holdings, Inc."
+2026-07-02,Turnarounds,TKO,202.43,"TKO Group Holdings, Inc."
+2026-07-02,Turnarounds,AMTM,20.2,"Amentum Holdings, Inc."
+2026-07-02,Turnarounds,DUOL,121.22,"Duolingo, Inc."
+2026-07-02,Turnarounds,INSP,45.46,"Inspire Medical Systems, Inc."
+2026-07-02,Turnarounds,TIC,8,"TIC Solutions, Inc."
+2026-07-02,Slow Growers,ABEV,3.11,Ambev S.A.
+2026-07-02,Slow Growers,NRT,7.2,North European Oil Royalty Trust
+2026-07-02,Slow Growers,APAM,33.97,Artisan Partners Asset Management Inc.
+2026-07-02,Slow Growers,BSM,13.68,"Black Stone Minerals, L.P."
+2026-07-02,Slow Growers,BKE,41.97,"The Buckle, Inc."
+2026-07-02,Cyclicals,MHK,119.86,"Mohawk Industries, Inc."
+2026-07-02,Cyclicals,BTU,22.2,Peabody Energy Corporation
+2026-07-02,Cyclicals,JBI,5.42,"Janus International Group, Inc."
+2026-07-02,Cyclicals,WGO,31.06,"Winnebago Industries, Inc."
+2026-07-02,Cyclicals,ADNT,18.14,Adient plc
+2026-07-02,Lynch 10-Baggers,ISSC,17.83,"Innovative Aerosystems, Inc."
+2026-07-02,Lynch 10-Baggers,ADMA,8.61,"ADMA Biologics, Inc."
+2026-07-02,Lynch 10-Baggers,MNTN,10.85,"MNTN, Inc Class A"
+2026-07-02,Lynch 10-Baggers,ERII,8.9,"Energy Recovery, Inc."
+2026-07-02,Lynch 10-Baggers,OPRA,20.05,Opera Limited
+2026-07-02,Off-the-Radar,BH,420.65,Biglari Holdings Inc.
+2026-07-02,Off-the-Radar,ALKT,18.72,"Alkami Technology, Inc."
+2026-07-02,Off-the-Radar,GRNT,4.36,"Granite Ridge Resources, Inc"
+2026-07-02,Off-the-Radar,TXO,12.39,"TXO Partners, L.P."
+2026-07-02,Off-the-Radar,VLN,2.23,Valens Semiconductor Ltd.
+2026-07-02,GARP,DAVE,383.13,Dave Inc.
+2026-07-02,GARP,HCI,178.64,"HCI Group, Inc."
+2026-07-02,GARP,PGY,18.77,Pagaya Technologies Ltd.
+2026-07-02,GARP,JCAP,19.61,"Jefferson Capital, Inc. Common Stock"
+2026-07-02,GARP,ORC,6.92,"Orchid Island Capital, Inc."
+2026-07-02,Earnings Momentum,ELA,26.92,Envela Corporation
+2026-07-02,Earnings Momentum,CALY,18.64,Callaway Golf Company
+2026-07-02,Earnings Momentum,MEI,18.41,"Methode Electronics, Inc."
+2026-07-02,Earnings Momentum,OOMA,19.6,"Ooma, Inc."
+2026-07-02,Earnings Momentum,AVNS,24.63,"Avanos Medical, Inc."
+2026-07-02,Contrarian,BRBR,13.35,"BellRing Brands, Inc."
+2026-07-02,Contrarian,MNTN,10.85,"MNTN, Inc Class A"
+2026-07-02,Contrarian,KD,12,"Kyndryl Holdings, Inc."
+2026-07-02,Contrarian,DOCS,21.59,"Doximity, Inc."
+2026-07-02,Contrarian,INSP,45.46,"Inspire Medical Systems, Inc."
+2026-07-02,GARP,LYFT,14.83,"Lyft, Inc."
+2026-07-02,Contrarian,TME,8.66,Tencent Music Entertainment Gr
+2026-07-02,Turnarounds,CURB,30.43,Curbline Properties Corp.
+2026-07-02,Lynch 10-Baggers,DV,11.28,"DoubleVerify Holdings, Inc."
+2026-07-02,Off-the-Radar,CMCL,20.17,Caledonia Mining Corporation Plc
