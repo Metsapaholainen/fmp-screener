@@ -1,0 +1,330 @@
+{
+ "date": "2026-07-22",
+ "market": "fi",
+ "currency": "EUR",
+ "screens": {
+  "Quality": [
+   {
+    "ticker": "WRT1V.HE",
+    "company": "W\u00e4rtsil\u00e4 Oyj Abp",
+    "sector": "Industrials",
+    "price": 29.71,
+    "mktCapUsdB": 20.02,
+    "score": 71.0
+   },
+   {
+    "ticker": "PUUILO.HE",
+    "company": "Puuilo Oyj",
+    "sector": "Consumer Cyclical",
+    "price": 16.92,
+    "mktCapUsdB": 1.63,
+    "score": 68.0
+   },
+   {
+    "ticker": "KNEBV.HE",
+    "company": "KONE Oyj",
+    "sector": "Industrials",
+    "price": 48.34,
+    "mktCapUsdB": 28.63,
+    "score": 60.0
+   },
+   {
+    "ticker": "ORNBV.HE",
+    "company": "Orion Oyj",
+    "sector": "Healthcare",
+    "price": 75.85,
+    "mktCapUsdB": 12.21,
+    "score": 62.0
+   },
+   {
+    "ticker": "FRAMERY.HE",
+    "company": "Framery Group Oyj",
+    "sector": "Consumer Cyclical",
+    "price": 6.912,
+    "mktCapUsdB": 0.63,
+    "score": 83
+   },
+   {
+    "ticker": "GRK.HE",
+    "company": "GRK Infra Oyj",
+    "sector": "Industrials",
+    "price": 19.36,
+    "mktCapUsdB": 0.91,
+    "score": 54
+   },
+   {
+    "ticker": "KALMAR.HE",
+    "company": "Kalmar Oyj",
+    "sector": "Industrials",
+    "price": 38.06,
+    "mktCapUsdB": 2.78,
+    "score": 21
+   },
+   {
+    "ticker": "SAMPO.HE",
+    "company": "Sampo Oyj",
+    "sector": "Financial Services",
+    "price": 9.646,
+    "mktCapUsdB": 29.09,
+    "score": 42.0
+   },
+   {
+    "ticker": "KCR.HE",
+    "company": "Konecranes Plc",
+    "sector": "Industrials",
+    "price": 27.28,
+    "mktCapUsdB": 7.41,
+    "score": 51
+   },
+   {
+    "ticker": "ALMA.HE",
+    "company": "Alma Media Oyj",
+    "sector": "Communication Services",
+    "price": 13.5,
+    "mktCapUsdB": 1.27,
+    "score": 50
+   }
+  ],
+  "Value": [
+   {
+    "ticker": "OUT1V.HE",
+    "company": "Outokumpu Oyj",
+    "sector": "Basic Materials",
+    "price": 5.43,
+    "mktCapUsdB": 2.93,
+    "score": 32.0
+   },
+   {
+    "ticker": "STEAV.HE",
+    "company": "Stora Enso Oyj",
+    "sector": "Consumer Cyclical",
+    "price": 9.78,
+    "mktCapUsdB": 8.81,
+    "score": 18.0
+   },
+   {
+    "ticker": "ERIBR.HE",
+    "company": "Telefonaktiebolaget LM Ericsson (publ)",
+    "sector": "Technology",
+    "price": 8.472,
+    "mktCapUsdB": 31.88,
+    "score": 40.0
+   },
+   {
+    "ticker": "CTY1S.HE",
+    "company": "Citycon Oyj",
+    "sector": "Real Estate",
+    "price": 2.91,
+    "mktCapUsdB": 0.61,
+    "score": 23.0
+   },
+   {
+    "ticker": "METSA.HE",
+    "company": "Mets\u00e4 Board Oyj",
+    "sector": "Consumer Cyclical",
+    "price": 4.19,
+    "mktCapUsdB": 1.7,
+    "score": 79.0
+   },
+   {
+    "ticker": "PON1V.HE",
+    "company": "Ponsse Oyj",
+    "sector": "Industrials",
+    "price": 22.3,
+    "mktCapUsdB": 0.71,
+    "score": 79.0
+   },
+   {
+    "ticker": "VALMT.HE",
+    "company": "Valmet Oyj",
+    "sector": "Industrials",
+    "price": 22.12,
+    "mktCapUsdB": 4.66,
+    "score": 78.0
+   },
+   {
+    "ticker": "KEMIRA.HE",
+    "company": "Kemira Oyj",
+    "sector": "Basic Materials",
+    "price": 16.67,
+    "mktCapUsdB": 2.76,
+    "score": 70.0
+   },
+   {
+    "ticker": "HIAB.HE",
+    "company": "Hiab Oyj",
+    "sector": "Industrials",
+    "price": 53.5,
+    "mktCapUsdB": 3.95,
+    "score": 69.0
+   },
+   {
+    "ticker": "YIT.HE",
+    "company": "YIT Oyj",
+    "sector": "Industrials",
+    "price": 2.61,
+    "mktCapUsdB": 0.69,
+    "score": 67.0
+   }
+  ],
+  "Growth": [
+   {
+    "ticker": "BITTI.HE",
+    "company": "Bittium Oyj",
+    "sector": "Technology",
+    "price": 26.3,
+    "mktCapUsdB": 1.07,
+    "score": 36.7
+   },
+   {
+    "ticker": "FRAMERY.HE",
+    "company": "Framery Group Oyj",
+    "sector": "Consumer Cyclical",
+    "price": 6.912,
+    "mktCapUsdB": 0.63,
+    "score": 59.8
+   },
+   {
+    "ticker": "ILKKA.HE",
+    "company": "Ilkka Oyj 2",
+    "sector": "Communication Services",
+    "price": 4.04,
+    "mktCapUsdB": 0.12,
+    "score": 54.7
+   },
+   {
+    "ticker": "ORNBV.HE",
+    "company": "Orion Oyj",
+    "sector": "Healthcare",
+    "price": 75.85,
+    "mktCapUsdB": 12.21,
+    "score": 46.2
+   },
+   {
+    "ticker": "GRK.HE",
+    "company": "GRK Infra Oyj",
+    "sector": "Industrials",
+    "price": 19.36,
+    "mktCapUsdB": 0.91,
+    "score": 48.0
+   },
+   {
+    "ticker": "RELAIS.HE",
+    "company": "Relais Group Oyj",
+    "sector": "Consumer Cyclical",
+    "price": 14.35,
+    "mktCapUsdB": 0.3,
+    "score": 66.0
+   },
+   {
+    "ticker": "REMEDY.HE",
+    "company": "Remedy Entertainment Oyj",
+    "sector": "Communication Services",
+    "price": 14.8,
+    "mktCapUsdB": 0.23,
+    "score": 55.0
+   },
+   {
+    "ticker": "PUUILO.HE",
+    "company": "Puuilo Oyj",
+    "sector": "Consumer Cyclical",
+    "price": 16.92,
+    "mktCapUsdB": 1.63,
+    "score": 54.0
+   },
+   {
+    "ticker": "HARVIA.HE",
+    "company": "Harvia Oyj",
+    "sector": "Consumer Cyclical",
+    "price": 41.2,
+    "mktCapUsdB": 0.88,
+    "score": 19
+   },
+   {
+    "ticker": "REG1V.HE",
+    "company": "Revenio Group Oyj",
+    "sector": "Healthcare",
+    "price": 12.5,
+    "mktCapUsdB": 0.42,
+    "score": 15
+   }
+  ],
+  "Contrarian": [],
+  "Special Situations": [
+   {
+    "ticker": "LASTIK.HE",
+    "company": "Lassila & Tikanoja Plc",
+    "sector": "Industrials",
+    "price": 6.83,
+    "mktCapUsdB": 0.3,
+    "score": 88.8
+   },
+   {
+    "ticker": "FRAMERY.HE",
+    "company": "Framery Group Oyj",
+    "sector": "Consumer Cycli",
+    "price": 6.912,
+    "mktCapUsdB": 0.6,
+    "score": 86.8
+   },
+   {
+    "ticker": "POSTI.HE",
+    "company": "Posti Group Oyj",
+    "sector": "Industrials",
+    "price": 9.91,
+    "mktCapUsdB": 0.5,
+    "score": 55.4
+   },
+   {
+    "ticker": "GRK.HE",
+    "company": "GRK Infra Oyj",
+    "sector": "Industrials",
+    "price": 19.36,
+    "mktCapUsdB": 0.9,
+    "score": 49.0
+   }
+  ]
+ },
+ "candidates": {
+  "WRT1V.HE": {
+   "metrics_block": "Company: W\u00e4rtsil\u00e4 Oyj Abp\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $20.02B\nPrice: $29.71\nP/E (TTM): 27.0\nPEG: 1.09 (trailing-growth basis)\nMargin of safety vs DCF: -16%\nROIC: 22%\nGross margin: 47%\nOperating margin: 12%\nRevenue growth YoY: 7%\nFCF yield: 8.2%\nSell-side analysts covering: 16\nCapital allocation: share count -0.1%/yr\n5yr trend: Rev growth 7% (prev 7%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "price": 29.71,
+   "currency": "EUR",
+   "sector": "Industrials",
+   "company": "W\u00e4rtsil\u00e4 Oyj Abp",
+   "heldPercentInsiders": 0.01503
+  },
+  "PUUILO.HE": {
+   "metrics_block": "Company: Puuilo Oyj\nSector / Industry: Consumer Cyclical / Department Stores\nMarket cap: $1.63B\nPrice: $16.92\nP/E (TTM): 25.6\nPEG: 1.62 (trailing-growth basis)\nMargin of safety vs DCF: -37%\nROIC: 35%\nGross margin: 38%\nOperating margin: 17%\nRevenue growth YoY: 15%\nFCF yield: 4.9%\nSell-side analysts covering: 3\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 15% (prev 13%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "price": 16.92,
+   "currency": "EUR",
+   "sector": "Consumer Cyclical",
+   "company": "Puuilo Oyj",
+   "heldPercentInsiders": 0.07625
+  },
+  "KNEBV.HE": {
+   "metrics_block": "Company: KONE Oyj\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $28.63B\nPrice: $48.34\nP/E (TTM): 25.6\nMargin of safety vs DCF: -29%\nROIC: 34%\nGross margin: 58%\nOperating margin: 10%\nRevenue growth YoY: 1%\nFCF yield: 4.6%\nSell-side analysts covering: 23\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 1% (prev 1%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 100% of yrs",
+   "price": 48.34,
+   "currency": "EUR",
+   "sector": "Industrials",
+   "company": "KONE Oyj",
+   "heldPercentInsiders": 0.27951
+  },
+  "OUT1V.HE": {
+   "metrics_block": "Company: Outokumpu Oyj\nSector / Industry: Basic Materials / Steel\nMarket cap: $2.93B\nPrice: $5.43\nROIC: -2%\nGross margin: 4%\nOperating margin: 0%\nRevenue growth YoY: -8%\nFCF yield: -2.5%\nSell-side analysts covering: 11\nCapital allocation: share count +11.2%/yr (diluting)\n5yr trend: Rev growth -8% (prev -15%) \u2014 accelerating; Rev consistent 0% of yrs; FCF consistent 33% of yrs",
+   "price": 5.43,
+   "currency": "EUR",
+   "sector": "Basic Materials",
+   "company": "Outokumpu Oyj",
+   "heldPercentInsiders": 0.21959999
+  },
+  "STEAV.HE": {
+   "metrics_block": "Company: Stora Enso Oyj\nSector / Industry: Consumer Cyclical / Packaging & Containers\nMarket cap: $8.81B\nPrice: $9.78\nP/E (TTM): 12.5\nPEG: 4.08 (trailing-growth basis)\nROIC: 5%\nGross margin: 25%\nOperating margin: 5%\nRevenue growth YoY: 3%\nFCF yield: -1.7%\nCapital allocation: share count +0.0%/yr; SBC ~$1M/yr (5y avg)\n5yr trend: Rev growth 3% (prev -4%) \u2014 accelerating; Rev consistent 33% of yrs; FCF consistent 0% of yrs",
+   "price": 9.78,
+   "currency": "EUR",
+   "sector": "Consumer Cyclical",
+   "company": "Stora Enso Oyj",
+   "heldPercentInsiders": 0.52499
+  }
+ }
+}

@@ -1,0 +1,379 @@
+{
+ "date": "2026-07-22",
+ "market": "no",
+ "currency": "NOK",
+ "screens": {
+  "Quality": [
+   {
+    "ticker": "AFG.OL",
+    "company": "AF Gruppen ASA",
+    "sector": "Industrials",
+    "price": 193.6,
+    "mktCapUsdB": 2.28,
+    "score": 59.0
+   },
+   {
+    "ticker": "NORBT.OL",
+    "company": "Norbit ASA",
+    "sector": "Technology",
+    "price": 170.9,
+    "mktCapUsdB": 1.14,
+    "score": 66.0
+   },
+   {
+    "ticker": "AKSO.OL",
+    "company": "Aker Solutions ASA",
+    "sector": "Energy",
+    "price": 42.66,
+    "mktCapUsdB": 2.15,
+    "score": 49.0
+   },
+   {
+    "ticker": "VAR.OL",
+    "company": "V\u00e5r Energi ASA",
+    "sector": "Energy",
+    "price": 45.94,
+    "mktCapUsdB": 11.93,
+    "score": 28.0
+   },
+   {
+    "ticker": "VEI.OL",
+    "company": "Veidekke ASA",
+    "sector": "Industrials",
+    "price": 187.8,
+    "mktCapUsdB": 2.63,
+    "score": 60.0
+   },
+   {
+    "ticker": "SNTIA.OL",
+    "company": "SENTIA ASA",
+    "sector": "Industrials",
+    "price": 78.4,
+    "mktCapUsdB": 0.82,
+    "score": 41
+   },
+   {
+    "ticker": "NAS.OL",
+    "company": "Norwegian Air Shuttle ASA",
+    "sector": "Industrials",
+    "price": 12.59,
+    "mktCapUsdB": 1.38,
+    "score": 45.0
+   },
+   {
+    "ticker": "SATS.OL",
+    "company": "Sats ASA",
+    "sector": "Consumer Cyclical",
+    "price": 40.35,
+    "mktCapUsdB": 0.81,
+    "score": 71
+   },
+   {
+    "ticker": "WAWI.OL",
+    "company": "Wallenius Wilhelmsen ASA",
+    "sector": "Industrials",
+    "price": 139.5,
+    "mktCapUsdB": 6.13,
+    "score": 31.0
+   },
+   {
+    "ticker": "ATEA.OL",
+    "company": "Atea ASA",
+    "sector": "Technology",
+    "price": 162.0,
+    "mktCapUsdB": 1.88,
+    "score": 33.0
+   }
+  ],
+  "Value": [
+   {
+    "ticker": "COSH.OL",
+    "company": "Constellation Oil Services Holding S.A.",
+    "sector": "Energy",
+    "price": 135.0,
+    "mktCapUsdB": 1.18,
+    "score": 51.0
+   },
+   {
+    "ticker": "BWO.OL",
+    "company": "BW Offshore Limited",
+    "sector": "Energy",
+    "price": 43.5,
+    "mktCapUsdB": 0.82,
+    "score": 24.0
+   },
+   {
+    "ticker": "VTURA.OL",
+    "company": "Ventura Offshore Holding Ltd.",
+    "sector": "Energy",
+    "price": 28.9,
+    "mktCapUsdB": 0.32,
+    "score": 55.0
+   },
+   {
+    "ticker": "ACR.OL",
+    "company": "Axactor ASA",
+    "sector": "Financial Services",
+    "price": 4.855,
+    "mktCapUsdB": 0.42,
+    "score": 38.0
+   },
+   {
+    "ticker": "ENTRA.OL",
+    "company": "Entra ASA",
+    "sector": "Real Estate",
+    "price": 103.8,
+    "mktCapUsdB": 1.96,
+    "score": 32.0
+   },
+   {
+    "ticker": "GSF.OL",
+    "company": "Grieg Seafood ASA",
+    "sector": "Consumer Defensive",
+    "price": 29.66,
+    "mktCapUsdB": 0.35,
+    "score": 30.0
+   },
+   {
+    "ticker": "NHY.OL",
+    "company": "Norsk Hydro ASA",
+    "sector": "Basic Materials",
+    "price": 83.66,
+    "mktCapUsdB": 17.08,
+    "score": 66.0
+   },
+   {
+    "ticker": "AUTO.OL",
+    "company": "AutoStore Holdings Ltd.",
+    "sector": "Industrials",
+    "price": 11.37,
+    "mktCapUsdB": 3.97,
+    "score": 54.0
+   },
+   {
+    "ticker": "TOM.OL",
+    "company": "Tomra Systems ASA",
+    "sector": "Industrials",
+    "price": 103.5,
+    "mktCapUsdB": 3.18,
+    "score": 54.0
+   },
+   {
+    "ticker": "ELK.OL",
+    "company": "Elkem ASA",
+    "sector": "Basic Materials",
+    "price": 32.5,
+    "mktCapUsdB": 1.22,
+    "score": 51.0
+   }
+  ],
+  "Growth": [
+   {
+    "ticker": "VTURA.OL",
+    "company": "Ventura Offshore Holding Ltd.",
+    "sector": "Energy",
+    "price": 28.9,
+    "mktCapUsdB": 0.32,
+    "score": 58.6
+   },
+   {
+    "ticker": "NORBT.OL",
+    "company": "Norbit ASA",
+    "sector": "Technology",
+    "price": 170.9,
+    "mktCapUsdB": 1.14,
+    "score": 85.0
+   },
+   {
+    "ticker": "GENO.OL",
+    "company": "GENERAL OCEANS ASA",
+    "sector": "Technology",
+    "price": 19.8,
+    "mktCapUsdB": 0.39,
+    "score": 81.1
+   },
+   {
+    "ticker": "MEDI.OL",
+    "company": "Medistim ASA",
+    "sector": "Healthcare",
+    "price": 225.0,
+    "mktCapUsdB": 0.43,
+    "score": 93.4
+   },
+   {
+    "ticker": "XPLRA.OL",
+    "company": "Xplora Technologies AS",
+    "sector": "Consumer Cyclical",
+    "price": 37.15,
+    "mktCapUsdB": 0.18,
+    "score": 51.9
+   },
+   {
+    "ticker": "DELIA.OL",
+    "company": "DELLIA GROUP",
+    "sector": "Consumer Defensive",
+    "price": 29.205,
+    "mktCapUsdB": 0.13,
+    "score": 45.0
+   },
+   {
+    "ticker": "IWS.OL",
+    "company": "Integrated Wind Solutions ASA",
+    "sector": "Industrials",
+    "price": 57.2,
+    "mktCapUsdB": 0.24,
+    "score": 41.6
+   },
+   {
+    "ticker": "SNM.OL",
+    "company": "ShaMaran Petroleum Ltd.",
+    "sector": "Energy",
+    "price": 1.245,
+    "mktCapUsdB": 0.37,
+    "score": 41.3
+   },
+   {
+    "ticker": "SMOP.OL",
+    "company": "Smartoptics Group ASA",
+    "sector": "Technology",
+    "price": 44.7,
+    "mktCapUsdB": 0.46,
+    "score": 43.4
+   },
+   {
+    "ticker": "JACK.OL",
+    "company": "Jacktel AS",
+    "sector": "Energy",
+    "price": 5.63,
+    "mktCapUsdB": 0.12,
+    "score": 35.6
+   }
+  ],
+  "Contrarian": [
+   {
+    "ticker": "WSTEP.OL",
+    "company": "Webstep ASA",
+    "sector": "Technology",
+    "price": 14.45,
+    "mktCapUsdB": 0.0,
+    "score": 67.4
+   }
+  ],
+  "Special Situations": [
+   {
+    "ticker": "SNM.OL",
+    "company": "ShaMaran Petroleum Ltd.",
+    "sector": "Energy",
+    "price": 1.245,
+    "mktCapUsdB": 0.4,
+    "score": 92.2
+   },
+   {
+    "ticker": "GENO.OL",
+    "company": "GENERAL OCEANS ASA",
+    "sector": "Technology",
+    "price": 19.8,
+    "mktCapUsdB": 0.4,
+    "score": 87.2
+   },
+   {
+    "ticker": "APR.OL",
+    "company": "APPEAR ASA",
+    "sector": "Technology",
+    "price": 42.5,
+    "mktCapUsdB": 0.2,
+    "score": 80.6
+   },
+   {
+    "ticker": "GKP.OL",
+    "company": "Gulf Keystone Petroleum Limite",
+    "sector": "Energy",
+    "price": 21.75,
+    "mktCapUsdB": 0.5,
+    "score": 78.0
+   },
+   {
+    "ticker": "DELIA.OL",
+    "company": "DELLIA GROUP",
+    "sector": "Consumer Defen",
+    "price": 29.205,
+    "mktCapUsdB": 0.1,
+    "score": 71.6
+   },
+   {
+    "ticker": "SNTIA.OL",
+    "company": "SENTIA ASA",
+    "sector": "Industrials",
+    "price": 78.4,
+    "mktCapUsdB": 0.8,
+    "score": 63.6
+   },
+   {
+    "ticker": "SOMA.OL",
+    "company": "Solstad Maritime ASA",
+    "sector": "Industrials",
+    "price": 27.0,
+    "mktCapUsdB": 1.3,
+    "score": 61.2
+   },
+   {
+    "ticker": "MORLD.OL",
+    "company": "Moreld ASA",
+    "sector": "Energy",
+    "price": 21.45,
+    "mktCapUsdB": 0.4,
+    "score": 47.6
+   },
+   {
+    "ticker": "BRUT.OL",
+    "company": "Bruton Limited",
+    "sector": "Industrials",
+    "price": 53.0,
+    "mktCapUsdB": 0.3,
+    "score": 44.8
+   }
+  ]
+ },
+ "candidates": {
+  "AFG.OL": {
+   "metrics_block": "Company: AF Gruppen ASA\nSector / Industry: Industrials / Engineering & Construction\nMarket cap: $2.28B\nPrice: $193.60\nP/E (TTM): 18.5\nPEG: 0.35 (trailing-growth basis)\nMargin of safety vs DCF: +47%\nROIC: 46%\nGross margin: 34%\nOperating margin: 4%\nRevenue growth YoY: 5%\nFCF yield: 12.5%\nSell-side analysts covering: 2\nCapital allocation: share count +0.7%/yr; SBC ~$5M/yr (5y avg)\n5yr trend: Rev growth 5% (prev 0%) \u2014 accelerating; Rev consistent 67% of yrs; FCF consistent 67% of yrs",
+   "price": 193.6,
+   "currency": "NOK",
+   "sector": "Industrials",
+   "company": "AF Gruppen ASA",
+   "heldPercentInsiders": 0.59186
+  },
+  "NORBT.OL": {
+   "metrics_block": "Company: Norbit ASA\nSector / Industry: Technology / Scientific & Technical Instruments\nMarket cap: $1.14B\nPrice: $170.90\nP/E (TTM): 25.7\nPEG: 0.6 (trailing-growth basis)\nMargin of safety vs DCF: -158%\nROIC: 27%\nGross margin: 54%\nOperating margin: 21%\nRevenue growth YoY: 43%\nFCF yield: 2.8%\nSell-side analysts covering: 4\nCapital allocation: share count +0.4%/yr\n5yr trend: Rev growth 43% (prev 15%) \u2014 accelerating; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "price": 170.9,
+   "currency": "NOK",
+   "sector": "Technology",
+   "company": "Norbit ASA",
+   "heldPercentInsiders": 0.46803
+  },
+  "AKSO.OL": {
+   "metrics_block": "Company: Aker Solutions ASA\nSector / Industry: Energy / Oil & Gas Equipment & Services\nMarket cap: $2.15B\nPrice: $42.66\nP/E (TTM): 6.4\nPEG: 0.33 (trailing-growth basis)\nMargin of safety vs DCF: +70%\nROIC: 24%\nGross margin: 38%\nOperating margin: 5%\nRevenue growth YoY: 19%\nFCF yield: 10.2%\nSell-side analysts covering: 9\nCapital allocation: share count +1.0%/yr (diluting)\n5yr trend: Rev growth 19% (prev 45%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "price": 42.66,
+   "currency": "NOK",
+   "sector": "Energy",
+   "company": "Aker Solutions ASA",
+   "heldPercentInsiders": 0.39751
+  },
+  "COSH.OL": {
+   "metrics_block": "Company: Constellation Oil Services Holding S.A.\nSector / Industry: Energy / Oil & Gas Drilling\nMarket cap: $1.18B\nPrice: $135.00\nROIC: -2%\nGross margin: 14%\nOperating margin: 21%\nRevenue growth YoY: 6%\nFCF yield: 0.9%\nSell-side analysts covering: 4\n5yr trend: Rev growth 6% (prev 2%) \u2014 accelerating; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "price": 135.0,
+   "currency": "NOK",
+   "sector": "Energy",
+   "company": "Constellation Oil Services Holding S.A.",
+   "heldPercentInsiders": 0.06877
+  },
+  "BWO.OL": {
+   "metrics_block": "Company: BW Offshore Limited\nSector / Industry: Energy / Oil & Gas Equipment & Services\nMarket cap: $819M\nPrice: $43.50\nP/E (TTM): 5.9\nPEG: 0.34 (trailing-growth basis)\nROIC: 11%\nGross margin: 68%\nOperating margin: 22%\nRevenue growth YoY: -16%\nFCF yield: 1.0%\nCapital allocation: share count +0.2%/yr; SBC ~$0M/yr (5y avg)\n5yr trend: Rev growth -16% (prev -8%) \u2014 decelerating; Rev consistent 0% of yrs; FCF consistent 33% of yrs",
+   "price": 43.5,
+   "currency": "NOK",
+   "sector": "Energy",
+   "company": "BW Offshore Limited",
+   "heldPercentInsiders": 0.53718
+  }
+ }
+}
