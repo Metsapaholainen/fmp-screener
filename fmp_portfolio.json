@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 23163.65549999999,
+  "cash": 23519.538899999992,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -88,18 +88,6 @@
       "sector": "Technology"
     },
     {
-      "ticker": "EXEL",
-      "company": "Exelixis, Inc.",
-      "shares": 96,
-      "entry_price": 51.71,
-      "entry_date": "2026-06-08",
-      "rationale": "UNLOCK HEALTHCARE SLOT: Healthcare sector currently 1/1 position (HALO). EXEL is high-quality (ROIC 35%, PEG 0.26, 7% revenue growth, 76% MoS) oncology player with durable pipeline moat. Meets all thr",
-      "conviction": "HIGH",
-      "sell_trigger": "FDA approval denial on lead oncology candidate; ROIC falls below 20%; two consecutive quarters of revenue decline",
-      "lynch_category": "Stalwart+Turnaround",
-      "sector": "Healthcare"
-    },
-    {
       "ticker": "HRB",
       "company": "H&R Block, Inc.",
       "shares": 138,
@@ -122,6 +110,18 @@
       "sell_trigger": "FCF margin falls below 8% or revenue declines for 2 consecutive years, or BRL devaluation structurally impairs USD returns",
       "lynch_category": "SlowGrower",
       "sector": "Communication Services"
+    },
+    {
+      "ticker": "PTC",
+      "company": "PTC Inc.",
+      "shares": 44,
+      "entry_price": 113.05,
+      "entry_date": "2026-07-23",
+      "rationale": "CIO's #1-ranked best idea this cycle and the only name to survive Stage 3 debate at BUY/HIGH unchanged. Wide-moat industrial CAD/PLM software at 13.9x P/E with accelerating 19% revenue growth; the bea",
+      "conviction": "HIGH",
+      "sell_trigger": "Revenue growth decelerates below 10% for two consecutive quarters, or evidence emerges that the recent net-income beat was entirely non-operating (int",
+      "lynch_category": "Stalwart+FastGrower",
+      "sector": "Technology"
     }
   ],
   "transactions": [
@@ -2104,7 +2104,31 @@
       "return_pct": 0.0,
       "transaction_cost": 5.99,
       "rationale": "IV-discount SlowGrower fills the open slot without breaching any cap. SlowGrower category is only 1/6. Communication Services is a new, uncorrelated sector (0 current positions). ROIC 13%, FCF 16.6%, "
+    },
+    {
+      "date": "2026-07-23",
+      "action": "SELL",
+      "ticker": "EXEL",
+      "company": "Exelixis, Inc.",
+      "shares": 96,
+      "price": 55.65,
+      "value": 5336.06,
+      "return_pct": 7.62,
+      "transaction_cost": 6.34,
+      "rationale": "BROKEN THESIS: independently re-verified this cycle and rated AVOID. Sell-side consensus price target ($50.38) already sits below the current price ($55.54) \u2014 the opposite of a margin of safety. Growth decelerated from 18% to 7% YoY, and the bundle's own 2030-to-2031 analyst estimates show revenue (-11.5%) and EPS (-16.2%) DECLINING as the core Cabometyx franchise's patent exclusivity is expected to erode starting 2031 \u2014 a dated, quantified patent-cliff risk landing inside the 3-5yr underwriting window, not a speculative one. The cheap trailing PEG (0.26) that justified the original entry is a value trap masking this cliff, confirmed by the same data set used to buy it."
+    },
+    {
+      "date": "2026-07-23",
+      "action": "BUY",
+      "ticker": "PTC",
+      "company": "PTC Inc.",
+      "shares": 44,
+      "price": 113.05,
+      "value": 4974.2,
+      "return_pct": 0.0,
+      "transaction_cost": 5.97,
+      "rationale": "CIO's #1-ranked best idea this cycle and the only name to survive Stage 3 debate at BUY/HIGH unchanged. Wide-moat industrial CAD/PLM software at 13.9x P/E with accelerating 19% revenue growth; the bea"
     }
   ],
-  "last_updated": "2026-07-22"
+  "last_updated": "2026-07-23"
 }
