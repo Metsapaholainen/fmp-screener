@@ -1,7 +1,7 @@
 {
   "started": "2026-04-08",
   "initial_cash": 100000.0,
-  "cash": 23519.538899999992,
+  "cash": 22861.017299999992,
   "holdings": [
     {
       "ticker": "QLYS",
@@ -100,18 +100,6 @@
       "sector": "Consumer Cyclical"
     },
     {
-      "ticker": "TIMB",
-      "company": "TIM S.A.",
-      "shares": 224,
-      "entry_price": 22.29,
-      "entry_date": "2026-06-13",
-      "rationale": "IV-discount SlowGrower fills the open slot without breaching any cap. SlowGrower category is only 1/6. Communication Services is a new, uncorrelated sector (0 current positions). ROIC 13%, FCF 16.6%, ",
-      "conviction": "MEDIUM",
-      "sell_trigger": "FCF margin falls below 8% or revenue declines for 2 consecutive years, or BRL devaluation structurally impairs USD returns",
-      "lynch_category": "SlowGrower",
-      "sector": "Communication Services"
-    },
-    {
       "ticker": "PTC",
       "company": "PTC Inc.",
       "shares": 44,
@@ -122,6 +110,18 @@
       "sell_trigger": "Revenue growth decelerates below 10% for two consecutive quarters, or evidence emerges that the recent net-income beat was entirely non-operating (int",
       "lynch_category": "Stalwart+FastGrower",
       "sector": "Technology"
+    },
+    {
+      "ticker": "MMS",
+      "company": "Maximus, Inc.",
+      "shares": 79,
+      "entry_price": 63.03,
+      "entry_date": "2026-07-29",
+      "rationale": "Confirmed BUY/MEDIUM through Stage 3 debate, unchanged in direction (conviction trimmed from HIGH to MEDIUM after debate surfaced Accenture Federal Services as a direct competitor on the same $2.6B IR",
+      "conviction": "MEDIUM",
+      "sell_trigger": "Accenture Federal Services (or another competitor) shows a confirmed win or credible bid displacing MMS on the $2.6B IRS contract or another flagship ",
+      "lynch_category": "SlowGrower+Turnaround",
+      "sector": "Industrials"
     }
   ],
   "transactions": [
@@ -2128,7 +2128,31 @@
       "return_pct": 0.0,
       "transaction_cost": 5.97,
       "rationale": "CIO's #1-ranked best idea this cycle and the only name to survive Stage 3 debate at BUY/HIGH unchanged. Wide-moat industrial CAD/PLM software at 13.9x P/E with accelerating 19% revenue growth; the bea"
+    },
+    {
+      "date": "2026-07-29",
+      "action": "SELL",
+      "ticker": "TIMB",
+      "company": "TIM S.A.",
+      "shares": 224,
+      "price": 19.34,
+      "value": 4326.83,
+      "return_pct": -13.23,
+      "transaction_cost": 5.33,
+      "rationale": "BROKEN THESIS: independently re-verified this cycle and rated AVOID. Total debt nearly doubled from BRL 15.6B (FY2024) to BRL 28.6B (FY2025) with no purpose explained in the available data, while cash collapsed from BRL 3.26B to BRL 85.8M. Simultaneously, revenue growth is decelerating (7%\u21925%, with the Q2 2026 print slowing further to 5.5% YoY), churn is rising, and ARPU is stagnant per the company's own commentary. The cheap trailing multiple (12.4x P/E, 0.62 PEG) that supported the original hold no longer compensates for an unexplained leverage jump landing right as the core business decelerates \u2014 the same combination of red flags (statistically cheap + deteriorating fundamentals + unexplained balance-sheet move) that has triggered sells in prior cycles."
+    },
+    {
+      "date": "2026-07-29",
+      "action": "BUY",
+      "ticker": "MMS",
+      "company": "Maximus, Inc.",
+      "shares": 79,
+      "price": 63.03,
+      "value": 4979.37,
+      "return_pct": 0.0,
+      "transaction_cost": 5.98,
+      "rationale": "Confirmed BUY/MEDIUM through Stage 3 debate, unchanged in direction (conviction trimmed from HIGH to MEDIUM after debate surfaced Accenture Federal Services as a direct competitor on the same $2.6B IR"
     }
   ],
-  "last_updated": "2026-07-23"
+  "last_updated": "2026-07-29"
 }
