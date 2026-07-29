@@ -8,7 +8,7 @@
     "ticker": "NOVO-B.CO",
     "company": "Novo Nordisk A/S",
     "sector": "Healthcare",
-    "price": 321.45,
+    "price": 335.7,
     "mktCapUsdB": 217.19,
     "score": 47.0
    },
@@ -16,7 +16,7 @@
     "ticker": "VWS.CO",
     "company": "Vestas Wind Systems A/S",
     "sector": "Industrials",
-    "price": 175.9,
+    "price": 168.35,
     "mktCapUsdB": 26.34,
     "score": 17.0
    },
@@ -24,31 +24,31 @@
     "ticker": "BAVA.CO",
     "company": "Bavarian Nordic A/S",
     "sector": "Healthcare",
-    "price": 179.8,
+    "price": 177.9,
     "mktCapUsdB": 2.08,
-    "score": 58
+    "score": 94
    },
    {
     "ticker": "HLUN-B.CO",
     "company": "H. Lundbeck A/S",
     "sector": "Healthcare",
-    "price": 42.3,
+    "price": 42.5,
     "mktCapUsdB": 6.41,
-    "score": 59
+    "score": 87
    },
    {
     "ticker": "AMBU-B.CO",
     "company": "Ambu A/S",
     "sector": "Healthcare",
-    "price": 69.4,
+    "price": 72.05,
     "mktCapUsdB": 2.79,
-    "score": 37
+    "score": 67
    },
    {
     "ticker": "PNDORA.CO",
     "company": "Pandora A/S",
     "sector": "Consumer Cyclical",
-    "price": 766.0,
+    "price": 815.0,
     "mktCapUsdB": 8.75,
     "score": 59
    },
@@ -56,7 +56,7 @@
     "ticker": "ZEAL.CO",
     "company": "Zealand Pharma A/S",
     "sector": "Healthcare",
-    "price": 290.8,
+    "price": 304.7,
     "mktCapUsdB": 3.07,
     "score": 65.0
    },
@@ -64,7 +64,7 @@
     "ticker": "ISS.CO",
     "company": "ISS A/S",
     "sector": "Industrials",
-    "price": 291.2,
+    "price": 293.2,
     "mktCapUsdB": 6.94,
     "score": 67.0
    },
@@ -72,15 +72,15 @@
     "ticker": "UIE.CO",
     "company": "UIE Plc",
     "sector": "Consumer Defensive",
-    "price": 379.5,
+    "price": 363.5,
     "mktCapUsdB": 1.78,
-    "score": 52.0
+    "score": 56.0
    },
    {
     "ticker": "CHEMM.CO",
     "company": "ChemoMetec A/S",
     "sector": "Healthcare",
-    "price": 407.0,
+    "price": 423.2,
     "mktCapUsdB": 1.08,
     "score": 66.0
    }
@@ -90,7 +90,7 @@
     "ticker": "DFDS.CO",
     "company": "DFDS A/S",
     "sector": "Industrials",
-    "price": 126.6,
+    "price": 127.8,
     "mktCapUsdB": 1.04,
     "score": 39.0
    },
@@ -98,7 +98,7 @@
     "ticker": "STG.CO",
     "company": "Scandinavian Tobacco Group A/S",
     "sector": "Consumer Defensive",
-    "price": 68.1,
+    "price": 73.0,
     "mktCapUsdB": 0.82,
     "score": 23.0
    },
@@ -106,7 +106,7 @@
     "ticker": "SCHO.CO",
     "company": "Aktieselskabet Schouw & Co.",
     "sector": "Industrials",
-    "price": 630.0,
+    "price": 623.0,
     "mktCapUsdB": 2.17,
     "score": 81.0
    },
@@ -114,57 +114,57 @@
     "ticker": "FLS.CO",
     "company": "FLSmidth & Co. A/S",
     "sector": "Industrials",
-    "price": 457.6,
+    "price": 477.8,
     "mktCapUsdB": 3.75,
-    "score": 63.0
-   },
-   {
-    "ticker": "ALMB.CO",
-    "company": "Alm. Brand A/S",
-    "sector": "Financial Services",
-    "price": 16.88,
-    "mktCapUsdB": 3.52,
     "score": 59.0
    },
    {
     "ticker": "MAERSK-B.CO",
     "company": "A.P. M\u00f8ller - M\u00e6rsk A/S",
     "sector": "Industrials",
-    "price": 16865.0,
+    "price": 17540.0,
     "mktCapUsdB": 37.25,
     "score": 57.0
    },
    {
-    "ticker": "PAAL-B.CO",
-    "company": "Per Aarsleff Holding A/S",
+    "ticker": "ALMB.CO",
+    "company": "Alm. Brand A/S",
+    "sector": "Financial Services",
+    "price": 16.93,
+    "mktCapUsdB": 3.52,
+    "score": 56.0
+   },
+   {
+    "ticker": "DNORD.CO",
+    "company": "Dampskibsselskabet Norden A/S",
     "sector": "Industrials",
-    "price": 747.0,
-    "mktCapUsdB": 2.15,
+    "price": 337.0,
+    "mktCapUsdB": 1.37,
     "score": 46.0
    },
    {
     "ticker": "BOOZT-DKK.CO",
     "company": "Boozt AB (publ)",
     "sector": "Consumer Cyclical",
-    "price": 106.8,
+    "price": 111.0,
     "mktCapUsdB": 0.96,
     "score": 45.0
-   },
-   {
-    "ticker": "MATAS.CO",
-    "company": "Matas A/S",
-    "sector": "Consumer Cyclical",
-    "price": 88.3,
-    "mktCapUsdB": 0.5,
-    "score": 44.0
    },
    {
     "ticker": "NSIS-B.CO",
     "company": "Novozymes A/S",
     "sector": "Basic Materials",
-    "price": 420.2,
+    "price": 417.9,
     "mktCapUsdB": 29.92,
     "score": 37.0
+   },
+   {
+    "ticker": "TRYG.CO",
+    "company": "Tryg A/S",
+    "sector": "Financial Services",
+    "price": 154.1,
+    "mktCapUsdB": 14.01,
+    "score": 36.0
    }
   ],
   "Growth": [
@@ -172,7 +172,7 @@
     "ticker": "CHEMM.CO",
     "company": "ChemoMetec A/S",
     "sector": "Healthcare",
-    "price": 407.0,
+    "price": 423.2,
     "mktCapUsdB": 1.08,
     "score": 66.3
    },
@@ -180,7 +180,7 @@
     "ticker": "GUBRA.CO",
     "company": "Gubra A/S",
     "sector": "Healthcare",
-    "price": 350.8,
+    "price": 373.2,
     "mktCapUsdB": 0.88,
     "score": 66.3
    },
@@ -188,7 +188,7 @@
     "ticker": "PARKEN.CO",
     "company": "PARKEN Sport & Entertainment A/S",
     "sector": "Communication Services",
-    "price": 195.0,
+    "price": 195.5,
     "mktCapUsdB": 0.29,
     "score": 45.2
    },
@@ -196,23 +196,23 @@
     "ticker": "NTG.CO",
     "company": "NTG Nordic Transport Group A/S",
     "sector": "Industrials",
-    "price": 248.0,
+    "price": 264.5,
     "mktCapUsdB": 0.83,
-    "score": 56.2
+    "score": 54.5
    },
    {
     "ticker": "UIE.CO",
     "company": "UIE Plc",
     "sector": "Consumer Defensive",
-    "price": 379.5,
+    "price": 363.5,
     "mktCapUsdB": 1.78,
-    "score": 59.3
+    "score": 63.6
    },
    {
     "ticker": "ZEAL.CO",
     "company": "Zealand Pharma A/S",
     "sector": "Healthcare",
-    "price": 290.8,
+    "price": 304.7,
     "mktCapUsdB": 3.07,
     "score": 77.3
    },
@@ -220,9 +220,9 @@
     "ticker": "DSV.CO",
     "company": "DSV A/S",
     "sector": "Industrials",
-    "price": 1673.0,
+    "price": 1442.5,
     "mktCapUsdB": 60.96,
-    "score": 34.4
+    "score": 32.7
    },
    {
     "ticker": "TGAMES.CO",
@@ -236,15 +236,15 @@
     "ticker": "GREENM.CO",
     "company": "GreenMobility A/S",
     "sector": "Industrials",
-    "price": 73.2,
+    "price": 65.2,
     "mktCapUsdB": 0.07,
-    "score": 83.0
+    "score": 88.0
    },
    {
     "ticker": "NETC.CO",
     "company": "Netcompany Group A/S",
     "sector": "Technology",
-    "price": 305.0,
+    "price": 332.6,
     "mktCapUsdB": 2.08,
     "score": 27.9
    }
@@ -254,57 +254,49 @@
     "ticker": "CBRAIN.CO",
     "company": "cBrain A/S",
     "sector": "Technology",
-    "price": 50.7,
+    "price": 51.8,
     "mktCapUsdB": 0.2,
-    "score": 80.6
+    "score": 79.8
    },
    {
     "ticker": "ZEAL.CO",
     "company": "Zealand Pharma A/S",
     "sector": "Healthcare",
-    "price": 290.8,
+    "price": 304.7,
     "mktCapUsdB": 3.1,
-    "score": 79.2
+    "score": 77.3
    },
    {
     "ticker": "GUBRA.CO",
     "company": "Gubra A/S",
     "sector": "Healthcare",
-    "price": 350.8,
+    "price": 373.2,
     "mktCapUsdB": 0.9,
-    "score": 75.7
-   },
-   {
-    "ticker": "PNDORA.CO",
-    "company": "Pandora A/S",
-    "sector": "Consumer Cycli",
-    "price": 766.0,
-    "mktCapUsdB": 8.8,
-    "score": 69.8
+    "score": 73.7
    },
    {
     "ticker": "ROCK-A.CO",
     "company": "Rockwool A/S",
     "sector": "Industrials",
-    "price": 205.5,
+    "price": 211.0,
     "mktCapUsdB": 6.5,
-    "score": 59.8
+    "score": 56.8
+   },
+   {
+    "ticker": "PNDORA.CO",
+    "company": "Pandora A/S",
+    "sector": "Consumer Cycli",
+    "price": 815.0,
+    "mktCapUsdB": 8.8,
+    "score": 55.5
    },
    {
     "ticker": "RBREW.CO",
     "company": "Royal Unibrew A/S",
     "sector": "Consumer Defen",
-    "price": 478.6,
+    "price": 480.6,
     "mktCapUsdB": 3.5,
-    "score": 52.5
-   },
-   {
-    "ticker": "FLS.CO",
-    "company": "FLSmidth & Co. A/S",
-    "sector": "Industrials",
-    "price": 457.6,
-    "mktCapUsdB": 3.8,
-    "score": 36.0
+    "score": 46.1
    }
   ],
   "Special Situations": [
@@ -312,48 +304,130 @@
     "ticker": "BIOMAR.CO",
     "company": "BioMar Group A/S",
     "sector": "Consumer Defen",
-    "price": 114.1,
+    "price": 109.0,
     "mktCapUsdB": 1.8,
     "score": 70.0
+   }
+  ],
+  "Munger Small-Cap": [
+   {
+    "ticker": "TGAMES.CO",
+    "company": "TROPHY GAMES Development A/S",
+    "sector": "Communication ",
+    "price": 14.0,
+    "mktCapUsdB": 0.06,
+    "score": 68
+   },
+   {
+    "ticker": "GUBRA.CO",
+    "company": "Gubra A/S",
+    "sector": "Healthcare",
+    "price": 373.2,
+    "mktCapUsdB": 0.88,
+    "score": 52
+   },
+   {
+    "ticker": "BOOZT-DKK.CO",
+    "company": "Boozt AB (publ)",
+    "sector": "Consumer Cycli",
+    "price": 111.0,
+    "mktCapUsdB": 0.96,
+    "score": 50
+   },
+   {
+    "ticker": "MTHH.CO",
+    "company": "MT H\u00f8jgaard Holding A/S",
+    "sector": "Industrials",
+    "price": 261.5,
+    "mktCapUsdB": 0.32,
+    "score": 50
+   },
+   {
+    "ticker": "GREENM.CO",
+    "company": "GreenMobility A/S",
+    "sector": "Industrials",
+    "price": 65.2,
+    "mktCapUsdB": 0.07,
+    "score": 50
+   },
+   {
+    "ticker": "CHEMM.CO",
+    "company": "ChemoMetec A/S",
+    "sector": "Healthcare",
+    "price": 423.2,
+    "mktCapUsdB": 1.08,
+    "score": 49
+   },
+   {
+    "ticker": "DONKEY.CO",
+    "company": "DonkeyRepublic Holding A/S",
+    "sector": "Industrials",
+    "price": 8.25,
+    "mktCapUsdB": 0.05,
+    "score": 49
+   },
+   {
+    "ticker": "GYLD-B.CO",
+    "company": "Gyldendal A/S",
+    "sector": "Communication ",
+    "price": 400.0,
+    "mktCapUsdB": 0.28,
+    "score": 46
+   },
+   {
+    "ticker": "UIE.CO",
+    "company": "UIE Plc",
+    "sector": "Consumer Defen",
+    "price": 363.5,
+    "mktCapUsdB": 1.78,
+    "score": 45
+   },
+   {
+    "ticker": "CBRAIN.CO",
+    "company": "cBrain A/S",
+    "sector": "Technology",
+    "price": 51.8,
+    "mktCapUsdB": 0.15,
+    "score": 43
    }
   ]
  },
  "candidates": {
   "NOVO-B.CO": {
-   "metrics_block": "Company: Novo Nordisk A/S\nSector / Industry: Healthcare / Drug Manufacturers - General\nMarket cap: $217.19B\nPrice: $321.45\nP/E (TTM): 11.7\nPEG: 1.82 (trailing-growth basis)\nMargin of safety vs DCF: -62%\nROIC: 34%\nGross margin: 83%\nOperating margin: 62%\nRevenue growth YoY: 6%\nFCF yield: 2.0%\nSell-side analysts covering: 24\nCapital allocation: share count +0.1%/yr; SBC ~$214M/yr (5y avg)\n5yr trend: Rev growth 6% (prev 25%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 33% of yrs",
-   "price": 321.45,
+   "metrics_block": "Company: Novo Nordisk A/S\nSector / Industry: Healthcare / Drug Manufacturers - General\nMarket cap: $217.19B\nPrice: $335.70\nP/E (TTM): 12.2\nPEG: 1.9 (trailing-growth basis)\nMargin of safety vs DCF: -62%\nROIC: 34%\nGross margin: 83%\nOperating margin: 62%\nRevenue growth YoY: 6%\nFCF yield: 2.0%\nSell-side analysts covering: 24\nCapital allocation: share count +0.1%/yr; SBC ~$214M/yr (5y avg)\n5yr trend: Rev growth 6% (prev 25%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 33% of yrs",
+   "price": 335.7,
    "currency": "DKK",
    "sector": "Healthcare",
    "company": "Novo Nordisk A/S",
    "heldPercentInsiders": 0.05283
   },
   "VWS.CO": {
-   "metrics_block": "Company: Vestas Wind Systems A/S\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $26.34B\nPrice: $175.90\nP/E (TTM): 27.6\nPEG: 0.48 (trailing-growth basis)\nROIC: 24%\nGross margin: 14%\nOperating margin: 3%\nRevenue growth YoY: 9%\nFCF yield: 0.6%\nSell-side analysts covering: 24\nCapital allocation: share count -1.5%/yr (shrinking \u2014 owner-friendly); SBC ~$3M/yr (5y avg)\n5yr trend: Rev growth 9% (prev 12%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 33% of yrs",
-   "price": 175.9,
+   "metrics_block": "Company: Vestas Wind Systems A/S\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $26.34B\nPrice: $168.35\nP/E (TTM): 26.5\nPEG: 0.46 (trailing-growth basis)\nROIC: 24%\nGross margin: 14%\nOperating margin: 3%\nRevenue growth YoY: 9%\nFCF yield: 0.6%\nSell-side analysts covering: 24\nCapital allocation: share count -1.5%/yr (shrinking \u2014 owner-friendly); SBC ~$3M/yr (5y avg)\n5yr trend: Rev growth 9% (prev 12%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 33% of yrs",
+   "price": 168.35,
    "currency": "DKK",
    "sector": "Industrials",
    "company": "Vestas Wind Systems A/S",
    "heldPercentInsiders": 8.0000005e-05
   },
   "BAVA.CO": {
-   "metrics_block": "Company: Bavarian Nordic A/S\nSector / Industry: Healthcare / Biotechnology\nMarket cap: $2.08B\nPrice: $179.80\nP/E (TTM): 11.9\nPEG: 0.3 (trailing-growth basis)\nMargin of safety vs DCF: -12%\nROIC: 11%\nGross margin: 48%\nOperating margin: -1%\nRevenue growth YoY: 9%\nFCF yield: 10.0%\nSell-side analysts covering: 4\nCapital allocation: share count -0.4%/yr; SBC ~$8M/yr (5y avg)\n5yr trend: Rev growth 9% (prev -19%) \u2014 accelerating; Rev consistent 67% of yrs; FCF consistent 67% of yrs",
-   "price": 179.8,
+   "metrics_block": "Company: Bavarian Nordic A/S\nSector / Industry: Healthcare / Biotechnology\nMarket cap: $2.08B\nPrice: $177.90\nP/E (TTM): 11.8\nPEG: 0.3 (trailing-growth basis)\nMargin of safety vs DCF: -12%\nROIC: 11%\nGross margin: 48%\nOperating margin: -1%\nRevenue growth YoY: 9%\nFCF yield: 10.0%\nSell-side analysts covering: 4\nCapital allocation: share count -0.4%/yr; SBC ~$8M/yr (5y avg)\n5yr trend: Rev growth 9% (prev -19%) \u2014 accelerating; Rev consistent 67% of yrs; FCF consistent 67% of yrs",
+   "price": 177.9,
    "currency": "DKK",
    "sector": "Healthcare",
    "company": "Bavarian Nordic A/S",
    "heldPercentInsiders": 0.00046
   },
   "DFDS.CO": {
-   "metrics_block": "Company: DFDS A/S\nSector / Industry: Industrials / Marine Shipping\nMarket cap: $1.04B\nPrice: $126.60\nMargin of safety vs DCF: +39%\nROIC: 2%\nGross margin: 17%\nOperating margin: 0%\nRevenue growth YoY: 4%\nFCF yield: 25.2%\nSell-side analysts covering: 2\nCapital allocation: share count +0.0%/yr; SBC ~$3M/yr (5y avg)\n5yr trend: Rev growth 4% (prev 9%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 33% of yrs",
-   "price": 126.6,
+   "metrics_block": "Company: DFDS A/S\nSector / Industry: Industrials / Marine Shipping\nMarket cap: $1.04B\nPrice: $127.80\nMargin of safety vs DCF: +39%\nROIC: 2%\nGross margin: 17%\nOperating margin: 0%\nRevenue growth YoY: 4%\nFCF yield: 25.1%\nSell-side analysts covering: 2\nCapital allocation: share count +0.0%/yr; SBC ~$3M/yr (5y avg)\n5yr trend: Rev growth 4% (prev 9%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 33% of yrs",
+   "price": 127.8,
    "currency": "DKK",
    "sector": "Industrials",
    "company": "DFDS A/S",
    "heldPercentInsiders": 0.41970003
   },
   "STG.CO": {
-   "metrics_block": "Company: Scandinavian Tobacco Group A/S\nSector / Industry: Consumer Defensive / Tobacco\nMarket cap: $819M\nPrice: $68.10\nP/E (TTM): 8.2\nMargin of safety vs DCF: +35%\nROIC: 6%\nGross margin: 44%\nOperating margin: 9%\nRevenue growth YoY: -2%\nFCF yield: 10.7%\nSell-side analysts covering: 2\nCapital allocation: share count +0.0%/yr\n5yr trend: Rev growth -2% (prev 5%) \u2014 decelerating; Rev consistent 33% of yrs; FCF consistent 33% of yrs",
-   "price": 68.1,
+   "metrics_block": "Company: Scandinavian Tobacco Group A/S\nSector / Industry: Consumer Defensive / Tobacco\nMarket cap: $819M\nPrice: $73.00\nP/E (TTM): 8.8\nMargin of safety vs DCF: +35%\nROIC: 6%\nGross margin: 44%\nOperating margin: 9%\nRevenue growth YoY: -2%\nFCF yield: 10.7%\nSell-side analysts covering: 2\nCapital allocation: share count +0.0%/yr\n5yr trend: Rev growth -2% (prev 5%) \u2014 decelerating; Rev consistent 33% of yrs; FCF consistent 33% of yrs",
+   "price": 73.0,
    "currency": "DKK",
    "sector": "Consumer Defensive",
    "company": "Scandinavian Tobacco Group A/S",

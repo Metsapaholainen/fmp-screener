@@ -8,7 +8,7 @@
     "ticker": "WRT1V.HE",
     "company": "W\u00e4rtsil\u00e4 Oyj Abp",
     "sector": "Industrials",
-    "price": 29.71,
+    "price": 29.4,
     "mktCapUsdB": 20.02,
     "score": 71.0
    },
@@ -16,7 +16,7 @@
     "ticker": "PUUILO.HE",
     "company": "Puuilo Oyj",
     "sector": "Consumer Cyclical",
-    "price": 16.92,
+    "price": 17.04,
     "mktCapUsdB": 1.63,
     "score": 68.0
    },
@@ -24,7 +24,7 @@
     "ticker": "KNEBV.HE",
     "company": "KONE Oyj",
     "sector": "Industrials",
-    "price": 48.34,
+    "price": 50.16,
     "mktCapUsdB": 28.63,
     "score": 60.0
    },
@@ -32,15 +32,15 @@
     "ticker": "ORNBV.HE",
     "company": "Orion Oyj",
     "sector": "Healthcare",
-    "price": 75.85,
+    "price": 81.0,
     "mktCapUsdB": 12.21,
-    "score": 62.0
+    "score": 68.0
    },
    {
     "ticker": "FRAMERY.HE",
     "company": "Framery Group Oyj",
     "sector": "Consumer Cyclical",
-    "price": 6.912,
+    "price": 6.947,
     "mktCapUsdB": 0.63,
     "score": 83
    },
@@ -48,23 +48,15 @@
     "ticker": "GRK.HE",
     "company": "GRK Infra Oyj",
     "sector": "Industrials",
-    "price": 19.36,
+    "price": 21.5,
     "mktCapUsdB": 0.91,
-    "score": 54
-   },
-   {
-    "ticker": "KALMAR.HE",
-    "company": "Kalmar Oyj",
-    "sector": "Industrials",
-    "price": 38.06,
-    "mktCapUsdB": 2.78,
-    "score": 21
+    "score": 92
    },
    {
     "ticker": "SAMPO.HE",
     "company": "Sampo Oyj",
     "sector": "Financial Services",
-    "price": 9.646,
+    "price": 9.576,
     "mktCapUsdB": 29.09,
     "score": 42.0
    },
@@ -72,33 +64,33 @@
     "ticker": "KCR.HE",
     "company": "Konecranes Plc",
     "sector": "Industrials",
-    "price": 27.28,
+    "price": 26.8,
     "mktCapUsdB": 7.41,
-    "score": 45
+    "score": 81
    },
    {
     "ticker": "ALMA.HE",
     "company": "Alma Media Oyj",
     "sector": "Communication Services",
-    "price": 13.5,
+    "price": 13.8,
     "mktCapUsdB": 1.27,
-    "score": 50
+    "score": 53
+   },
+   {
+    "ticker": "VAIAS.HE",
+    "company": "Vaisala Oyj",
+    "sector": "Technology",
+    "price": 54.7,
+    "mktCapUsdB": 2.16,
+    "score": 31.0
    }
   ],
   "Value": [
    {
-    "ticker": "OUT1V.HE",
-    "company": "Outokumpu Oyj",
-    "sector": "Basic Materials",
-    "price": 5.43,
-    "mktCapUsdB": 2.93,
-    "score": 32.0
-   },
-   {
     "ticker": "STEAV.HE",
     "company": "Stora Enso Oyj",
     "sector": "Consumer Cyclical",
-    "price": 9.78,
+    "price": 9.88,
     "mktCapUsdB": 8.81,
     "score": 18.0
    },
@@ -106,7 +98,7 @@
     "ticker": "ERIBR.HE",
     "company": "Telefonaktiebolaget LM Ericsson (publ)",
     "sector": "Technology",
-    "price": 8.472,
+    "price": 8.728,
     "mktCapUsdB": 31.88,
     "score": 40.0
    },
@@ -114,15 +106,23 @@
     "ticker": "CTY1S.HE",
     "company": "Citycon Oyj",
     "sector": "Real Estate",
-    "price": 2.91,
+    "price": 2.9,
     "mktCapUsdB": 0.61,
     "score": 23.0
+   },
+   {
+    "ticker": "OUT1V.HE",
+    "company": "Outokumpu Oyj",
+    "sector": "Basic Materials",
+    "price": 5.78,
+    "mktCapUsdB": 2.93,
+    "score": 86.0
    },
    {
     "ticker": "METSA.HE",
     "company": "Mets\u00e4 Board Oyj",
     "sector": "Consumer Cyclical",
-    "price": 4.19,
+    "price": 4.2,
     "mktCapUsdB": 1.7,
     "score": 79.0
    },
@@ -130,39 +130,39 @@
     "ticker": "PON1V.HE",
     "company": "Ponsse Oyj",
     "sector": "Industrials",
-    "price": 22.3,
+    "price": 23.0,
     "mktCapUsdB": 0.71,
     "score": 79.0
-   },
-   {
-    "ticker": "VALMT.HE",
-    "company": "Valmet Oyj",
-    "sector": "Industrials",
-    "price": 22.12,
-    "mktCapUsdB": 4.66,
-    "score": 78.0
    },
    {
     "ticker": "KEMIRA.HE",
     "company": "Kemira Oyj",
     "sector": "Basic Materials",
-    "price": 16.67,
+    "price": 16.98,
     "mktCapUsdB": 2.76,
     "score": 70.0
+   },
+   {
+    "ticker": "VALMT.HE",
+    "company": "Valmet Oyj",
+    "sector": "Industrials",
+    "price": 26.32,
+    "mktCapUsdB": 4.66,
+    "score": 67.0
    },
    {
     "ticker": "HIAB.HE",
     "company": "Hiab Oyj",
     "sector": "Industrials",
-    "price": 53.5,
+    "price": 58.1,
     "mktCapUsdB": 3.95,
-    "score": 69.0
+    "score": 67.0
    },
    {
     "ticker": "YIT.HE",
     "company": "YIT Oyj",
     "sector": "Industrials",
-    "price": 2.61,
+    "price": 3.0,
     "mktCapUsdB": 0.69,
     "score": 67.0
    }
@@ -172,15 +172,15 @@
     "ticker": "BITTI.HE",
     "company": "Bittium Oyj",
     "sector": "Technology",
-    "price": 26.3,
+    "price": 27.75,
     "mktCapUsdB": 1.07,
-    "score": 36.7
+    "score": 38.4
    },
    {
     "ticker": "FRAMERY.HE",
     "company": "Framery Group Oyj",
     "sector": "Consumer Cyclical",
-    "price": 6.912,
+    "price": 6.947,
     "mktCapUsdB": 0.63,
     "score": 59.8
    },
@@ -188,7 +188,7 @@
     "ticker": "ILKKA.HE",
     "company": "Ilkka Oyj 2",
     "sector": "Communication Services",
-    "price": 4.04,
+    "price": 4.1,
     "mktCapUsdB": 0.12,
     "score": 54.7
    },
@@ -196,31 +196,31 @@
     "ticker": "ORNBV.HE",
     "company": "Orion Oyj",
     "sector": "Healthcare",
-    "price": 75.85,
+    "price": 81.0,
     "mktCapUsdB": 12.21,
-    "score": 46.2
+    "score": 50.4
    },
    {
     "ticker": "GRK.HE",
     "company": "GRK Infra Oyj",
     "sector": "Industrials",
-    "price": 19.36,
+    "price": 21.5,
     "mktCapUsdB": 0.91,
-    "score": 48.0
+    "score": 51.0
    },
    {
     "ticker": "RELAIS.HE",
     "company": "Relais Group Oyj",
     "sector": "Consumer Cyclical",
-    "price": 14.35,
+    "price": 15.2,
     "mktCapUsdB": 0.3,
-    "score": 66.0
+    "score": 59.0
    },
    {
     "ticker": "REMEDY.HE",
     "company": "Remedy Entertainment Oyj",
     "sector": "Communication Services",
-    "price": 14.8,
+    "price": 15.36,
     "mktCapUsdB": 0.23,
     "score": 55.0
    },
@@ -228,7 +228,7 @@
     "ticker": "PUUILO.HE",
     "company": "Puuilo Oyj",
     "sector": "Consumer Cyclical",
-    "price": 16.92,
+    "price": 17.04,
     "mktCapUsdB": 1.63,
     "score": 54.0
    },
@@ -236,15 +236,15 @@
     "ticker": "HARVIA.HE",
     "company": "Harvia Oyj",
     "sector": "Consumer Cyclical",
-    "price": 41.2,
+    "price": 42.1,
     "mktCapUsdB": 0.88,
-    "score": 19
+    "score": 11
    },
    {
     "ticker": "REG1V.HE",
     "company": "Revenio Group Oyj",
     "sector": "Healthcare",
-    "price": 12.5,
+    "price": 12.6,
     "mktCapUsdB": 0.42,
     "score": 15
    }
@@ -256,7 +256,7 @@
     "sector": "Healthcare",
     "price": 10.38,
     "mktCapUsdB": 0.3,
-    "score": 78.2
+    "score": 77.5
    }
   ],
   "Special Situations": [
@@ -264,7 +264,7 @@
     "ticker": "LASTIK.HE",
     "company": "Lassila & Tikanoja Plc",
     "sector": "Industrials",
-    "price": 6.83,
+    "price": 6.76,
     "mktCapUsdB": 0.3,
     "score": 88.8
    },
@@ -272,7 +272,7 @@
     "ticker": "FRAMERY.HE",
     "company": "Framery Group Oyj",
     "sector": "Consumer Cycli",
-    "price": 6.912,
+    "price": 6.947,
     "mktCapUsdB": 0.6,
     "score": 86.8
    },
@@ -280,60 +280,142 @@
     "ticker": "POSTI.HE",
     "company": "Posti Group Oyj",
     "sector": "Industrials",
-    "price": 9.91,
+    "price": 10.3,
     "mktCapUsdB": 0.5,
-    "score": 55.4
+    "score": 53.2
    },
    {
     "ticker": "GRK.HE",
     "company": "GRK Infra Oyj",
     "sector": "Industrials",
-    "price": 19.36,
+    "price": 21.5,
     "mktCapUsdB": 0.9,
-    "score": 49.0
+    "score": 51.2
+   }
+  ],
+  "Munger Small-Cap": [
+   {
+    "ticker": "TEKOVA.HE",
+    "company": "Tekova Oyj",
+    "sector": "Industrials",
+    "price": 1.23,
+    "mktCapUsdB": 0.06,
+    "score": 60
+   },
+   {
+    "ticker": "NLG1V.HE",
+    "company": "Nurminen Logistics Oyj",
+    "sector": "Industrials",
+    "price": 0.68,
+    "mktCapUsdB": 0.06,
+    "score": 55
+   },
+   {
+    "ticker": "TITAN.HE",
+    "company": "Titanium Oyj",
+    "sector": "Financial Serv",
+    "price": 6.2,
+    "mktCapUsdB": 0.07,
+    "score": 54
+   },
+   {
+    "ticker": "ADMCM.HE",
+    "company": "Admicom Oyj",
+    "sector": "Technology",
+    "price": 25.45,
+    "mktCapUsdB": 0.15,
+    "score": 53
+   },
+   {
+    "ticker": "BITTI.HE",
+    "company": "Bittium Oyj",
+    "sector": "Technology",
+    "price": 27.75,
+    "mktCapUsdB": 1.07,
+    "score": 52
+   },
+   {
+    "ticker": "LEMON.HE",
+    "company": "Lemonsoft Oyj",
+    "sector": "Technology",
+    "price": 4.49,
+    "mktCapUsdB": 0.1,
+    "score": 52
+   },
+   {
+    "ticker": "LUOTEA.HE",
+    "company": "Luotea Plc",
+    "sector": "Industrials",
+    "price": 1.92,
+    "mktCapUsdB": 0.08,
+    "score": 52
+   },
+   {
+    "ticker": "ORTHEX.HE",
+    "company": "Orthex Oyj",
+    "sector": "Consumer Cycli",
+    "price": 4.44,
+    "mktCapUsdB": 0.09,
+    "score": 51
+   },
+   {
+    "ticker": "MEKKO.HE",
+    "company": "Marimekko Oyj",
+    "sector": "Consumer Cycli",
+    "price": 10.56,
+    "mktCapUsdB": 0.48,
+    "score": 49
+   },
+   {
+    "ticker": "ICP1V.HE",
+    "company": "Incap Oyj",
+    "sector": "Technology",
+    "price": 7.25,
+    "mktCapUsdB": 0.29,
+    "score": 48
    }
   ]
  },
  "candidates": {
   "WRT1V.HE": {
-   "metrics_block": "Company: W\u00e4rtsil\u00e4 Oyj Abp\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $20.02B\nPrice: $29.71\nP/E (TTM): 27.0\nPEG: 1.09 (trailing-growth basis)\nMargin of safety vs DCF: -17%\nROIC: 22%\nGross margin: 47%\nOperating margin: 12%\nRevenue growth YoY: 7%\nFCF yield: 8.2%\nSell-side analysts covering: 16\nCapital allocation: share count -0.1%/yr\n5yr trend: Rev growth 7% (prev 7%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
-   "price": 29.71,
+   "metrics_block": "Company: W\u00e4rtsil\u00e4 Oyj Abp\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $20.02B\nPrice: $29.40\nP/E (TTM): 26.2\nPEG: 1.06 (trailing-growth basis)\nMargin of safety vs DCF: -17%\nROIC: 22%\nGross margin: 47%\nOperating margin: 12%\nRevenue growth YoY: 7%\nFCF yield: 8.2%\nSell-side analysts covering: 16\nCapital allocation: share count -0.1%/yr\n5yr trend: Rev growth 7% (prev 7%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "price": 29.4,
    "currency": "EUR",
    "sector": "Industrials",
    "company": "W\u00e4rtsil\u00e4 Oyj Abp",
    "heldPercentInsiders": 0.01503
   },
   "PUUILO.HE": {
-   "metrics_block": "Company: Puuilo Oyj\nSector / Industry: Consumer Cyclical / Department Stores\nMarket cap: $1.63B\nPrice: $16.92\nP/E (TTM): 25.6\nPEG: 1.62 (trailing-growth basis)\nMargin of safety vs DCF: -39%\nROIC: 35%\nGross margin: 38%\nOperating margin: 17%\nRevenue growth YoY: 15%\nFCF yield: 4.8%\nSell-side analysts covering: 3\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 15% (prev 13%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
-   "price": 16.92,
+   "metrics_block": "Company: Puuilo Oyj\nSector / Industry: Consumer Cyclical / Department Stores\nMarket cap: $1.63B\nPrice: $17.04\nP/E (TTM): 25.8\nPEG: 1.63 (trailing-growth basis)\nMargin of safety vs DCF: -39%\nROIC: 35%\nGross margin: 38%\nOperating margin: 17%\nRevenue growth YoY: 15%\nFCF yield: 4.8%\nSell-side analysts covering: 3\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 15% (prev 13%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "price": 17.04,
    "currency": "EUR",
    "sector": "Consumer Cyclical",
    "company": "Puuilo Oyj",
    "heldPercentInsiders": 0.07625
   },
   "KNEBV.HE": {
-   "metrics_block": "Company: KONE Oyj\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $28.63B\nPrice: $48.34\nP/E (TTM): 25.6\nMargin of safety vs DCF: -30%\nROIC: 34%\nGross margin: 58%\nOperating margin: 10%\nRevenue growth YoY: 1%\nFCF yield: 4.6%\nSell-side analysts covering: 23\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 1% (prev 1%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 100% of yrs",
-   "price": 48.34,
+   "metrics_block": "Company: KONE Oyj\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $28.63B\nPrice: $50.16\nP/E (TTM): 27.6\nMargin of safety vs DCF: -30%\nROIC: 34%\nGross margin: 57%\nOperating margin: 11%\nRevenue growth YoY: 1%\nFCF yield: 4.6%\nSell-side analysts covering: 22\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 1% (prev 1%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 100% of yrs",
+   "price": 50.16,
    "currency": "EUR",
    "sector": "Industrials",
    "company": "KONE Oyj",
    "heldPercentInsiders": 0.27951
   },
-  "OUT1V.HE": {
-   "metrics_block": "Company: Outokumpu Oyj\nSector / Industry: Basic Materials / Steel\nMarket cap: $2.93B\nPrice: $5.43\nROIC: -2%\nGross margin: 4%\nOperating margin: 0%\nRevenue growth YoY: -8%\nFCF yield: -2.5%\nSell-side analysts covering: 11\nCapital allocation: share count +11.2%/yr (diluting)\n5yr trend: Rev growth -8% (prev -15%) \u2014 accelerating; Rev consistent 0% of yrs; FCF consistent 33% of yrs",
-   "price": 5.43,
-   "currency": "EUR",
-   "sector": "Basic Materials",
-   "company": "Outokumpu Oyj",
-   "heldPercentInsiders": 0.21959999
-  },
   "STEAV.HE": {
-   "metrics_block": "Company: Stora Enso Oyj\nSector / Industry: Consumer Cyclical / Packaging & Containers\nMarket cap: $8.81B\nPrice: $9.78\nP/E (TTM): 12.5\nPEG: 4.08 (trailing-growth basis)\nROIC: 5%\nGross margin: 25%\nOperating margin: 5%\nRevenue growth YoY: 3%\nFCF yield: -1.7%\nCapital allocation: share count +0.0%/yr; SBC ~$1M/yr (5y avg)\n5yr trend: Rev growth 3% (prev -4%) \u2014 accelerating; Rev consistent 33% of yrs; FCF consistent 0% of yrs",
-   "price": 9.78,
+   "metrics_block": "Company: Stora Enso Oyj\nSector / Industry: Consumer Cyclical / Packaging & Containers\nMarket cap: $8.81B\nPrice: $9.88\nP/E (TTM): 13.7\nPEG: 4.48 (trailing-growth basis)\nROIC: 5%\nGross margin: 25%\nOperating margin: 4%\nRevenue growth YoY: 3%\nFCF yield: -1.7%\nCapital allocation: share count +0.0%/yr; SBC ~$1M/yr (5y avg)\n5yr trend: Rev growth 3% (prev -4%) \u2014 accelerating; Rev consistent 33% of yrs; FCF consistent 0% of yrs",
+   "price": 9.88,
    "currency": "EUR",
    "sector": "Consumer Cyclical",
    "company": "Stora Enso Oyj",
    "heldPercentInsiders": 0.52499
+  },
+  "ERIBR.HE": {
+   "metrics_block": "Company: Telefonaktiebolaget LM Ericsson (publ)\nSector / Industry: Technology / Communication Equipment\nMarket cap: $31.88B\nPrice: $8.73\nP/E (TTM): 13.0\nROIC: 23%\nGross margin: 48%\nRevenue growth YoY: -5%\nCapital allocation: share count +0.0%/yr\n5yr trend: Rev growth -5% (prev -6%) \u2014 stable; Rev consistent 0% of yrs; FCF consistent 33% of yrs",
+   "price": 8.728,
+   "currency": "EUR",
+   "sector": "Technology",
+   "company": "Telefonaktiebolaget LM Ericsson (publ)",
+   "heldPercentInsiders": 0.00098
   }
  }
 }

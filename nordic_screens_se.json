@@ -8,23 +8,23 @@
     "ticker": "CLAS-B.ST",
     "company": "Clas Ohlson AB (publ)",
     "sector": "Consumer Cyclical",
-    "price": 395.4,
+    "price": 417.8,
     "mktCapUsdB": 2.6,
-    "score": 68.0
+    "score": 78.0
    },
    {
     "ticker": "RUSTA.ST",
     "company": "Rusta AB (publ)",
     "sector": "Consumer Cyclical",
-    "price": 82.45,
+    "price": 88.9,
     "mktCapUsdB": 1.3,
-    "score": 62.0
+    "score": 58.0
    },
    {
     "ticker": "AXFO.ST",
     "company": "Axfood AB (publ)",
     "sector": "Consumer Defensive",
-    "price": 232.4,
+    "price": 243.1,
     "mktCapUsdB": 5.18,
     "score": 46.0
    },
@@ -32,7 +32,7 @@
     "ticker": "OEM-B.ST",
     "company": "OEM International AB (publ)",
     "sector": "Industrials",
-    "price": 177.4,
+    "price": 178.0,
     "mktCapUsdB": 2.54,
     "score": 45.0
    },
@@ -40,7 +40,7 @@
     "ticker": "MYCR.ST",
     "company": "Mycronic AB (publ)",
     "sector": "Industrials",
-    "price": 336.2,
+    "price": 315.0,
     "mktCapUsdB": 6.78,
     "score": 52.0
    },
@@ -48,41 +48,41 @@
     "ticker": "ABB.ST",
     "company": "ABB Ltd",
     "sector": "Industrials",
-    "price": 959.8,
+    "price": 914.0,
     "mktCapUsdB": 179.97,
-    "score": 41.0
+    "score": 38.0
    },
    {
     "ticker": "LAGR-B.ST",
     "company": "Lagercrantz Group AB (publ)",
     "sector": "Industrials",
-    "price": 225.0,
+    "price": 221.6,
     "mktCapUsdB": 4.79,
-    "score": 44
+    "score": 54
    },
    {
     "ticker": "LIFCO-B.ST",
     "company": "Lifco AB (publ)",
     "sector": "Industrials",
-    "price": 306.8,
+    "price": 322.4,
     "mktCapUsdB": 14.4,
     "score": 47
+   },
+   {
+    "ticker": "THULE.ST",
+    "company": "Thule Group AB (publ)",
+    "sector": "Consumer Cyclical",
+    "price": 224.4,
+    "mktCapUsdB": 2.36,
+    "score": 62
    },
    {
     "ticker": "HMS.ST",
     "company": "HMS Networks AB (publ)",
     "sector": "Technology",
-    "price": 465.0,
+    "price": 484.6,
     "mktCapUsdB": 2.41,
-    "score": 74
-   },
-   {
-    "ticker": "HACK.ST",
-    "company": "Hacksaw AB",
-    "sector": "Communication Services",
-    "price": 75.15,
-    "mktCapUsdB": 2.24,
-    "score": 69.0
+    "score": 82
    }
   ],
   "Value": [
@@ -90,7 +90,7 @@
     "ticker": "KINV-A.ST",
     "company": "Kinnevik AB",
     "sector": "Financial Services",
-    "price": 61.5,
+    "price": 60.4,
     "mktCapUsdB": 1.79,
     "score": 43.0
    },
@@ -98,23 +98,15 @@
     "ticker": "DOM.ST",
     "company": "Dometic Group AB (publ)",
     "sector": "Consumer Cyclical",
-    "price": 22.22,
+    "price": 23.78,
     "mktCapUsdB": 0.73,
     "score": 35.0
-   },
-   {
-    "ticker": "STOR-B.ST",
-    "company": "Storskogen Group AB (publ)",
-    "sector": "Industrials",
-    "price": 9.2,
-    "mktCapUsdB": 1.6,
-    "score": 24.0
    },
    {
     "ticker": "BILL.ST",
     "company": "Billerud AB (publ)",
     "sector": "Basic Materials",
-    "price": 69.5,
+    "price": 76.25,
     "mktCapUsdB": 1.79,
     "score": 20.0
    },
@@ -122,7 +114,7 @@
     "ticker": "SCA-A.ST",
     "company": "Svenska Cellulosa Aktiebolaget SCA (publ)",
     "sector": "Basic Materials",
-    "price": 102.0,
+    "price": 109.5,
     "mktCapUsdB": 7.4,
     "score": 11.0
    },
@@ -130,23 +122,15 @@
     "ticker": "NIVI-B.ST",
     "company": "Nivika Fastigheter AB (publ)",
     "sector": "Real Estate",
-    "price": 37.3,
+    "price": 37.1,
     "mktCapUsdB": 0.35,
     "score": 63.0
-   },
-   {
-    "ticker": "LOGI-B.ST",
-    "company": "Logistea AB (publ)",
-    "sector": "Real Estate",
-    "price": 12.96,
-    "mktCapUsdB": 0.68,
-    "score": 59.0
    },
    {
     "ticker": "BALD-B.ST",
     "company": "Fastighets AB Balder (publ)",
     "sector": "Real Estate",
-    "price": 49.69,
+    "price": 52.24,
     "mktCapUsdB": 6.06,
     "score": 52.0
    },
@@ -154,7 +138,7 @@
     "ticker": "PLAZ-B.ST",
     "company": "Platzer Fastigheter Holding AB (publ)",
     "sector": "Real Estate",
-    "price": 73.8,
+    "price": 72.9,
     "mktCapUsdB": 0.89,
     "score": 52.0
    },
@@ -162,9 +146,25 @@
     "ticker": "BRIN-B.ST",
     "company": "Brinova Fastigheter AB (publ)",
     "sector": "Real Estate",
-    "price": 12.85,
+    "price": 12.95,
     "mktCapUsdB": 0.31,
     "score": 52.0
+   },
+   {
+    "ticker": "PRISMA.ST",
+    "company": "Prisma Properties AB (publ)",
+    "sector": "Real Estate",
+    "price": 24.2,
+    "mktCapUsdB": 0.41,
+    "score": 51.0
+   },
+   {
+    "ticker": "INTEA-D.ST",
+    "company": "Intea Fastigheter AB ser. D",
+    "sector": "Real Estate",
+    "price": 32.3,
+    "mktCapUsdB": 0.96,
+    "score": 48.0
    }
   ],
   "Growth": [
@@ -172,7 +172,7 @@
     "ticker": "OVZON.ST",
     "company": "Ovzon AB (publ)",
     "sector": "Communication Services",
-    "price": 37.44,
+    "price": 38.1,
     "mktCapUsdB": 0.43,
     "score": 54.4
    },
@@ -180,7 +180,7 @@
     "ticker": "NYAB.ST",
     "company": "NYAB AB",
     "sector": "Industrials",
-    "price": 6.17,
+    "price": 6.13,
     "mktCapUsdB": 0.45,
     "score": 58.9
    },
@@ -188,7 +188,7 @@
     "ticker": "ZZ-B.ST",
     "company": "Zinzino AB (publ)",
     "sector": "Consumer Defensive",
-    "price": 124.3,
+    "price": 129.6,
     "mktCapUsdB": 0.5,
     "score": 109.2
    },
@@ -196,7 +196,7 @@
     "ticker": "PLEJD.ST",
     "company": "Plejd AB",
     "sector": "Industrials",
-    "price": 893.0,
+    "price": 870.0,
     "mktCapUsdB": 1.05,
     "score": 53.1
    },
@@ -204,7 +204,7 @@
     "ticker": "NREST.ST",
     "company": "Nordrest Holding AB (publ)",
     "sector": "Consumer Cyclical",
-    "price": 250.0,
+    "price": 257.0,
     "mktCapUsdB": 0.33,
     "score": 91.3
    },
@@ -212,15 +212,15 @@
     "ticker": "HANZA.ST",
     "company": "Hanza AB (publ)",
     "sector": "Technology",
-    "price": 126.6,
+    "price": 137.0,
     "mktCapUsdB": 0.82,
-    "score": 55.1
+    "score": 57.6
    },
    {
     "ticker": "ITAB.ST",
     "company": "ITAB Group AB (publ)",
     "sector": "Industrials",
-    "price": 14.98,
+    "price": 15.32,
     "mktCapUsdB": 0.4,
     "score": 41.0
    },
@@ -228,7 +228,7 @@
     "ticker": "GOMX.ST",
     "company": "GomSpace Group AB (publ)",
     "sector": "Industrials",
-    "price": 13.28,
+    "price": 12.69,
     "mktCapUsdB": 0.24,
     "score": 50.0
    },
@@ -236,7 +236,7 @@
     "ticker": "MILDEF.ST",
     "company": "MilDef Group AB (publ)",
     "sector": "Industrials",
-    "price": 186.2,
+    "price": 219.7,
     "mktCapUsdB": 0.9,
     "score": 33.1
    },
@@ -244,7 +244,7 @@
     "ticker": "VERT-B.ST",
     "company": "Vertiseit AB (publ)",
     "sector": "Technology",
-    "price": 58.0,
+    "price": 57.0,
     "mktCapUsdB": 0.2,
     "score": 45.0
    }
@@ -254,81 +254,81 @@
     "ticker": "TRUE-B.ST",
     "company": "Truecaller AB (publ)",
     "sector": "Technology",
-    "price": 16.78,
+    "price": 18.405,
     "mktCapUsdB": 0.6,
-    "score": 82.4
+    "score": 80.3
    },
    {
     "ticker": "HEM.ST",
     "company": "Hemnet Group AB (publ)",
     "sector": "Communication ",
-    "price": 88.4,
+    "price": 91.95,
     "mktCapUsdB": 0.8,
-    "score": 78.2
+    "score": 76.2
    },
    {
     "ticker": "SANION.ST",
     "company": "Saniona AB (publ)",
     "sector": "Healthcare",
-    "price": 13.13,
+    "price": 14.12,
     "mktCapUsdB": 0.2,
-    "score": 75.2
-   },
-   {
-    "ticker": "WPTG-B.ST",
-    "company": "White Pearl Technology Group A",
-    "sector": "Technology",
-    "price": 14.5,
-    "mktCapUsdB": 0.0,
-    "score": 70.4
+    "score": 71.8
    },
    {
     "ticker": "G5EN.ST",
     "company": "G5 Entertainment AB (publ)",
     "sector": "Communication ",
-    "price": 63.3,
+    "price": 63.8,
     "mktCapUsdB": 0.0,
-    "score": 65.4
+    "score": 64.2
+   },
+   {
+    "ticker": "WPTG-B.ST",
+    "company": "White Pearl Technology Group A",
+    "sector": "Technology",
+    "price": 15.3,
+    "mktCapUsdB": 0.0,
+    "score": 63.9
    },
    {
     "ticker": "SLEEP.ST",
     "company": "Sleep Cycle AB (publ)",
     "sector": "Technology",
-    "price": 24.6,
+    "price": 25.0,
     "mktCapUsdB": 0.1,
-    "score": 64.0
-   },
-   {
-    "ticker": "GULD.ST",
-    "company": "Guldbrev Holding AB (publ)",
-    "sector": "Consumer Cycli",
-    "price": 18.0,
-    "mktCapUsdB": 0.0,
-    "score": 61.1
-   },
-   {
-    "ticker": "CALVIK.ST",
-    "company": "Calviks AB (publ)",
-    "sector": "Industrials",
-    "price": 67.4,
-    "mktCapUsdB": 0.0,
-    "score": 60.5
-   },
-   {
-    "ticker": "XANO-B.ST",
-    "company": "XANO Industri AB (publ)",
-    "sector": "Industrials",
-    "price": 48.2,
-    "mktCapUsdB": 0.3,
-    "score": 57.1
+    "score": 62.8
    },
    {
     "ticker": "ARPL.ST",
     "company": "Arla Plast AB",
     "sector": "Basic Material",
-    "price": 38.05,
+    "price": 39.25,
     "mktCapUsdB": 0.1,
-    "score": 56.5
+    "score": 51.2
+   },
+   {
+    "ticker": "BOTX.ST",
+    "company": "Botnia Gold AB (publ)",
+    "sector": "Basic Material",
+    "price": 11.98,
+    "mktCapUsdB": 0.1,
+    "score": 51.0
+   },
+   {
+    "ticker": "CALVIK.ST",
+    "company": "Calviks AB (publ)",
+    "sector": "Industrials",
+    "price": 76.2,
+    "mktCapUsdB": 0.0,
+    "score": 50.5
+   },
+   {
+    "ticker": "GULD.ST",
+    "company": "Guldbrev Holding AB (publ)",
+    "sector": "Consumer Cycli",
+    "price": 20.0,
+    "mktCapUsdB": 0.0,
+    "score": 47.2
    }
   ],
   "Special Situations": [
@@ -336,7 +336,7 @@
     "ticker": "SILEX.ST",
     "company": "Silex Microsystems AB (publ)",
     "sector": "Technology",
-    "price": 182.95,
+    "price": 175.0,
     "mktCapUsdB": 2.2,
     "score": 94.0
    },
@@ -344,7 +344,7 @@
     "ticker": "COFFEE-B.ST",
     "company": "Coffee Stain Group AB (publ)",
     "sector": "Communication ",
-    "price": 17.618,
+    "price": 18.196,
     "mktCapUsdB": 0.4,
     "score": 85.2
    },
@@ -352,7 +352,7 @@
     "ticker": "GULD.ST",
     "company": "Guldbrev Holding AB (publ)",
     "sector": "Consumer Cycli",
-    "price": 18.0,
+    "price": 20.0,
     "mktCapUsdB": 0.0,
     "score": 82.8
    },
@@ -360,7 +360,7 @@
     "ticker": "HACK.ST",
     "company": "Hacksaw AB",
     "sector": "Communication ",
-    "price": 75.15,
+    "price": 74.0,
     "mktCapUsdB": 2.2,
     "score": 81.2
    },
@@ -368,7 +368,7 @@
     "ticker": "WSG.ST",
     "company": "WS WeSports Group AB",
     "sector": "Consumer Cycli",
-    "price": 55.52,
+    "price": 56.88,
     "mktCapUsdB": 0.2,
     "score": 76.8
    },
@@ -376,7 +376,7 @@
     "ticker": "MEDS.ST",
     "company": "Meds Apotek AB",
     "sector": "Consumer Cycli",
-    "price": 24.8,
+    "price": 25.2,
     "mktCapUsdB": 0.0,
     "score": 70.8
    },
@@ -384,7 +384,7 @@
     "ticker": "QSYS.ST",
     "company": "Qualisys Holding Aktiebolag",
     "sector": "Technology",
-    "price": 51.9,
+    "price": 49.95,
     "mktCapUsdB": 0.1,
     "score": 67.8
    },
@@ -392,7 +392,7 @@
     "ticker": "BMC.ST",
     "company": "Brock Milton Capital AB",
     "sector": "Financial Serv",
-    "price": 90.8,
+    "price": 95.4,
     "mktCapUsdB": 0.0,
     "score": 66.4
    },
@@ -400,7 +400,7 @@
     "ticker": "ENVAR.ST",
     "company": "Envar Holding AB",
     "sector": "Communication ",
-    "price": 48.0,
+    "price": 53.4,
     "mktCapUsdB": 0.1,
     "score": 60.6
    },
@@ -408,48 +408,130 @@
     "ticker": "ASMDEE-B.ST",
     "company": "Asmodee Group AB (publ)",
     "sector": "Consumer Cycli",
-    "price": 145.8,
+    "price": 149.9,
     "mktCapUsdB": 3.6,
     "score": 56.0
+   }
+  ],
+  "Munger Small-Cap": [
+   {
+    "ticker": "CASE.ST",
+    "company": "Case Group AB (publ)",
+    "sector": "Financial Serv",
+    "price": 21.0,
+    "mktCapUsdB": 0.07,
+    "score": 67
+   },
+   {
+    "ticker": "TAGM-B.ST",
+    "company": "TagMaster AB (publ)",
+    "sector": "Technology",
+    "price": 39.7,
+    "mktCapUsdB": 0.05,
+    "score": 62
+   },
+   {
+    "ticker": "SLEEP.ST",
+    "company": "Sleep Cycle AB (publ)",
+    "sector": "Technology",
+    "price": 25.0,
+    "mktCapUsdB": 0.05,
+    "score": 58
+   },
+   {
+    "ticker": "VPAB-B.ST",
+    "company": "Veteranpoolen AB ser. B",
+    "sector": "Industrials",
+    "price": 68.8,
+    "mktCapUsdB": 0.14,
+    "score": 57
+   },
+   {
+    "ticker": "SOF-B.ST",
+    "company": "Softronic AB (publ)",
+    "sector": "Technology",
+    "price": 22.1,
+    "mktCapUsdB": 0.12,
+    "score": 57
+   },
+   {
+    "ticker": "FIRE.ST",
+    "company": "Firefly AB (publ)",
+    "sector": "Industrials",
+    "price": 160.5,
+    "mktCapUsdB": 0.1,
+    "score": 57
+   },
+   {
+    "ticker": "SINT.ST",
+    "company": "SinterCast AB (publ)",
+    "sector": "Industrials",
+    "price": 108.0,
+    "mktCapUsdB": 0.08,
+    "score": 57
+   },
+   {
+    "ticker": "SIBEK.ST",
+    "company": "SIBEK AB",
+    "sector": "Industrials",
+    "price": 58.4,
+    "mktCapUsdB": 0.06,
+    "score": 57
+   },
+   {
+    "ticker": "CRAD-B.ST",
+    "company": "C-Rad AB (publ)",
+    "sector": "Healthcare",
+    "price": 36.8,
+    "mktCapUsdB": 0.13,
+    "score": 55
+   },
+   {
+    "ticker": "QSYS.ST",
+    "company": "Qualisys Holding Aktiebolag",
+    "sector": "Technology",
+    "price": 49.95,
+    "mktCapUsdB": 0.05,
+    "score": 55
    }
   ]
  },
  "candidates": {
   "CLAS-B.ST": {
-   "metrics_block": "Company: Clas Ohlson AB (publ)\nSector / Industry: Consumer Cyclical / Specialty Retail\nMarket cap: $2.60B\nPrice: $395.40\nP/E (TTM): 21.6\nPEG: 2.83 (trailing-growth basis)\nMargin of safety vs DCF: +2%\nROIC: 39%\nGross margin: 48%\nOperating margin: 7%\nRevenue growth YoY: 8%\nFCF yield: 7.7%\nSell-side analysts covering: 4\nCapital allocation: share count +0.2%/yr\n5yr trend: Rev growth 8% (prev 14%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 100% of yrs",
-   "price": 395.4,
+   "metrics_block": "Company: Clas Ohlson AB (publ)\nSector / Industry: Consumer Cyclical / Specialty Retail\nMarket cap: $2.60B\nPrice: $417.80\nP/E (TTM): 22.9\nPEG: 0.71 (trailing-growth basis)\nMargin of safety vs DCF: +2%\nROIC: 39%\nGross margin: 48%\nOperating margin: 7%\nRevenue growth YoY: 8%\nFCF yield: 7.7%\nSell-side analysts covering: 4\nCapital allocation: share count +0.2%/yr\n5yr trend: Rev growth 8% (prev 14%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 100% of yrs",
+   "price": 417.8,
    "currency": "SEK",
    "sector": "Consumer Cyclical",
    "company": "Clas Ohlson AB (publ)",
    "heldPercentInsiders": 0.35682
   },
   "RUSTA.ST": {
-   "metrics_block": "Company: Rusta AB (publ)\nSector / Industry: Consumer Cyclical / Department Stores\nMarket cap: $1.30B\nPrice: $82.45\nP/E (TTM): 22.9\nPEG: 1.42 (trailing-growth basis)\nMargin of safety vs DCF: -10%\nROIC: 35%\nGross margin: 43%\nRevenue growth YoY: 6%\nFCF yield: 9.4%\nSell-side analysts covering: 3\nCapital allocation: share count +0.0%/yr\n5yr trend: Rev growth 6% (prev 6%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
-   "price": 82.45,
+   "metrics_block": "Company: Rusta AB (publ)\nSector / Industry: Consumer Cyclical / Department Stores\nMarket cap: $1.30B\nPrice: $88.90\nP/E (TTM): 24.7\nPEG: 1.53 (trailing-growth basis)\nMargin of safety vs DCF: -10%\nROIC: 35%\nGross margin: 43%\nRevenue growth YoY: 6%\nFCF yield: 9.4%\nSell-side analysts covering: 3\nCapital allocation: share count +0.0%/yr\n5yr trend: Rev growth 6% (prev 6%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "price": 88.9,
    "currency": "SEK",
    "sector": "Consumer Cyclical",
    "company": "Rusta AB (publ)",
    "heldPercentInsiders": 0.68232
   },
   "AXFO.ST": {
-   "metrics_block": "Company: Axfood AB (publ)\nSector / Industry: Consumer Defensive / Grocery Stores\nMarket cap: $5.18B\nPrice: $232.40\nP/E (TTM): 20.7\nPEG: 3.08 (trailing-growth basis)\nMargin of safety vs DCF: +32%\nROIC: 28%\nGross margin: 15%\nOperating margin: 4%\nRevenue growth YoY: 6%\nFCF yield: 10.0%\nSell-side analysts covering: 6\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 6% (prev 4%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 100% of yrs",
-   "price": 232.4,
+   "metrics_block": "Company: Axfood AB (publ)\nSector / Industry: Consumer Defensive / Grocery Stores\nMarket cap: $5.18B\nPrice: $243.10\nP/E (TTM): 21.7\nPEG: 3.22 (trailing-growth basis)\nMargin of safety vs DCF: +32%\nROIC: 28%\nGross margin: 15%\nOperating margin: 4%\nRevenue growth YoY: 6%\nFCF yield: 10.0%\nSell-side analysts covering: 6\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 6% (prev 4%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 100% of yrs",
+   "price": 243.1,
    "currency": "SEK",
    "sector": "Consumer Defensive",
    "company": "Axfood AB (publ)",
    "heldPercentInsiders": 0.51752996
   },
   "KINV-A.ST": {
-   "metrics_block": "Company: Kinnevik AB\nSector / Industry: Financial Services / Asset Management\nMarket cap: $1.79B\nPrice: $61.50\nOperating margin: 95%\nRevenue growth YoY: 62%\nFCF yield: -1.2%\nCapital allocation: share count -0.5%/yr\n5yr trend: Rev growth 62% (prev -45%) \u2014 accelerating; Rev consistent 33% of yrs; FCF consistent 0% of yrs",
-   "price": 61.5,
+   "metrics_block": "Company: Kinnevik AB\nSector / Industry: Financial Services / Asset Management\nMarket cap: $1.79B\nPrice: $60.40\nOperating margin: 95%\nRevenue growth YoY: 62%\nFCF yield: -1.2%\nCapital allocation: share count -0.5%/yr\n5yr trend: Rev growth 62% (prev -45%) \u2014 accelerating; Rev consistent 33% of yrs; FCF consistent 0% of yrs",
+   "price": 60.4,
    "currency": "SEK",
    "sector": "Financial Services",
    "company": "Kinnevik AB",
    "heldPercentInsiders": 0.78424
   },
   "DOM.ST": {
-   "metrics_block": "Company: Dometic Group AB (publ)\nSector / Industry: Consumer Cyclical / Leisure\nMarket cap: $734M\nPrice: $22.22\nP/E (TTM): 23.1\nMargin of safety vs DCF: +75%\nROIC: 4%\nGross margin: 30%\nOperating margin: 10%\nRevenue growth YoY: -15%\nFCF yield: 34.8%\nSell-side analysts covering: 7\nCapital allocation: share count +0.0%/yr\n5yr trend: Rev growth -15% (prev -11%) \u2014 decelerating; Rev consistent 0% of yrs; FCF consistent 33% of yrs",
-   "price": 22.22,
+   "metrics_block": "Company: Dometic Group AB (publ)\nSector / Industry: Consumer Cyclical / Leisure\nMarket cap: $734M\nPrice: $23.78\nP/E (TTM): 24.8\nMargin of safety vs DCF: +75%\nROIC: 4%\nGross margin: 30%\nOperating margin: 10%\nRevenue growth YoY: -15%\nFCF yield: 34.8%\nSell-side analysts covering: 7\nCapital allocation: share count +0.0%/yr\n5yr trend: Rev growth -15% (prev -11%) \u2014 decelerating; Rev consistent 0% of yrs; FCF consistent 33% of yrs",
+   "price": 23.78,
    "currency": "SEK",
    "sector": "Consumer Cyclical",
    "company": "Dometic Group AB (publ)",
