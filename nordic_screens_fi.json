@@ -1,5 +1,5 @@
 {
- "date": "2026-07-22",
+ "date": "2026-07-29",
  "market": "fi",
  "currency": "EUR",
  "screens": {
@@ -74,7 +74,7 @@
     "sector": "Industrials",
     "price": 27.28,
     "mktCapUsdB": 7.41,
-    "score": 51
+    "score": 45
    },
    {
     "ticker": "ALMA.HE",
@@ -249,7 +249,16 @@
     "score": 15
    }
   ],
-  "Contrarian": [],
+  "Contrarian": [
+   {
+    "ticker": "PIHLIS.HE",
+    "company": "Pihlajalinna Oyj",
+    "sector": "Healthcare",
+    "price": 10.38,
+    "mktCapUsdB": 0.3,
+    "score": 78.2
+   }
+  ],
   "Special Situations": [
    {
     "ticker": "LASTIK.HE",
@@ -287,7 +296,7 @@
  },
  "candidates": {
   "WRT1V.HE": {
-   "metrics_block": "Company: W\u00e4rtsil\u00e4 Oyj Abp\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $20.02B\nPrice: $29.71\nP/E (TTM): 27.0\nPEG: 1.09 (trailing-growth basis)\nMargin of safety vs DCF: -16%\nROIC: 22%\nGross margin: 47%\nOperating margin: 12%\nRevenue growth YoY: 7%\nFCF yield: 8.2%\nSell-side analysts covering: 16\nCapital allocation: share count -0.1%/yr\n5yr trend: Rev growth 7% (prev 7%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "metrics_block": "Company: W\u00e4rtsil\u00e4 Oyj Abp\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $20.02B\nPrice: $29.71\nP/E (TTM): 27.0\nPEG: 1.09 (trailing-growth basis)\nMargin of safety vs DCF: -17%\nROIC: 22%\nGross margin: 47%\nOperating margin: 12%\nRevenue growth YoY: 7%\nFCF yield: 8.2%\nSell-side analysts covering: 16\nCapital allocation: share count -0.1%/yr\n5yr trend: Rev growth 7% (prev 7%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
    "price": 29.71,
    "currency": "EUR",
    "sector": "Industrials",
@@ -295,7 +304,7 @@
    "heldPercentInsiders": 0.01503
   },
   "PUUILO.HE": {
-   "metrics_block": "Company: Puuilo Oyj\nSector / Industry: Consumer Cyclical / Department Stores\nMarket cap: $1.63B\nPrice: $16.92\nP/E (TTM): 25.6\nPEG: 1.62 (trailing-growth basis)\nMargin of safety vs DCF: -37%\nROIC: 35%\nGross margin: 38%\nOperating margin: 17%\nRevenue growth YoY: 15%\nFCF yield: 4.9%\nSell-side analysts covering: 3\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 15% (prev 13%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "metrics_block": "Company: Puuilo Oyj\nSector / Industry: Consumer Cyclical / Department Stores\nMarket cap: $1.63B\nPrice: $16.92\nP/E (TTM): 25.6\nPEG: 1.62 (trailing-growth basis)\nMargin of safety vs DCF: -39%\nROIC: 35%\nGross margin: 38%\nOperating margin: 17%\nRevenue growth YoY: 15%\nFCF yield: 4.8%\nSell-side analysts covering: 3\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 15% (prev 13%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
    "price": 16.92,
    "currency": "EUR",
    "sector": "Consumer Cyclical",
@@ -303,7 +312,7 @@
    "heldPercentInsiders": 0.07625
   },
   "KNEBV.HE": {
-   "metrics_block": "Company: KONE Oyj\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $28.63B\nPrice: $48.34\nP/E (TTM): 25.6\nMargin of safety vs DCF: -29%\nROIC: 34%\nGross margin: 58%\nOperating margin: 10%\nRevenue growth YoY: 1%\nFCF yield: 4.6%\nSell-side analysts covering: 23\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 1% (prev 1%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 100% of yrs",
+   "metrics_block": "Company: KONE Oyj\nSector / Industry: Industrials / Specialty Industrial Machinery\nMarket cap: $28.63B\nPrice: $48.34\nP/E (TTM): 25.6\nMargin of safety vs DCF: -30%\nROIC: 34%\nGross margin: 58%\nOperating margin: 10%\nRevenue growth YoY: 1%\nFCF yield: 4.6%\nSell-side analysts covering: 23\nCapital allocation: share count +0.1%/yr\n5yr trend: Rev growth 1% (prev 1%) \u2014 stable; Rev consistent 100% of yrs; FCF consistent 100% of yrs",
    "price": 48.34,
    "currency": "EUR",
    "sector": "Industrials",

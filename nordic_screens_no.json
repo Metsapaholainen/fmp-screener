@@ -1,5 +1,5 @@
 {
- "date": "2026-07-22",
+ "date": "2026-07-29",
  "market": "no",
  "currency": "NOK",
  "screens": {
@@ -257,6 +257,22 @@
     "price": 14.45,
     "mktCapUsdB": 0.0,
     "score": 67.4
+   },
+   {
+    "ticker": "BOUV.OL",
+    "company": "Bouvet ASA",
+    "sector": "Technology",
+    "price": 44.55,
+    "mktCapUsdB": 0.5,
+    "score": 63.0
+   },
+   {
+    "ticker": "VEND.OL",
+    "company": "VEND MARKETPLACES ASA",
+    "sector": "Communication ",
+    "price": 241.8,
+    "mktCapUsdB": 5.1,
+    "score": 42.5
    }
   ],
   "Special Situations": [
@@ -266,7 +282,15 @@
     "sector": "Energy",
     "price": 1.245,
     "mktCapUsdB": 0.4,
-    "score": 92.2
+    "score": 87.8
+   },
+   {
+    "ticker": "MDATA.OL",
+    "company": "MAGNORA DATA CENTER ASA",
+    "sector": "Technology",
+    "price": 11.202,
+    "mktCapUsdB": 0.1,
+    "score": 87.4
    },
    {
     "ticker": "GENO.OL",
@@ -274,7 +298,7 @@
     "sector": "Technology",
     "price": 19.8,
     "mktCapUsdB": 0.4,
-    "score": 87.2
+    "score": 83.4
    },
    {
     "ticker": "APR.OL",
@@ -282,7 +306,7 @@
     "sector": "Technology",
     "price": 42.5,
     "mktCapUsdB": 0.2,
-    "score": 80.6
+    "score": 78.0
    },
    {
     "ticker": "GKP.OL",
@@ -290,7 +314,7 @@
     "sector": "Energy",
     "price": 21.75,
     "mktCapUsdB": 0.5,
-    "score": 78.0
+    "score": 75.4
    },
    {
     "ticker": "DELIA.OL",
@@ -298,7 +322,7 @@
     "sector": "Consumer Defen",
     "price": 29.205,
     "mktCapUsdB": 0.1,
-    "score": 71.6
+    "score": 69.2
    },
    {
     "ticker": "SNTIA.OL",
@@ -306,7 +330,7 @@
     "sector": "Industrials",
     "price": 78.4,
     "mktCapUsdB": 0.8,
-    "score": 63.6
+    "score": 62.2
    },
    {
     "ticker": "SOMA.OL",
@@ -314,7 +338,7 @@
     "sector": "Industrials",
     "price": 27.0,
     "mktCapUsdB": 1.3,
-    "score": 61.2
+    "score": 60.2
    },
    {
     "ticker": "MORLD.OL",
@@ -322,7 +346,7 @@
     "sector": "Energy",
     "price": 21.45,
     "mktCapUsdB": 0.4,
-    "score": 47.6
+    "score": 48.2
    },
    {
     "ticker": "BRUT.OL",
@@ -330,13 +354,13 @@
     "sector": "Industrials",
     "price": 53.0,
     "mktCapUsdB": 0.3,
-    "score": 44.8
+    "score": 45.6
    }
   ]
  },
  "candidates": {
   "AFG.OL": {
-   "metrics_block": "Company: AF Gruppen ASA\nSector / Industry: Industrials / Engineering & Construction\nMarket cap: $2.28B\nPrice: $193.60\nP/E (TTM): 18.5\nPEG: 0.35 (trailing-growth basis)\nMargin of safety vs DCF: +47%\nROIC: 46%\nGross margin: 34%\nOperating margin: 4%\nRevenue growth YoY: 5%\nFCF yield: 12.5%\nSell-side analysts covering: 2\nCapital allocation: share count +0.7%/yr; SBC ~$5M/yr (5y avg)\n5yr trend: Rev growth 5% (prev 0%) \u2014 accelerating; Rev consistent 67% of yrs; FCF consistent 67% of yrs",
+   "metrics_block": "Company: AF Gruppen ASA\nSector / Industry: Industrials / Engineering & Construction\nMarket cap: $2.28B\nPrice: $193.60\nP/E (TTM): 18.5\nPEG: 0.35 (trailing-growth basis)\nMargin of safety vs DCF: +47%\nROIC: 46%\nGross margin: 34%\nOperating margin: 4%\nRevenue growth YoY: 5%\nFCF yield: 12.4%\nSell-side analysts covering: 2\nCapital allocation: share count +0.7%/yr; SBC ~$5M/yr (5y avg)\n5yr trend: Rev growth 5% (prev 0%) \u2014 accelerating; Rev consistent 67% of yrs; FCF consistent 67% of yrs",
    "price": 193.6,
    "currency": "NOK",
    "sector": "Industrials",
@@ -344,7 +368,7 @@
    "heldPercentInsiders": 0.59186
   },
   "NORBT.OL": {
-   "metrics_block": "Company: Norbit ASA\nSector / Industry: Technology / Scientific & Technical Instruments\nMarket cap: $1.14B\nPrice: $170.90\nP/E (TTM): 25.7\nPEG: 0.6 (trailing-growth basis)\nMargin of safety vs DCF: -158%\nROIC: 27%\nGross margin: 54%\nOperating margin: 21%\nRevenue growth YoY: 43%\nFCF yield: 2.8%\nSell-side analysts covering: 4\nCapital allocation: share count +0.4%/yr\n5yr trend: Rev growth 43% (prev 15%) \u2014 accelerating; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "metrics_block": "Company: Norbit ASA\nSector / Industry: Technology / Scientific & Technical Instruments\nMarket cap: $1.14B\nPrice: $170.90\nP/E (TTM): 25.7\nPEG: 0.6 (trailing-growth basis)\nMargin of safety vs DCF: -160%\nROIC: 27%\nGross margin: 54%\nOperating margin: 21%\nRevenue growth YoY: 43%\nFCF yield: 2.7%\nSell-side analysts covering: 4\nCapital allocation: share count +0.4%/yr\n5yr trend: Rev growth 43% (prev 15%) \u2014 accelerating; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
    "price": 170.9,
    "currency": "NOK",
    "sector": "Technology",
@@ -352,7 +376,7 @@
    "heldPercentInsiders": 0.46803
   },
   "AKSO.OL": {
-   "metrics_block": "Company: Aker Solutions ASA\nSector / Industry: Energy / Oil & Gas Equipment & Services\nMarket cap: $2.15B\nPrice: $42.66\nP/E (TTM): 6.4\nPEG: 0.33 (trailing-growth basis)\nMargin of safety vs DCF: +70%\nROIC: 24%\nGross margin: 38%\nOperating margin: 5%\nRevenue growth YoY: 19%\nFCF yield: 10.2%\nSell-side analysts covering: 9\nCapital allocation: share count +1.0%/yr (diluting)\n5yr trend: Rev growth 19% (prev 45%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
+   "metrics_block": "Company: Aker Solutions ASA\nSector / Industry: Energy / Oil & Gas Equipment & Services\nMarket cap: $2.15B\nPrice: $42.66\nP/E (TTM): 6.4\nPEG: 0.33 (trailing-growth basis)\nMargin of safety vs DCF: +69%\nROIC: 24%\nGross margin: 38%\nOperating margin: 5%\nRevenue growth YoY: 19%\nFCF yield: 10.1%\nSell-side analysts covering: 9\nCapital allocation: share count +1.0%/yr (diluting)\n5yr trend: Rev growth 19% (prev 45%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 67% of yrs",
    "price": 42.66,
    "currency": "NOK",
    "sector": "Energy",

@@ -1,5 +1,5 @@
 {
- "date": "2026-07-22",
+ "date": "2026-07-29",
  "market": "dk",
  "currency": "DKK",
  "screens": {
@@ -259,6 +259,14 @@
     "score": 80.6
    },
    {
+    "ticker": "ZEAL.CO",
+    "company": "Zealand Pharma A/S",
+    "sector": "Healthcare",
+    "price": 290.8,
+    "mktCapUsdB": 3.1,
+    "score": 79.2
+   },
+   {
     "ticker": "GUBRA.CO",
     "company": "Gubra A/S",
     "sector": "Healthcare",
@@ -275,12 +283,28 @@
     "score": 69.8
    },
    {
+    "ticker": "ROCK-A.CO",
+    "company": "Rockwool A/S",
+    "sector": "Industrials",
+    "price": 205.5,
+    "mktCapUsdB": 6.5,
+    "score": 59.8
+   },
+   {
     "ticker": "RBREW.CO",
     "company": "Royal Unibrew A/S",
     "sector": "Consumer Defen",
     "price": 478.6,
     "mktCapUsdB": 3.5,
     "score": 52.5
+   },
+   {
+    "ticker": "FLS.CO",
+    "company": "FLSmidth & Co. A/S",
+    "sector": "Industrials",
+    "price": 457.6,
+    "mktCapUsdB": 3.8,
+    "score": 36.0
    }
   ],
   "Special Situations": [
@@ -312,7 +336,7 @@
    "heldPercentInsiders": 8.0000005e-05
   },
   "BAVA.CO": {
-   "metrics_block": "Company: Bavarian Nordic A/S\nSector / Industry: Healthcare / Biotechnology\nMarket cap: $2.08B\nPrice: $179.80\nP/E (TTM): 11.9\nPEG: 0.3 (trailing-growth basis)\nMargin of safety vs DCF: -11%\nROIC: 11%\nGross margin: 48%\nOperating margin: -1%\nRevenue growth YoY: 9%\nFCF yield: 10.0%\nSell-side analysts covering: 4\nCapital allocation: share count -0.4%/yr; SBC ~$8M/yr (5y avg)\n5yr trend: Rev growth 9% (prev -19%) \u2014 accelerating; Rev consistent 67% of yrs; FCF consistent 67% of yrs",
+   "metrics_block": "Company: Bavarian Nordic A/S\nSector / Industry: Healthcare / Biotechnology\nMarket cap: $2.08B\nPrice: $179.80\nP/E (TTM): 11.9\nPEG: 0.3 (trailing-growth basis)\nMargin of safety vs DCF: -12%\nROIC: 11%\nGross margin: 48%\nOperating margin: -1%\nRevenue growth YoY: 9%\nFCF yield: 10.0%\nSell-side analysts covering: 4\nCapital allocation: share count -0.4%/yr; SBC ~$8M/yr (5y avg)\n5yr trend: Rev growth 9% (prev -19%) \u2014 accelerating; Rev consistent 67% of yrs; FCF consistent 67% of yrs",
    "price": 179.8,
    "currency": "DKK",
    "sector": "Healthcare",
@@ -320,7 +344,7 @@
    "heldPercentInsiders": 0.00046
   },
   "DFDS.CO": {
-   "metrics_block": "Company: DFDS A/S\nSector / Industry: Industrials / Marine Shipping\nMarket cap: $1.04B\nPrice: $126.60\nMargin of safety vs DCF: +40%\nROIC: 2%\nGross margin: 17%\nOperating margin: 0%\nRevenue growth YoY: 4%\nFCF yield: 25.2%\nSell-side analysts covering: 2\nCapital allocation: share count +0.0%/yr; SBC ~$3M/yr (5y avg)\n5yr trend: Rev growth 4% (prev 9%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 33% of yrs",
+   "metrics_block": "Company: DFDS A/S\nSector / Industry: Industrials / Marine Shipping\nMarket cap: $1.04B\nPrice: $126.60\nMargin of safety vs DCF: +39%\nROIC: 2%\nGross margin: 17%\nOperating margin: 0%\nRevenue growth YoY: 4%\nFCF yield: 25.2%\nSell-side analysts covering: 2\nCapital allocation: share count +0.0%/yr; SBC ~$3M/yr (5y avg)\n5yr trend: Rev growth 4% (prev 9%) \u2014 decelerating; Rev consistent 100% of yrs; FCF consistent 33% of yrs",
    "price": 126.6,
    "currency": "DKK",
    "sector": "Industrials",
@@ -328,7 +352,7 @@
    "heldPercentInsiders": 0.41970003
   },
   "STG.CO": {
-   "metrics_block": "Company: Scandinavian Tobacco Group A/S\nSector / Industry: Consumer Defensive / Tobacco\nMarket cap: $819M\nPrice: $68.10\nP/E (TTM): 8.2\nMargin of safety vs DCF: +36%\nROIC: 6%\nGross margin: 44%\nOperating margin: 9%\nRevenue growth YoY: -2%\nFCF yield: 10.7%\nSell-side analysts covering: 2\nCapital allocation: share count +0.0%/yr\n5yr trend: Rev growth -2% (prev 5%) \u2014 decelerating; Rev consistent 33% of yrs; FCF consistent 33% of yrs",
+   "metrics_block": "Company: Scandinavian Tobacco Group A/S\nSector / Industry: Consumer Defensive / Tobacco\nMarket cap: $819M\nPrice: $68.10\nP/E (TTM): 8.2\nMargin of safety vs DCF: +35%\nROIC: 6%\nGross margin: 44%\nOperating margin: 9%\nRevenue growth YoY: -2%\nFCF yield: 10.7%\nSell-side analysts covering: 2\nCapital allocation: share count +0.0%/yr\n5yr trend: Rev growth -2% (prev 5%) \u2014 decelerating; Rev consistent 33% of yrs; FCF consistent 33% of yrs",
    "price": 68.1,
    "currency": "DKK",
    "sector": "Consumer Defensive",
